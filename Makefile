@@ -73,7 +73,12 @@ notebooks:
 
 ## Start a jupyter server in the docker container
 jupyter: .docker_images/$(GIT_VERSION).stamp notebooks
-	@docker run -d --name hela --rm -p 8889:8888 hela:$(GIT_VERSION)
+	@docker run -d --rm   \
+		--name hela         \
+		-p 8889:8888        \
+		-v /tmp:/tmp        \
+		-v $(CURDIR):/hela  \
+		hela:$(GIT_VERSION)
 	@docker logs hela 2>&1 | sed -n -e 's/^.*\(?token=\)/http:\/\/localhost:8889\/\1/p' | head -n 1
 
 ## Get the current local jupyter URL.
