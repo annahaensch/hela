@@ -15,7 +15,6 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             ns_hidden_states=None,
             random_state=0,
             n_categorical_features=0,
-            # TODO @AH: incorporate categorical features
             n_categorical_values=(),
             categorical_values=None,
             n_gaussian_features=None,
