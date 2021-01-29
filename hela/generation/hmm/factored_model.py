@@ -160,7 +160,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         """
         random = self.random
         categorical_values = self.categorical_values
-        n_hidden_states = self.ns_hidden_states[0] ** len(self.ns_hidden_states)
+        n_hidden_states = np.prod(self.ns_hidden_states)
 
         values = list(categorical_values.index)
 
