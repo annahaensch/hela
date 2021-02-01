@@ -50,8 +50,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
 
         # Generate categorical model parameters.
         if self.n_categorical_features > 0:
-            raise NotImplementedError("Categorical emissions features are not "
-                                      "yet implemented.")
+            self.emission_matrix = self._generate_emission_matrix()
 
         # Generate Gaussian mixture model parameters.
         if self.n_gaussian_features > 0:
@@ -110,12 +109,30 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             and categorical and gaussian feature parameters.
         """
         random = self.random
+        flattened_hidden_states = self.flatten_hidden_state_sequence(hidden_states)
+        n_observations = flattened_hidden_states.shape[0]
 
         # Generated categorical data.
         df_categorical = pd.DataFrame()
         if self.n_categorical_features > 0:
-            raise NotImplementedError("Categorical emissions features are not "
-                                      "yet implemented.")
+            emission_matrix = self.emission_matrix
+            categorical_values = self.categorical_values
+            observation_sequence = []
+            for i in range(n_observations):
+                # Use discrete inverse transform method to sample hidden states.
+                u = random.uniform()
+                current_state = flattened_hidden_states[i]
+                cumulative_prob = np.cumsum(
+                    [e[current_state] for e in emission_matrix])
+                observation = np.argmax(cumulative_prob >= u)
+                observation_sequence.append(
+                    list(categorical_values.loc[observation]))
+
+            columns = categorical_values.columns
+            df_categorical = pd.DataFrame(
+                observation_sequence,
+                columns=columns,
+                index=hidden_states.index)
 
         # Generate gaussian data.
         df_gaussian = pd.DataFrame()
@@ -137,6 +154,33 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 columns=self.gaussian_values.columns)
 
         return df_categorical.join(df_gaussian, how="outer")
+
+    def _generate_emission_matrix(self):
+        """ Returns emission matrix with constraints.
+        """
+        random = self.random
+        categorical_values = self.categorical_values
+        n_hidden_states = np.prod(self.ns_hidden_states)
+
+        values = list(categorical_values.index)
+
+        if len(values) >= n_hidden_states:
+            most_likely_emission = random.choice(
+                values, n_hidden_states, replace=False)
+        else:
+            most_likely_emission = random.choice(values, n_hidden_states)
+        emission_matrix = np.zeros((n_hidden_states, len(values)))
+        for i in range(n_hidden_states):
+            emission_prob = random.uniform(0, 1, len(values))
+            most_likely_prob = random.uniform(.75, 1)
+            emission_prob[most_likely_emission[i]] = 0
+
+            emission_prob = (1 - most_likely_prob) * (
+                emission_prob / np.sum(emission_prob))
+            emission_prob[most_likely_emission[i]] = most_likely_prob
+            emission_matrix[i] = emission_prob
+
+        return emission_matrix.transpose()
 
     def _generate_means(self):
         """ Returns array of means
