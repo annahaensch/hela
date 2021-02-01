@@ -1,6 +1,7 @@
 \documentclass{amsart}
 \usepackage{amsmath,amsthm}
 \usepackage{graphicx}
+\usepackage{xcolor}
 \usepackage{wrapfig}
 \usepackage{url}
 \usepackage{caption}
@@ -9,6 +10,9 @@
 
 \usepackage{algorithm} % Must be loaded *after* hyperref
 \usepackage[noend]{algpseudocode}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
 
 \title{The dynamics of factored state hidden Markov models}
 \date{1 December 2020}
@@ -96,9 +100,9 @@ a_{ij}
 \]
 One relevant observation that we can make about the transition matrix, is that 
 every row of $A$ necessarily sums to 1, since 
-\[
+\begin{eqnarray}\label{eqn:transitionsum}
 \sum_{j=1}^Np_z(h_j\mid h_i)=\sum_{j=1}^N\frac{p(h_j,h_i)}{p(h_i)}=1.
-\]
+\end{eqnarray}
 marginal over $h_i$.
 
 The {\em emission probability} is the parameter that directly 
@@ -161,13 +165,14 @@ $s_i^{(m)}$. A comprehensive treatment of fHMMs can be found in the foundational
 on the topic by Gharamani and Jordan \cite{GJ95}, but we will highlight some 
 key components of that paper here.  
 
-The full set of model parameters for an fHMM is 
-still given by $\Theta$, with the additional factored state parameters 
+The initial state vector can take on one of $N^M$ values, therefore we will define the initial state probabilties by 
 \[
-\theta_z = \{\theta_z^{(m)}:1\leq m \leq M\}.
-\]
-The initial state probability is given by 
-a $1\times N^M$ vector since the initial state vector can take on one of $N^M$ values.  
+\pi_{i_1,...,i_M} := p_1(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\};\theta_1).
+\] 
+for any hidden state vector, subject to the restriction
+\begin{eqnarray}\label{eqn:initialstate}
+1 = \sum_{i_1=1}^N\cdots \sum_{i_M=1}^M \pi_{i_1,...,i_M}.
+\end{eqnarray}
 The transition probability will now be described by a collection of $M$ many $N\times N$ matrices, 
 \[
 \{A^{(1)},...,A^{(M)}\},
@@ -176,10 +181,14 @@ where
 \[
 A^{(m)} = \begin{bmatrix}
 a_{ij}^{(m)}
-\end{bmatrix}_{1\leq i,j\leq N}\text{ where } a_{ij}^m = p_z(h_j^{(m)}\mid 
-h_i^{(m)}; \theta_z^{(m)})
+\end{bmatrix}_{1\leq i,j\leq N}\text{ where } a_{ij}^m := p_z(h_j^{(m)}\mid 
+h_i^{(m)}; \theta_z)
 \]
-for $1\leq m\leq M$.
+for $1\leq m\leq M$, with the added restriction,
+\begin{eqnarray}\label{eqn:transitionsum2}
+1=\sum_{j=1}^Na_{ij}^{(m)}
+\end{eqnarray}
+which is just the fHMM analogue of equation (\ref{eqn:transitionsum}).
 
 The probability of transitioning from one hidden state vector to another can 
 then be constructed as a tensor product of these matrices.  More concretely, 
@@ -247,7 +256,10 @@ s_i;\theta_{cat})\cdot p_{cont}(v\mid s_i;\theta_{cont}) .
 
 In this section we will describe the components necessary to perform Gibbs 
 sampling for fHMMs in a maximally flexible way following the notation set forth 
-in Section \ref{sec:intro}.  Suppose we already know the model parameters, 
+in Section \ref{sec:intro}.  
+
+\subsubsection{Inference with Gibbs Sampling}
+Suppose we already know the model parameters, 
 $\Theta$, then general strategy will be to determine the most 
 likely sequence of hidden states for an observation sequence, $x_{1:T}$, by iterative 
 sampling.  In particular, we will begin by randomly seeding a sequence of hidden 
@@ -338,6 +350,127 @@ The sampling This process is described in its totality in Algorithm \ref{alg:gib
     \EndFunction
   \end{algorithmic}
 \end{algorithm}
+
+\subsubsection{Learning with Gibbs Sampling}
+The problem of learning with fHMMs involves finding the set of model parameters, $\Theta$, that optimize the observed data log likelihood, 
+\begin{eqnarray*}
+\mathcal L(\Theta;X_{1:T}) = \log p(X_{1:T}\mid \Theta).
+\end{eqnarray*}
+In the case of classical HMMs, this is typically done by marginalizing over the observed data likelihood
+\begin{eqnarray}\label{eqn:loglikelihood}
+\log p(X_{1:T}\mid \Theta) = \log\int p(X_{1:T},Z_{1:T}\mid \Theta)\,\,dZ_{1:T}
+\end{eqnarray}
+to find $\mathcal L$.  The integral in equation (\ref{eqn:loglikelihood}) is generally intractible, but for there is an effective algorithm for computing the marginal likelihood that doesn't involve direct evaluation of the integral.  The algorithm, called {\em expectation-maximization} (or {\em EM}), consists of two fundamental steps.  In the expectation step, the expected value of the marginal probabilty is computed by way of an auxiliary function,
+\begin{eqnarray}
+Q(\Theta,\Theta') = \mathbb E_{Z_{1:T}\mid X_{1:T},\Theta'}\left[\log p(X_{1:T},Z_{1:T}\mid \Theta\right)],
+\end{eqnarray}
+conditioned on the observations, $X_{1:T}$ and current ``best guess" at the model parameters, $\Theta'$.  In the maximization step, we optimize $Q$ by computing 
+\[
+\Theta = \text{argmax}_{\Theta}Q(\Theta,\Theta').
+\]
+By iteratively maximizing $Q$, it's possible to find a local maximum of the likelihood function.\footnote{The fact that the this process leads to a maximal value for $\mathcal L$ is not totally obvious.  For a detailed explanation of why EM is guaranteed to converge to a locally optimal solution, the reader is directed to \cite[$\S2.2$]{HVB20}. \textcolor{red}{$\leftarrow$ It might be helpful to clean up this note and give it a permanent home.}}
+
+In classical HMMs the $E$ step is computed across time steps by a {\em forward-backward} algorithm that can be carried out with time complexity $O(TN^2)$.  In the case of fHMMs, exact computation of the E step is intractible (cf. \cite[$\S3.3$]{GJ95}).  Although it seems the posterior probabilties could be computed across the time dimension without difficulty, the intractibility is a conseqence of the conditional dependece of the Markov systems within each time step.  As an alternative to the exact $E$ step, we will compute an approximate $E$ step using the probabilities gathered during each iteration of Gibbs sampling.  
+
+To understand how we might approximate the $E$ step, let's consider the components of the expected value, $Q$, in the fHMM case.  Recall that for a fixed $\Theta$,  
+\begin{eqnarray*}
+p(x_{1:T},z_{1:T}\mid \Theta) & = & p_1(z_1)\cdot p_x(x_1\mid z_1)\cdot \prod_{t=2}^Tp_x(x_t\mid z_t)\cdot p_z(z_t\mid z_{t-1}).  
+\end{eqnarray*}
+for an observation sequence $x_{1:T}$ and hidden state sequence $z_{1:T}$. Therefore, 
+\begin{eqnarray*}
+Q(\Theta,\Theta') = \int_{z_{1:T}}\log p(x_{1:T},z_{1:T}\mid \Theta) \cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T}
+\end{eqnarray*}
+can be decomposed into three components, 
+\begin{eqnarray*}
+Q(\Theta,\Theta') &=& \iota(\Theta,\Theta')+\beta(\Theta,\Theta')+\alpha(\Theta,\Theta'), 
+\end{eqnarray*}
+where $\iota$ carries the initial state information,
+\begin{eqnarray}\label{eqn:iota}
+\iota(\Theta,\Theta') &=& \int_{z_{1:T}}\log p_1(z_1)p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T},
+\end{eqnarray}
+$\beta$ carries the emission information,
+\begin{eqnarray}\label{eqn:beta}
+\beta(\Theta,\Theta') &=& \sum_{t=1}^T\int_{z_{1:T}}\log p_x(x_1\mid z_1)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T},
+\end{eqnarray}
+and $\alpha$ carries the transition information,
+\begin{eqnarray}\label{eqn:alpha}
+\alpha(\Theta,\Theta') &=& \sum_{t=2}^T\int_{z_{1:T}}\log p_z(z_t\mid z_{t-1})\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T}.
+\end{eqnarray}
+In what follows we will determine which quantities are necessary to exactly compute and maximize equations (\ref{eqn:iota}), (\ref{eqn:alpha}) and (\ref{eqn:beta}).  Since our hidden states are drawn from a discrete probability distribution, the integrals in all three equations can be replaced by discrete sums.
+
+\begin{lemma}
+For a fixed set of model parameters, $\Theta'$, the function $\iota(\Theta,\Theta')$ achieves its maximum value at
+\begin{eqnarray*}
+\pi_{i_1,...,i_M} &=&\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\sum_{i_1=1}^N\cdots \sum_{i_M=1}^M p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}.
+\end{eqnarray*}
+for $1\leq m\leq M$ and $1\leq i_m\leq N$.
+\end{lemma}
+
+\begin{proof}
+To begin, observe 
+\begin{eqnarray*}
+\iota(\theta_1,\Theta') &=& \sum_{z_{1:T}}\log p_1(z_1)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\\
+& = & \sum_{z_1}\log p_1(z_1)\cdot p(z_1\mid x_{1:T},\Theta')\cdot \sum_{z_{2:T}}p(z_{2:T}\mid z_1,x_{1:T},\Theta')\\
+& = & \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log p_1(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\})\cdot p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')\\
+& = & \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log \pi_{{i_1},...,{i_M}}\cdot p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta').
+\end{eqnarray*}
+Combining this with equation (\ref{eqn:initialstate}) we can use the theory of Lagrange multipliers to optimize 
+\begin{eqnarray*}
+&&L(\{\pi_{{i_1},...,{i_M}}:1\leq m\leq M\text{ and }1\leq i_m\leq N\}, \lambda) \\
+& = & \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log \pi_{{i_1},...,{i_M}}\cdot p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta') -...\\
+&&\hspace{10mm}...- \lambda \left(-1 + \sum_{i_1=1}^N\cdots \sum_{i_M=1}^M \pi_{i_1,...,i_M}.\right) 
+\end{eqnarray*}
+where $\lambda$ is the Lagrange multiplier.  This optimization can be achieved by simultaneous solving every component of the gradient, 
+\begin{eqnarray*}
+\nabla_{\lambda,\{\pi_{{i_1},...,{i_M}}:1\leq m\leq M \text{ and } 1\leq i_m\leq N\}}L &=& 0,
+\end{eqnarray*}
+which can be achieved by solving 
+\begin{eqnarray}\label{eqn:grad1}
+1 - \sum_{i_1=1}^N\cdots \sum_{i_M=1}^M \pi_{i_1,...,i_M} &=& 0
+\end{eqnarray}
+and 
+\begin{eqnarray}\label{eqn:grad2}
+\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\pi_{{i_1},...,{i_M}}} - \lambda &=& 0
+\end{eqnarray}
+for all $1\leq m\leq M$ and $1\leq i_m\leq N$.  This can be done by for rewriting equation (\ref{eqn:grad2}) as 
+\begin{eqnarray*}
+ \pi_{{i_1},...,{i_M}}&=&\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\lambda}
+\end{eqnarray*}
+and combining this with equation (\ref{eqn:grad1}) to obtain 
+\begin{eqnarray*}
+\lambda&=&\sum_{i_1=1}^N\cdots \sum_{i_M=1}^M p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')
+\end{eqnarray*}
+from which it follows,
+\begin{eqnarray*}
+\pi_{{i_1},...,{i_M}}&=&\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\sum_{i_1=1}^N\cdots \sum_{i_M=1}^M p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')},
+\end{eqnarray*}
+which is what we wanted to show.
+\end{proof}
+
+\begin{lemma}
+For a fixed set of model parameters, $\Theta'$, the function $\alpha(\Theta,\Theta')$ achieves its maximum value at
+\begin{eqnarray*}
+a_{i_m,j_m}^{(m)} &=&
+\end{eqnarray*}
+for $1\leq i_m\leq N$ and $1\leq j_m\leq N$.
+\end{lemma}
+
+\begin{proof}
+To begin, we will observe that 
+\begin{eqnarray*}
+\alpha(\Theta,\Theta') &=& \sum_{t=2}^T\sum_{z_{1:T}}\log p_z(z_t\mid z_{t-1})\cdot p(z_{1:T}\mid x_{1:T},\Theta')\\
+&=& \sum_{t=2}^T\sum_{z_{t}}\sum_{z_{t-1}}\log p_z(z_t\mid z_{t-1})\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta')\cdot \sum_{z_{1:t-2,t:T}}p(z_{1:t-2,t:T}\mid z_t,z_{t-1},x_{1:T},\Theta')\\
+& = & \sum_{t=2}^T\sum_{z_{t}}\sum_{z_{t-1}}\log p_z(z_t\mid z_{t-1})\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta')\\
+& = & \sum_{t=2}^T\sum_{i_1=1}^N\cdots\sum_{i_M=1}^N\sum_{j_1=1}^N\cdots\sum_{j_M=1}^Np(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\}\mid x_{1:T},\Theta')\sum_{m=1}^M\log a_{i_mj_m}^{(m)},
+\end{eqnarray*}
+where the last step follows from equation (\ref{eqn:trans2}).  Combining this with equation (\ref{eqn:transitionsum2}) we can use the theory of Lagrange multipliers to optimize 
+\begin{eqnarray*}
+&&L(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\},\lambda) \\
+& = & \sum_{t=2}^T\sum_{i_1=1}^N\cdots\sum_{i_M=1}^N\sum_{j_1=1}^N\cdots\sum_{j_M=1}^Np(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\}\mid x_{1:T},\Theta')\sum_{m=1}^M\log a_{i_mj_m}^{(m)} - ...\\
+&&\hspace{10mm}...-\lambda \left(\sum_{m=1}^M\sum_{i_m=1}^N\sum_{j_m=1}^N\log a_{i_mj_m}^{(m)}\right)
+\end{eqnarray*}
+
+\end{proof}
 
 \bibliographystyle{siam}
 \bibliography{references}
