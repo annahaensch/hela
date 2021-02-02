@@ -189,11 +189,15 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             in hmm system m to gaussian dimension d.
         """
         means = []
+        max_hidden_state = np.max(self.ns_hidden_states)
         for n in self.ns_hidden_states:
-            weights = np.random.uniform(-3, 3, (self.n_gaussian_features, n))
+            weights = np.random.uniform(-3, 3, (self.n_gaussian_features, max_hidden_state))
+            if n < max_hidden_state:
+                weights[:,n:] = np.nan
+            weights = np.ma.masked_invalid(weights)
             means.append(weights)
 
-        return np.array(means)
+        return np.ma.array(means)
 
     def _generate_covariance(self):
         """ Returns covariance array with dim. n_gaussian_features x n_gaussian_features
