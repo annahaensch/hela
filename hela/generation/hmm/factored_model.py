@@ -185,8 +185,13 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         """ Returns array of means
 
         Returns:
-            Array where entry [m,d,n] is the contribution of hidden state n
+            Masked array where entry [m,d,n] is the contribution of hidden state n
             in hmm system m to gaussian dimension d.
+
+            If the number of hidden states are not the same for each system, n is
+            the max number of hidden states across all systems m.
+            A system with fewer than n states will have columns filled with masked
+            Nan entries.
         """
         means = []
         max_hidden_state = np.max(self.ns_hidden_states)
@@ -194,6 +199,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             weights = np.random.uniform(-3, 3, (self.n_gaussian_features, max_hidden_state))
             if n < max_hidden_state:
                 weights[:,n:] = np.nan
+            # Mask all Nan entries
             weights = np.ma.masked_invalid(weights)
             means.append(weights)
 
