@@ -37,7 +37,7 @@ X_t = W_t\oplus V_t
 \end{eqnarray}
 where $W_{t}$ is drawn from the categorical space
 \[ 
-\mathcal W = \{w_1,...,w_D\}
+\mathcal W = \{1,...,D\}
 \]
 and $V_t$ is drawn from a $K$ dimensional Gaussian distribution, $\mathbb R^K$.
 A hidden Markov model (HMM) is a latent state model that captures the Markov dynamics of a latent process underlying the observed data.  In its most basic form, the HMM models a sequence of hidden states
@@ -111,7 +111,7 @@ state sequence and captures the probability of an observation vector given each
 of the hidden states. The categorical part of the emission probability can be 
 described by a $D\times N$ matrix, 
 \[
-B = \left[b_{i}(w_d)\right]_{d,i=1}^{D,N}\text{ where }b_{i}(w_d) =p_{cat}(w_d\mid h_i; \theta_{cat}).
+B = \left[b_{i}(d)\right]_{d,i=1}^{D,N}\text{ where }b_{i}(d) =p_{cat}(d\mid h_i; \theta_{cat}).
 \]
 For the continuous part of the emission probability, each hidden state, $h_i$ 
 corresponds to a $K$-dimensional Gaussian distribution with a 
@@ -225,10 +225,18 @@ In the case of categorical observations we can
 describe the emission probability much like in the classical case, but encoding 
 the information in a $D\times N^M$ matrix, $B$, where 
 \[
-B = \left[b_{i}(w_d)\right]_{d,i=1}^{D,N^M} \text{ where }b_{i}(w_d) = p_{cat}(w_d\mid 
-s_i;\theta_{cat})
+B = \left[b_{i}(d)\right]_{d,i=1}^{D,N^M} \text{ where }b_{i}(d) = p_{cat}(d\mid 
+s_i;\theta_{cat}).
 \]
-The situation becomes more complicated for continuous observations.  In 
+Since $s_i$ refers to the hidden state tuple
+\[
+s_i = (s_i^{(1)},...,s_i^{(M)}) \text{ where }s_i^{(m)} = h_{i_m}^{(m)}
+\]
+we will often refer to a single entry of the emission matrix as 
+\[
+b_{i}(d) = b_{i_1,...,i_M}(d)
+\]
+where no confusion will arise.  The situation becomes more complicated for continuous observations.  In 
 particular, the mean values for each Markov system and hidden state vector are 
 given in a $K\times N$ matrix, $W^{(m)}$, where the $kn^{th}$ entry 
 of $W^{(m)}$ is the contribution to the $k^{th}$ dimension by the $n^{th}$ 
@@ -390,13 +398,19 @@ where $\iota$ carries the initial state information,
 \end{eqnarray}
 $\beta$ carries the emission information,
 \begin{eqnarray}\label{eqn:beta}
-\beta(\Theta,\Theta') &=& \sum_{t=1}^T\int_{z_{1:T}}\log p_x(x_1\mid z_1)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T},
+\beta(\Theta,\Theta') &=& \sum_{t=1}^T\int_{z_{1:T}}\log p_x(x_t\mid z_t)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T},
 \end{eqnarray}
 and $\alpha$ carries the transition information,
 \begin{eqnarray}\label{eqn:alpha}
 \alpha(\Theta,\Theta') &=& \sum_{t=2}^T\int_{z_{1:T}}\log p_z(z_t\mid z_{t-1})\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T}.
 \end{eqnarray}
-In what follows we will determine which quantities are necessary to exactly compute and maximize equations (\ref{eqn:iota}), (\ref{eqn:alpha}) and (\ref{eqn:beta}).  Since our hidden states are drawn from a discrete probability distribution, the integrals in all three equations can be replaced by discrete sums.
+In what follows we will determine which quantities are necessary to exactly compute and maximize equations (\ref{eqn:iota}), (\ref{eqn:alpha}) and (\ref{eqn:beta}).  Since our hidden states are drawn from a discrete probability distribution, the integrals in all three equations can be replaced by discrete sums.  Since it will be helpful in what follows, we define 
+\[
+\delta_t(d)=\begin{cases}
+1 & \text{ if }w_t=d\\
+0 & \text{otherwise}.
+\end{cases}
+\]
 
 \begin{lemma}
 For a fixed set of model parameters, $\Theta'$, the function $\iota(\Theta,\Theta')$ achieves its maximum value at
@@ -426,7 +440,7 @@ where $\lambda$ is the Lagrange multiplier.  This optimization can be achieved b
 \end{eqnarray*}
 which can be achieved by solving 
 \begin{eqnarray}\label{eqn:grad1}
-1 - \sum_{i_1=1}^N\cdots \sum_{i_M=1}^M \pi_{i_1,...,i_M} &=& 0
+1 - \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N \pi_{i_1,...,i_M} &=& 0
 \end{eqnarray}
 and 
 \begin{eqnarray}\label{eqn:grad2}
@@ -450,7 +464,7 @@ which is what we wanted to show.
 \begin{lemma}
 For a fixed set of model parameters, $\Theta'$, the function $\alpha(\Theta,\Theta')$ achieves its maximum value at
 \begin{eqnarray*}
-a_{i_m,j_m}^{(m)} &=&
+a_{i_mj_m}^{(m)} &=& \frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{\sum_{t=2}^T\sum_{j_m=1}^N\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}
 \end{eqnarray*}
 for $1\leq i_m\leq N$ and $1\leq j_m\leq N$.
 \end{lemma}
@@ -463,13 +477,153 @@ To begin, we will observe that
 & = & \sum_{t=2}^T\sum_{z_{t}}\sum_{z_{t-1}}\log p_z(z_t\mid z_{t-1})\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta')\\
 & = & \sum_{t=2}^T\sum_{i_1=1}^N\cdots\sum_{i_M=1}^N\sum_{j_1=1}^N\cdots\sum_{j_M=1}^Np(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\}\mid x_{1:T},\Theta')\sum_{m=1}^M\log a_{i_mj_m}^{(m)},
 \end{eqnarray*}
-where the last step follows from equation (\ref{eqn:trans2}).  Combining this with equation (\ref{eqn:transitionsum2}) we can use the theory of Lagrange multipliers to optimize 
+where the last step follows from equation (\ref{eqn:trans2}).  Combining this with equation (\ref{eqn:transitionsum2}) we can use the theory of Lagrange multipliers to optimize each transition parameter independently
 \begin{eqnarray*}
-&&L(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\},\lambda) \\
-& = & \sum_{t=2}^T\sum_{i_1=1}^N\cdots\sum_{i_M=1}^N\sum_{j_1=1}^N\cdots\sum_{j_M=1}^Np(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\}\mid x_{1:T},\Theta')\sum_{m=1}^M\log a_{i_mj_m}^{(m)} - ...\\
-&&\hspace{10mm}...-\lambda \left(\sum_{m=1}^M\sum_{i_m=1}^N\sum_{j_m=1}^N\log a_{i_mj_m}^{(m)}\right)
+&&L(\{a_{i_mj_m}^{(m)}:1\leq i_m<N\text{ and }1\leq j_m\leq N\},\lambda) \\
+& = & \sum_{t=2}^T\sum_{i_m=1}^N\sum_{j_m=1}^N\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_{t}:z_{t}^{(m)}=h_{j_m}^{(m)}\}}\log a_{i_mj_m}^{(m)}\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta') - ...\\
+&&\hspace{10mm}...-\lambda \left(-1+\sum_{j_m=1}^N\log a_{i_mj_m}^{(m)}\right),
+\end{eqnarray*}
+where $\lambda$ is a Lagrange multiplier.  The optimization can be achieved by simultaneously solving every component of the gradient 
+\begin{eqnarray*}
+\nabla_{\lambda,\{a_{i_mj_m}^{(m)}:1\leq i_m\leq N\text{ and }1\leq j_m\leq N\}}L&=&0,
+\end{eqnarray*}
+which can be achieved by simultaneously solving
+\begin{eqnarray}\label{eqn:grad3}
+1-\sum_{j_m=1}^N\log a_{i_mj_m}^{(m)}&=&0
+\end{eqnarray}
+and 
+\begin{eqnarray}\label{eqn:grad4}
+\frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{a_{i_mj_m}^{(m)}}-\lambda &=&0
+\end{eqnarray}
+for $1\leq i_m\leq N$, $1\leq j_m\leq N$ and $1\leq m\leq M$. This can be done by rewriting equation (\ref{eqn:grad4}) as 
+\begin{eqnarray*}
+a_{i_mj_m}^{(m)} &=& \frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{\lambda}
+\end{eqnarray*}
+and combining this with equation (\ref{eqn:grad3}) to obtain
+\begin{eqnarray*}
+\lambda & = & \sum_{j_m=1}^N\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')
+\end{eqnarray*}
+and hence 
+\begin{eqnarray*}
+a_{i_mj_m}^{(m)} &=& \frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{\sum_{t=2}^T\sum_{j_m=1}^N\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}
+\end{eqnarray*}
+which is what we wanted to show.
+\end{proof}
+
+\begin{lemma}
+For a fixed set of model parameters, $\Theta'$, the function $\beta(\Theta,\Theta')$ achieves its maximum value at
+\begin{eqnarray*}
+b_{i_1,...,i_M}(d) &=& \frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{\sum_{d=1}^D\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')},
+\end{eqnarray*}
+for $1\leq m\leq M$, $1\leq i_m\leq N$ and $1\leq d\leq D$.
+\end{lemma}
+
+\begin{proof}
+To begin, we will observe 
+\begin{eqnarray*}
+\beta(\Theta,\Theta') &=& \sum_{t=1}^T\sum_{z_{1:T}}\log p_x(x_t\mid z_t)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{z_{1:T}}\log p_x(x_t\mid z_t)\cdot p(z_t,z_{1:t-1},z_{t+1:T}\mid x_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{z_t}\log p_x(x_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\sum_{z_{1:t-1},z_{t+1:T}}p(z_{1:t-1},z_{t+1:T}\mid z_t,x_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{z_t}\log p_x(x_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{z_t}\left[\log p_x(w_t\mid z_t)+\log p_x(v_t\mid z_t)\right]\cdot p(z_t\mid x_{1:T},\Theta')
+\end{eqnarray*}
+for $x_t=w_t\oplus v_t$.  We will now proceed to optimize the categorical and continuous components separately.
+
+For the categorical part, we have 
+\begin{eqnarray*}
+&&\sum_{t=1}^T\sum_{z_t}\log p_x(w_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\\
+& = &\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log b_{i_1,\cdots ,i_M}(w_t)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta').
+\end{eqnarray*}
+subject to the addded constraint 
+\begin{eqnarray*}
+1 &=&\sum_{d=1}^Db_{i_1,\cdots ,i_M}(d).
+\end{eqnarray*}
+for any fixed set $\{i_1,...,i_M\}$.  In other words, we are maximizing the function 
+\begin{eqnarray*}
+f(\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d})& = &\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log b_{i_1,\cdots ,i_M}(w_t)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')
+\end{eqnarray*}
+subject to the constraint
+\begin{eqnarray*}
+g_{i_1,...,i_M}(\{b_{i_1,...,i_M}(d)\}_d)=&&-1+\sum_{d=1}^Db_{i_1,\cdots ,i_M}(d)=0.
+\end{eqnarray*}
+Therefore, this optimization can be performed using the theory of Lagrange multipliers, by introducing the auxiliary function 
+\begin{eqnarray*}
+L(\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d}, \{\lambda_{i_1,...,i_M}\}_{i_1,...,i_M}) & = & f(\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d}) - ...\\
+&&\hspace{5mm} ...-\sum_{i_1,...,i_M}\lambda_{i_1,...,i_M}\cdot g_{i_1,...,i_M}(\{b_{i_1,...,i_M}(d)\}_d)
+\end{eqnarray*}
+where $\lambda_{i_1,...,i_M}$ is a Lagrange multiplier for all $1\leq m\leq M$ and $1\leq i_m\leq N$, and solving the gradient for zero, that is,
+\begin{eqnarray*}
+\nabla_{\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d}, \{\lambda_{i_1,...,i_M}\}_{i_1,...,i_M}}L & = & 0.
+\end{eqnarray*}
+In order for this gradient to be identically 0, we must simultaneously solve 
+\begin{eqnarray}\label{eqn:grad5}
+-1+\sum_{d=1}^Db_{i_1,\cdots ,i_M}(d)=0
+\end{eqnarray}
+for each set $\{i_1,...,i_M\}$, and 
+\begin{eqnarray}\label{eqn:grad6}
+\frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{b_{i_1,...,i_M}(d)}-\lambda_{i_1,...,i_M} & = & 0.
+\end{eqnarray}
+Equation (\ref{eqn:grad6}) can be rewritten as 
+\begin{eqnarray*}
+b_{i_1,...,i_M}(d) &=& \frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{\lambda_{i_1,...,i_M}},
+\end{eqnarray*}
+and combining this with equation (\ref{eqn:grad5}) we have
+\begin{eqnarray*}
+\lambda_{i_1,...,i_M} & = & \sum_{d=1}^D\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')
+\end{eqnarray*}
+and hence 
+\begin{eqnarray*}
+b_{i_1,...,i_M}(d) &=& \frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{\sum_{d=1}^D\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')},
+\end{eqnarray*}
+which is what we wanted to show.
+
+For the continuous part, recall that there are $N^M$ many hidden state vectors of the for $(h_{i_1},...,h_{i_M})$ and for any such vector we have a corresponding $K$-dimensional mean vector 
+\[
+\mu_{i_1,...,i_M} = \left(\sum_{m=1}^M w_{1,i_m}^{(m)},...,\sum_{m=1}^M w_{K,i_m}^{(m)}\right).
+\]
+where $w_{k,i_m}^{(m)}$ is the contribution to the $k^{th}$ dimension by hidden state $i_m$ of system $m$. Our goal is the to optimize the function 
+\[
+f\left(\{w_{k,i_m}^{(m)}\}_{k,m,i_m}\right)=\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log p_x(v\mid h_{i_1}^{(1)},...,h_{i_M}^{(M)})\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta').
+\]
+To carry out this optimization, we make the following observation 
+\begin{eqnarray*}
+&&\log p_x(v\mid h_{i_1}^{(1)},...,h_{i_M}^{(M)}) \\
+& = & -\frac{1}{2}(v-\mu_{i_1,...,i_M})\cdot \Sigma^{-1}\cdot (v-\mu_{i_1,...,i_M})^T - \log \sqrt{(2\pi)^K\mid \Sigma\mid}\\
+& = & -\frac{1}{2}(v-\mu_{i_1,...,i_M})\cdot \Sigma^{-1}\cdot (v-\mu_{i_1,...,i_M})^T - \log \sqrt{(2\pi)^K\mid \Sigma\mid}\\
+& = & -\frac{1}{2}\left(v_1-\sum_{m=1}^M w_{1,i_m}^{(m)},...,v_K-\sum_{m=1}^M w_{K,i_m}^{(m)}\right)\cdot \Sigma^{-1}\cdot 
+\begin{pmatrix}
+v_1-\sum_{m=1}^M w_{1,i_m}^{(m)}\\
+\vdots\\
+v_K-\sum_{m=1}^M w_{K,i_m}^{(m)}
+\end{pmatrix} - \log\sqrt{(2\pi)^K\mid \Sigma\mid}\\
+& = & -\frac{1}{2}\left(
+\sum_{k=1}^K\sigma_{kk}\left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)^2
+-\sum_{k=1}^K\sum_{k'\neq k}2\sigma_{kk'}\left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)\left(v_{k'}-\sum_{m=1}^M w_{k',i_m}^{(m)}\right)
+\right) -...\\
+&& \hspace{5in}...- \sqrt{(2\pi)^K\mid \Sigma\mid}
+\end{eqnarray*}
+where we define $\sigma_{ij}$ to be the $ij^\text{th}$ entry of $\Sigma^{-1}$.  Therefore, for any $w_{k,n}^{(\ell)}$, we can compute the partial derivative 
+\begin{eqnarray*}
+\frac{\partial f}{\partial w_{k,n}^{(\ell)}} & = & \sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N  p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')\cdot...\\
+&&...\cdot \left[-\cdot \sigma_{kk}\cdot \left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)\cdot \delta_{i_m,n}+...\right.\\
+&& \left....+\sum_{k'\neq k}\sigma_{kk'}\left(v_{k'}-\sum_{m=1}w_{k',i_m}^{(m)}\right)\cdot \delta_{i_m,n}\right]\\
+& = & \sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N  p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')\cdot...\\
+&&...\cdot \left[-\cdot \sigma_{kk}\cdot \left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)\cdot \delta_{i_m,n}+...\right.\\
+&& \left....+\sum_{k'\neq k}\sigma_{kk'}\left(v_{k'}-\sum_{m=1}^Mw_{k',i_m}^{(m)}\right)\cdot \delta_{i_m,n}\right]
 \end{eqnarray*}
 
+
+
+
+we have 
+\begin{eqnarray*}
+&&\sum_{t=1}^T\sum_{z_t}\log p_x(v_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\\
+& = &\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log p_{cont}(v_t\mid (h_{i_1},...,h_{i_M}) \cdot p((h_{i_1},...,h_{i_M})\mid x_{1:T},\Theta').
+\end{eqnarray*}
+where 
+\begin{eqnarray*}
+p_{cont}(v_t\mid (h_{i_1},...,h_{i_M})) & = & \frac{exp\left(-\frac{1}{2}(v- )\Sigma^{-1}(v-  )^T\right)}{\sqrt{(2\pi)^K \mid \Sigma\mid }}
+\end{eqnarray*}
 \end{proof}
 
 \bibliographystyle{siam}
