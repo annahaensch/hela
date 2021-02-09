@@ -1,5 +1,5 @@
 \documentclass{amsart}
-\usepackage{amsmath,amsthm}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{wrapfig}
@@ -120,9 +120,10 @@ and $K\times K$ covariance matrix, $\Sigma_i$ for each hidden state $h_i$, and
 hence 
 \[
 p_{cont}(v\mid 
-h_i;\theta_{cont})=\frac{\exp\left(-\frac{1}{2}\left(v-\mu_i\right)\Sigma_i^{-1}\left(v-\mu_i\right)^T\right)}{\sqrt{(2\pi)^K\mid \Sigma_i\mid}}.
+h_i;\theta_{cont})=\frac{\exp\left(-\frac{1}{2}\left(v-\mu_i\right)^\intercal\Sigma_i^{-1}
+\left(v-\mu_i\right)\right)}{\sqrt{(2\pi)^K\mid \Sigma_i\mid}}.
 \]
-The graphical model for a classical HMM can 
+where $^\intercal$ denotes the matrix transpose. The graphical model for a classical HMM can 
 be seen in Figure \ref{fig:HMM}.  One primary goal in much of what follows, will be to learn the components of 
 $\theta$.
 
@@ -159,36 +160,46 @@ for $1\leq i\leq N^M$.  The set of hidden
 state variables in $\mathcal Z^{(m)}$ can be more concisely 
 represented by a collection of $N$ 
 many $N\times 1$ matrices, each 
-of which is 0 in all but one component.  Therefore, we will represent the vector $s_i$ by a 
-set of $M$ many $N\times1$ matrices corresponding to the appropriate 
-$s_i^{(m)}$. A comprehensive treatment of fHMMs can be found in the foundational publication 
+of which is 0 in all but one component.  In this way we can 
+represent $s_i$ as the $N\times M$ matrix obtained by concatenating the 
+appropriate $s_i^{(m)}$ column vectors,
+\[
+s_i = 
+\left[
+\begin{array}{c|c|c}
+s_i^{(1)} &  \cdots & s_i^{(M)} 
+\end{array}
+\right].
+\]
+A comprehensive treatment of fHMMs can be found in the foundational publication 
 on the topic by Gharamani and Jordan \cite{GJ95}, but we will highlight some 
 key components of that paper here.  
 
-The initial state vector can take on one of $N^M$ values, therefore we will define the initial state probabilties by 
-\[
-\pi_{i_1,...,i_M} := p_1(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\};\theta_1).
-\] 
-for any hidden state vector, subject to the restriction
-\begin{eqnarray}\label{eqn:initialstate}
-1 = \sum_{i_1=1}^N\cdots \sum_{i_M=1}^M \pi_{i_1,...,i_M}.
-\end{eqnarray}
-The transition probability will now be described by a collection of $M$ many $N\times N$ matrices, 
+The initial state vector, $Z_1$, can take on one of $N$ values in each of 
+its $M$ components, therefore, we will define the 
+initial state probability as the $M\times N$ matrix, $\pi$ where the 
+entry in row $m$ and column $n$ of $\pi$ is defined as 
+\begin{eqnarray*}
+\pi_n^{(m)} & := & p\left(Z_1^{(m)}=h_{n}^{(m)}; \Theta\right).
+\end{eqnarray*}
+Under this definition, note that each row of $\pi$ necessarily sums to 
+1. The transition probability will be described by a collection of $M$ many $N\times N$ matrices, 
 \[
 \{A^{(1)},...,A^{(M)}\},
 \]
 where 
 \[
 A^{(m)} = \begin{bmatrix}
-a_{ij}^{(m)}
-\end{bmatrix}_{1\leq i,j\leq N}\text{ where } a_{ij}^m := p_z(h_j^{(m)}\mid 
-h_i^{(m)}; \theta_z)
+a_{nn'}^{(m)}
+\end{bmatrix}_{1\leq n,n'\leq N}
 \]
-for $1\leq m\leq M$, with the added restriction,
-\begin{eqnarray}\label{eqn:transitionsum2}
-1=\sum_{j=1}^Na_{ij}^{(m)}
-\end{eqnarray}
-which is just the fHMM analogue of equation (\ref{eqn:transitionsum}).
+with
+\[
+a_{nn'}^m := p(Z_t^{(m)} = 
+h_{n'}^{(m)}\mid Z_{t-1}^{(m)} = h_n^{(m)}; \Theta)
+\]
+for $1\leq m\leq M$.  Under this definiton, for a fixed $m$, the 
+rows of $A^{(m)}$ sum to 1. 
 
 The probability of transitioning from one hidden state vector to another can 
 then be constructed as a tensor product of these matrices.  More concretely, 
@@ -209,36 +220,36 @@ its own dynamics. A graphical model for the fHMM can be seen in Figure
 
 Although we want to maintain this marginal independence for the hidden states, 
 $Z_{1:T}$, we would expect some dependence once we condition on the observation 
-sequence, $X_{1:T}$.  To understand the intuition behind this, let's revisit our 
-example of involving the five components of the wind turbine.  While we don't 
-expect the status of the generator from time $t$ to $t+1$ to be connected to 
-the status of the yaw motor from time $t$ to $t+1$, if we were to observe a 
-power surge that causes the generator to experience a fault, that might 
-increase the likelihood that the yaw motor experiences a fault\footnote{This is 
-an example of what is known as ``Berkson's paradox".}.  If we consider 
+sequence, $X_{1:T}$.  In particular, the hidden values across systems 
+at a fixed timestep are not independent of one another conditioned on 
+the observation at the given timestep. If we consider 
 the fHMM as a graphical model as in Figure (\ref{fig:fHMM}) we can couch this 
 observation in the language of directed graphs and the so-called d-separation 
 criterion. This conditional dependence means that, in particular, we would not expect the 
-emission probability to decompose as a tensor product as in equation (\ref{eqn:trans2}). 
+emission probability to decompose as a tensor product as in equation 
+(\ref{eqn:trans2}). Intuitively, this means that the hidden state at 
+one layer has the possibility to be "explained away" by the hidden 
+state at another layer, an example of what is known as Berkson's 
+paradox. 
 
+Recall that an observation vector $X$ can be decomposed into its 
+categorical part, $Y$, and continuous part, $V$, and 
+\begin{eqnarray}
+p(X_t\mid Z_t) = p(Y_t\mid Z_t)\cdot p(V_t\mid Z_t).
+\end{eqnarray}
 In the case of categorical observations we can 
 describe the emission probability much like in the classical case, but encoding 
 the information in a $D\times N^M$ matrix, $B$, where 
 \[
-B = \left[b_{i}(d)\right]_{d,i=1}^{D,N^M} \text{ where }b_{i}(d) = p_{cat}(d\mid 
-s_i;\theta_{cat}).
+B = \left[b_{i}(d)\right]_{d,i=1}^{D,N^M}
 \]
-Since $s_i$ refers to the hidden state tuple
+with 
 \[
-s_i = (s_i^{(1)},...,s_i^{(M)}) \text{ where }s_i^{(m)} = h_{i_m}^{(m)}
+b_{i}(d) := p(Y_t=d\mid Z_t = s_i;\Theta).
 \]
-we will often refer to a single entry of the emission matrix as 
-\[
-b_{i}(d) = b_{i_1,...,i_M}(d)
-\]
-where no confusion will arise.  The situation becomes more complicated for continuous observations.  In 
+Under this definition, the columns of $B$ must sum to 1. The situation becomes more complicated for continuous observations.  In 
 particular, the mean values for each Markov system and hidden state vector are 
-given in a $K\times N$ matrix, $W^{(m)}$, where the $kn^{th}$ entry 
+determined by a $K\times N$ matrix, $W^{(m)}$, where the $kn^{th}$ entry 
 of $W^{(m)}$ is the contribution to the $k^{th}$ dimension by the $n^{th}$ 
 hidden state vector for system $m$. For a hidden state vector, $s_i$, as in 
 equation (\ref{eqn:vec}) we obtain a $K$-dimensional mean vector
@@ -248,15 +259,23 @@ equation (\ref{eqn:vec}) we obtain a $K$-dimensional mean vector
 which couples the hidden state vectors across the Markov systems.
 Therefore, assuming a constant $K\times K$ covariance matrix, $\Sigma$, we have 
 \[
-p_{cont}(v\mid s_i;\theta_{cont}) = 
-\frac{\exp\left(-\frac{1}{2}\left(v-\mu_i\right)\Sigma^{-1}\left(v-\mu_i\right)^T\right)}{\sqrt{(2\pi)^K\mid \Sigma\mid}}.
+p(V_t = v\mid Z_t = s_i;\Theta) = 
+\frac{\exp\left(-\frac{1}{2}\left(v-\mu_i\right)^\intercal\Sigma^{-1}\left(v-\mu_i\right)\right)}{\sqrt{(2\pi)^K\mid \Sigma\mid}}.
 \]
-This for a hidden state vector, $s_i$, and observation $x=w\oplus v$, we have
-\begin{eqnarray}
-p_x(x\mid s_i; \theta_x) = p_{cat}(w\mid 
-s_i;\theta_{cat})\cdot p_{cont}(v\mid s_i;\theta_{cont}) .
-\end{eqnarray}
+where $'$ denotes the matrix transpose.  
 
+For the full set of model paramters, 
+\[
+\Theta = \{\pi,A,B,W,\Sigma\}
+\]
+we can now parameterize the probabilities as in the classical case, 
+with
+\begin{eqnarray*}
+p(Z_1 = z) & = & p_1(z;\Theta)\\
+p(Z_t = z\mid Z_{t-1} = z') & = & p_z(z\mid z';\Theta)\\
+p(X_t = x\mid Z_t = z) & = & p_x(x\mid z;\Theta)
+\end{eqnarray*}
+where $\Theta$ might be omitted when it is clear from context.
 
 \section{Learning and Inference for Factored HMMs}
 
@@ -274,13 +293,13 @@ sampling.  In particular, we will begin by randomly seeding a sequence of hidden
 states, $z_{1:T}$.  We will randomly traverse the full sequence, and for each time, 
 $t$, and hidden state system, $m$, we will draw a sample  
 \begin{equation}\label{eqn:sample}
-{z_t^{(m)}}'\sim p(Z_t^{(m)}\mid \{z_t^{(n)}:n\neq m\},z_{t-1}^{(m)}, z_{t+1}^{(m)}, x_t),
+{z_t^{(m)'}}\sim p(Z_t^{(m)}\mid \{z_t^{(n)}:n\neq m\},z_{t-1}^{(m)}, z_{t+1}^{(m)}, x_t),
 \end{equation}
-eventually replacing every $z_t^{(m)}$ with ${z_t^{(m)}}'$.  With sufficient 
+eventually replacing every $z_t^{(m)}$ with ${z_t^{(m)'}}$.  With sufficient 
 iterations this process will eventually converge to a reasonable approximation 
 for the most likely sequence of hidden states.  In order to do this, a first 
 step will be to express equation (\ref{eqn:sample}) in terms of known 
-quantities, $p_1,p_x$ and $p_z$.  By repeated applications of Bayes' rule and marginalizing over all possible hidden 
+initial state, transition, and emission probabilities.  By repeated applications of Bayes' rule and marginalizing over all possible hidden 
 states for time $t$ and system $m$, we obtain 
 \begin{eqnarray*}
 &&p(Z_t^{(m)}\mid \{z_t^{(n)}:n\neq m\},z_{t-1}^{(m)}, z_{t+1}^{(m)}, x_t)\\
@@ -305,7 +324,7 @@ However, we can see the random variable $Z_t^{(m)}$ is independent of the
 denominator above, and therefore is not 
 relevant to the sampling. Consequently, we can sample 
 \begin{equation}\label{eqn:sample2}
-z_t^{(m)}\sim p_x(x_t\mid Z_t^{(m)},\{z_t^{(n)}:n\neq m\})\cdot
+z_t^{(m)'}\sim p_x(x_t\mid Z_t^{(m)},\{z_t^{(n)}:n\neq m\})\cdot
 p_z(z_{t+1}^{(m)}\mid Z_t^{(m)})\cdot
 p_z(Z_t^{(m)}\mid z_{t-1}^{(m)}).
 \end{equation}
@@ -368,7 +387,13 @@ In the case of classical HMMs, this is typically done by marginalizing over the 
 \begin{eqnarray}\label{eqn:loglikelihood}
 \log p(X_{1:T}\mid \Theta) = \log\int p(X_{1:T},Z_{1:T}\mid \Theta)\,\,dZ_{1:T}
 \end{eqnarray}
-to find $\mathcal L$.  The integral in equation (\ref{eqn:loglikelihood}) is generally intractible, but for there is an effective algorithm for computing the marginal likelihood that doesn't involve direct evaluation of the integral.  The algorithm, called {\em expectation-maximization} (or {\em EM}), consists of two fundamental steps.  In the expectation step, the expected value of the marginal probabilty is computed by way of an auxiliary function,
+to find $\mathcal L$.  The integral in equation (\ref{eqn:loglikelihood}) is generally intractible, 
+but fortunately there is an effective algorithm for computing the marginal likelihood that 
+doesn't involve direct evaluation of the integral.  The algorithm, called 
+{\em expectation-maximization} (or {\em EM}), consists of two 
+fundamental steps: the expectation or {\em E}-step, and the maximization or 
+{\em M}-step.  In the {\em E}-step, the expected value of the marginal probabilty is computed 
+by way of an auxiliary function,
 \begin{eqnarray}
 Q(\Theta,\Theta') = \mathbb E_{Z_{1:T}\mid X_{1:T},\Theta'}\left[\log p(X_{1:T},Z_{1:T}\mid \Theta\right)],
 \end{eqnarray}
@@ -378,15 +403,24 @@ conditioned on the observations, $X_{1:T}$ and current ``best guess" at the mode
 \]
 By iteratively maximizing $Q$, it's possible to find a local maximum of the likelihood function.\footnote{The fact that the this process leads to a maximal value for $\mathcal L$ is not totally obvious.  For a detailed explanation of why EM is guaranteed to converge to a locally optimal solution, the reader is directed to \cite[$\S2.2$]{HVB20}. \textcolor{red}{$\leftarrow$ It might be helpful to clean up this note and give it a permanent home.}}
 
-In classical HMMs the $E$ step is computed across time steps by a {\em forward-backward} algorithm that can be carried out with time complexity $O(TN^2)$.  In the case of fHMMs, exact computation of the E step is intractible (cf. \cite[$\S3.3$]{GJ95}).  Although it seems the posterior probabilties could be computed across the time dimension without difficulty, the intractibility is a conseqence of the conditional dependece of the Markov systems within each time step.  As an alternative to the exact $E$ step, we will compute an approximate $E$ step using the probabilities gathered during each iteration of Gibbs sampling.  
+In classical HMMs the $E$-step is computed across time steps by a {\em forward-backward} 
+algorithm that can be carried out with time complexity $O(TN^2)$.  In the case of 
+fHMMs, exact computation of the $E$-step is intractible (cf. \cite[$\S3.3$]{GJ95}).  
+Although it seems the posterior probabilties could be computed across the time 
+dimension without difficulty, the intractibility is a conseqence of the conditional 
+dependece of the Markov systems within each time step.  As an alternative to the 
+exact $E$-step, we will compute an approximate $E$-step using the probabilities 
+gathered during each iteration of Gibbs sampling.  
 
-To understand how we might approximate the $E$ step, let's consider the components of the expected value, $Q$, in the fHMM case.  Recall that for a fixed $\Theta$,  
+To understand how we might approximate the $E$-step, let's consider the components of the expected value, $Q$, in the fHMM case.  Recall that for a fixed $\Theta$,  
 \begin{eqnarray*}
-p(x_{1:T},z_{1:T}\mid \Theta) & = & p_1(z_1)\cdot p_x(x_1\mid z_1)\cdot \prod_{t=2}^Tp_x(x_t\mid z_t)\cdot p_z(z_t\mid z_{t-1}).  
+p(X_{1:T},Z_{1:T}\mid \Theta) & = & p(Z_1)\cdot p(X_1\mid Z_1)\cdot 
+\prod_{t=2}^Tp(X_t\mid Z_t)\cdot p(Z_t\mid Z_{t-1}).  
 \end{eqnarray*}
-for an observation sequence $x_{1:T}$ and hidden state sequence $z_{1:T}$. Therefore, 
+Therefore, 
 \begin{eqnarray*}
-Q(\Theta,\Theta') = \int_{z_{1:T}}\log p(x_{1:T},z_{1:T}\mid \Theta) \cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T}
+Q(\Theta,\Theta') = \int_{Z_{1:T}}\log p(X_{1:T},Z_{1:T}\mid \Theta) 
+\cdot p(Z_{1:T}\mid X_{1:T},\Theta')\,\,dZ_{1:T}
 \end{eqnarray*}
 can be decomposed into three components, 
 \begin{eqnarray*}
@@ -394,20 +428,53 @@ Q(\Theta,\Theta') &=& \iota(\Theta,\Theta')+\beta(\Theta,\Theta')+\alpha(\Theta,
 \end{eqnarray*}
 where $\iota$ carries the initial state information,
 \begin{eqnarray}\label{eqn:iota}
-\iota(\Theta,\Theta') &=& \int_{z_{1:T}}\log p_1(z_1)p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T},
+\iota(\Theta,\Theta') &=& \int_{Z_{1:T}}\log p(Z_1)\cdot p(Z_{1:T}\mid 
+X_{1:T},\Theta')\,\,dZ_{1:T},
 \end{eqnarray}
-$\beta$ carries the emission information,
-\begin{eqnarray}\label{eqn:beta}
-\beta(\Theta,\Theta') &=& \sum_{t=1}^T\int_{z_{1:T}}\log p_x(x_t\mid z_t)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T},
-\end{eqnarray}
-and $\alpha$ carries the transition information,
+$\alpha$ carries the transition information,
 \begin{eqnarray}\label{eqn:alpha}
-\alpha(\Theta,\Theta') &=& \sum_{t=2}^T\int_{z_{1:T}}\log p_z(z_t\mid z_{t-1})\cdot p(z_{1:T}\mid x_{1:T},\Theta')\,\,dz_{1:T}.
+\alpha(\Theta,\Theta') &=& \sum_{t=2}^T\int_{Z_{1:T}}\log p(Z_t\mid 
+Z_{t-1})\cdot p(Z_{1:T}\mid X_{1:T},\Theta')\,\,dZ_{1:T}.
 \end{eqnarray}
-In what follows we will determine which quantities are necessary to exactly compute and maximize equations (\ref{eqn:iota}), (\ref{eqn:alpha}) and (\ref{eqn:beta}).  Since our hidden states are drawn from a discrete probability distribution, the integrals in all three equations can be replaced by discrete sums.  Since it will be helpful in what follows, we define 
+and $\beta$ carries the emission information,
+\begin{eqnarray}\label{eqn:beta}
+\beta(\Theta,\Theta') &=& \sum_{t=1}^T\int_{Z_{1:T}}\log p(X_t\mid 
+Z_t)\cdot p(Z_{1:T}\mid X_{1:T},\Theta')\,\,dZ_{1:T},
+\end{eqnarray}
+In what follows we will determine which quantities are necessary to exactly 
+compute and maximize equations (\ref{eqn:iota}), (\ref{eqn:alpha}) and (\ref{eqn:beta}).  
+Since our hidden states are drawn from a discrete probability distribution, the integrals 
+in all three equations can be replaced by discrete sums.  In an effort 
+to keep our notation consistent with the notation in \cite{GJ95}, for 
+each $m$ we 
+introduce the $N\times 1$ vector $\langle Z_t^{(m)}\rangle$ whose 
+$n^{th}$ component is given by 
+\begin{eqnarray*}
+\langle Z_t^{(m)}\rangle_n &=& p\left(Z_t^{(m)}=h_n^{(m)}\mid 
+X_{1:T},\Theta'\right),
+\end{eqnarray*}
+which is equivalent to the definiton in
+\cite[Appendix B]{GJ95}. Similarly, for each $m$, we will introduce the the $N\times N$ matrix 
+$\langle Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle$ 
+where the entry in row $n$ and column $n'$ is given by 
+\begin{eqnarray*}
+\langle Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle_{nn'} &=& 
+p\left(Z_{t-1}^{(m)}=h_n^{(m)},Z_t^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta'\right).
+\end{eqnarray*}
+Finally, we introduce a collection of $M\times M$ many $N\times N$ 
+matrices $\langle 
+Z_t^{(m)}Z_t^{(m')^\intercal} \rangle$ where the entry in row $n$ and column $n'$ is 
+given by  
+\begin{eqnarray*}
+\langle Z_t^{(m)}Z_t^{(m')^\intercal}\rangle_{nn'} &=& 
+p\left(Z_t^{(m)}=h_n^{(m)},Z_t^{(m')}=h_{n'}^{(m')}\mid 
+X_{1:T},\Theta'\right).
+\end{eqnarray*}
+Since it will be helpful in what follows, we define 
 \[
-\delta_t(d)=\begin{cases}
-1 & \text{ if }w_t=d\\
+\delta_{i,j}=\begin{cases}
+1 & \text{ if }i=j\\
 0 & \text{otherwise}.
 \end{cases}
 \]
@@ -415,215 +482,311 @@ In what follows we will determine which quantities are necessary to exactly comp
 \begin{lemma}
 For a fixed set of model parameters, $\Theta'$, the function $\iota(\Theta,\Theta')$ achieves its maximum value at
 \begin{eqnarray*}
-\pi_{i_1,...,i_M} &=&\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\sum_{i_1=1}^N\cdots \sum_{i_M=1}^M p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}.
+\pi_n^{(m)} &=& \frac{p(Z_1^{(m)} = h_n^{(m)}\mid 
+X_{1:T},\Theta')}{\sum_{n'=1}^Np(Z_1^{(m)} = h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}
 \end{eqnarray*}
-for $1\leq m\leq M$ and $1\leq i_m\leq N$.
+or written equivalently in bracket notation
+\begin{eqnarray*}
+\pi_n^{(m)} &=&\frac{\langle Z_1^{(m)}\rangle_n}{\sum_{n'=1}^N\langle 
+Z_1^{(m)}\rangle_{n'}}
+\end{eqnarray*}
+for $1\leq m\leq M$ and $1\leq n\leq N$.
 \end{lemma}
 
 \begin{proof}
-To begin, observe 
+To begin, observe that equation (\ref{eqn:iota}) can be rewritten as 
 \begin{eqnarray*}
-\iota(\theta_1,\Theta') &=& \sum_{z_{1:T}}\log p_1(z_1)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\\
-& = & \sum_{z_1}\log p_1(z_1)\cdot p(z_1\mid x_{1:T},\Theta')\cdot \sum_{z_{2:T}}p(z_{2:T}\mid z_1,x_{1:T},\Theta')\\
-& = & \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log p_1(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\})\cdot p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')\\
-& = & \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log \pi_{{i_1},...,{i_M}}\cdot p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta').
+\iota(\Theta,\Theta') &=& \sum_{Z_{1:T}}\log p(Z_1)\cdot p(Z_{1:T}\mid 
+X_{1:T},\Theta')\\
+& = & \sum_{Z_{1:T}}\log p(Z_1)\cdot p(Z_1\mid X_{1:T},\Theta')\cdot 
+p(Z_{2:T}\mid Z_1,X_{1:T},\Theta')\\
+& = & \sum_{Z_1} \log p(Z_1)\cdot p(Z_1\mid 
+X_{1:T},\Theta')\sum_{Z_{2:T}}p(Z_{2:T}\mid Z_1,X_{1:T},\Theta')\\
+& = & \sum_{Z_1} \log p(Z_1)\cdot p(Z_1\mid 
+X_{1:T},\Theta')
 \end{eqnarray*}
-Combining this with equation (\ref{eqn:initialstate}) we can use the theory of Lagrange multipliers to optimize 
+by marginalizing over $Z_{2:T}$.  Moreover, by marginalizing across the 
+factored Markov systems, we can reduce this to 
 \begin{eqnarray*}
-&&L(\{\pi_{{i_1},...,{i_M}}:1\leq m\leq M\text{ and }1\leq i_m\leq N\}, \lambda) \\
-& = & \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log \pi_{{i_1},...,{i_M}}\cdot p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta') -...\\
-&&\hspace{10mm}...- \lambda \left(-1 + \sum_{i_1=1}^N\cdots \sum_{i_M=1}^M \pi_{i_1,...,i_M}.\right) 
+\iota(\Theta,\Theta')& = & \sum_{m=1}^M\sum_{n=1}^N 
+\log\pi_n^{(m)}\cdot p(Z_1^{(m)} = h_n^{(m)}\mid X_{1:T},\Theta') + ...\\
+& & ...+\sum_{\stackrel{Z_1 with }{Z_1^{(m)}=h_n^{(m)}}}\log 
+p(\{Z_1^{(m')}:m'\neq m\}\mid Z_1^{(m)}=h_n^{(m)})\cdot p(Z_1\mid 
+X_{1:T},\Theta').
 \end{eqnarray*}
-where $\lambda$ is the Lagrange multiplier.  This optimization can be achieved by simultaneous solving every component of the gradient, 
+Now by considering $\iota$ as a funtion with variables $\pi_n^{(m)}$ 
+for $1\leq m\leq M$ and $1\leq n\leq N$, we can optimize $\iota$ using the theory of Lagrange multipliers, 
+defining the auxiliary function 
 \begin{eqnarray*}
-\nabla_{\lambda,\{\pi_{{i_1},...,{i_M}}:1\leq m\leq M \text{ and } 1\leq i_m\leq N\}}L &=& 0,
+L(\{\pi_n^{(m)}:1\leq m\leq M,1\leq n\leq N\}, 
+\lambda_1.,,,.\lambda_m)=\iota(\Theta,\Theta')-\sum_{m=1}^M 
+\lambda_m\cdot g_m(\{\pi_n^{(m)}:1\leq n\leq N\})
 \end{eqnarray*}
-which can be achieved by solving 
-\begin{eqnarray}\label{eqn:grad1}
-1 - \sum_{i_1=1}^N\cdots \sum_{i_M=1}^N \pi_{i_1,...,i_M} &=& 0
+for Lagrange multipliers $\lambda_1,...,\lambda_m$, and the system of functions 
+\begin{eqnarray*}
+g_m(\{\pi_n^{(m)}:1\leq n\leq N\}) = \sum_{n=1}^N \pi_n^{(m)} -1.
+\end{eqnarray*}
+By setting the gradient, $\nabla L$, equal to zero, we can solve for the 
+values of 
+$\pi_n^{(m)}$ that optimize $\iota$. For any values of $m$ and $n$, we 
+have 
+\begin{eqnarray}\label{eqn:partial_L_iota1}
+\frac{\partial L}{\partial \pi_n^{(m)}} & = &
+\frac{p(Z_1^{(m)} = h_n^{(m)}\mid X_{1:T},\Theta')}{\pi_n^{(m)}} - 
+\lambda_m
 \end{eqnarray}
 and 
-\begin{eqnarray}\label{eqn:grad2}
-\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\pi_{{i_1},...,{i_M}}} - \lambda &=& 0
+\begin{eqnarray}\label{eqn:partial_L_iota2}
+\frac{\partial L}{\partial \lambda_m} & = &-1 +\sum_{n=1}^N 
+\pi_n^{(m)}.
 \end{eqnarray}
-for all $1\leq m\leq M$ and $1\leq i_m\leq N$.  This can be done by for rewriting equation (\ref{eqn:grad2}) as 
+Combining equations (\ref{eqn:partial_L_iota1}) and 
+(\ref{eqn:partial_L_iota2}) we obtain 
 \begin{eqnarray*}
- \pi_{{i_1},...,{i_M}}&=&\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\lambda}
+\pi_n^{(m)} &=& \frac{p(Z_1^{(m)} = h_n^{(m)}\mid 
+X_{1:T},\Theta')}{\lambda_m}
 \end{eqnarray*}
-and combining this with equation (\ref{eqn:grad1}) to obtain 
+and
 \begin{eqnarray*}
-\lambda&=&\sum_{i_1=1}^N\cdots \sum_{i_M=1}^M p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')
-\end{eqnarray*}
-from which it follows,
-\begin{eqnarray*}
-\pi_{{i_1},...,{i_M}}&=&\frac{p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')}{\sum_{i_1=1}^N\cdots \sum_{i_M=1}^M p(\{h_{i_1}^{(1)},...,h_{i_M}^{(M)}\}\mid x_{1:T},\Theta')},
-\end{eqnarray*}
-which is what we wanted to show.
-\end{proof}
-
-\begin{lemma}
-For a fixed set of model parameters, $\Theta'$, the function $\alpha(\Theta,\Theta')$ achieves its maximum value at
-\begin{eqnarray*}
-a_{i_mj_m}^{(m)} &=& \frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{\sum_{t=2}^T\sum_{j_m=1}^N\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}
-\end{eqnarray*}
-for $1\leq i_m\leq N$ and $1\leq j_m\leq N$.
-\end{lemma}
-
-\begin{proof}
-To begin, we will observe that 
-\begin{eqnarray*}
-\alpha(\Theta,\Theta') &=& \sum_{t=2}^T\sum_{z_{1:T}}\log p_z(z_t\mid z_{t-1})\cdot p(z_{1:T}\mid x_{1:T},\Theta')\\
-&=& \sum_{t=2}^T\sum_{z_{t}}\sum_{z_{t-1}}\log p_z(z_t\mid z_{t-1})\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta')\cdot \sum_{z_{1:t-2,t:T}}p(z_{1:t-2,t:T}\mid z_t,z_{t-1},x_{1:T},\Theta')\\
-& = & \sum_{t=2}^T\sum_{z_{t}}\sum_{z_{t-1}}\log p_z(z_t\mid z_{t-1})\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta')\\
-& = & \sum_{t=2}^T\sum_{i_1=1}^N\cdots\sum_{i_M=1}^N\sum_{j_1=1}^N\cdots\sum_{j_M=1}^Np(\{h_{i_1}^{(1)},...,h_{i_M}^{(m)}\},\{h_{j_1}^{(1)},...,h_{j_M}^{(m)}\}\mid x_{1:T},\Theta')\sum_{m=1}^M\log a_{i_mj_m}^{(m)},
-\end{eqnarray*}
-where the last step follows from equation (\ref{eqn:trans2}).  Combining this with equation (\ref{eqn:transitionsum2}) we can use the theory of Lagrange multipliers to optimize each transition parameter independently
-\begin{eqnarray*}
-&&L(\{a_{i_mj_m}^{(m)}:1\leq i_m<N\text{ and }1\leq j_m\leq N\},\lambda) \\
-& = & \sum_{t=2}^T\sum_{i_m=1}^N\sum_{j_m=1}^N\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_{t}:z_{t}^{(m)}=h_{j_m}^{(m)}\}}\log a_{i_mj_m}^{(m)}\cdot p(z_t,z_{t-1}\mid x_{1:T},\Theta') - ...\\
-&&\hspace{10mm}...-\lambda \left(-1+\sum_{j_m=1}^N\log a_{i_mj_m}^{(m)}\right),
-\end{eqnarray*}
-where $\lambda$ is a Lagrange multiplier.  The optimization can be achieved by simultaneously solving every component of the gradient 
-\begin{eqnarray*}
-\nabla_{\lambda,\{a_{i_mj_m}^{(m)}:1\leq i_m\leq N\text{ and }1\leq j_m\leq N\}}L&=&0,
-\end{eqnarray*}
-which can be achieved by simultaneously solving
-\begin{eqnarray}\label{eqn:grad3}
-1-\sum_{j_m=1}^N\log a_{i_mj_m}^{(m)}&=&0
-\end{eqnarray}
-and 
-\begin{eqnarray}\label{eqn:grad4}
-\frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{a_{i_mj_m}^{(m)}}-\lambda &=&0
-\end{eqnarray}
-for $1\leq i_m\leq N$, $1\leq j_m\leq N$ and $1\leq m\leq M$. This can be done by rewriting equation (\ref{eqn:grad4}) as 
-\begin{eqnarray*}
-a_{i_mj_m}^{(m)} &=& \frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{\lambda}
-\end{eqnarray*}
-and combining this with equation (\ref{eqn:grad3}) to obtain
-\begin{eqnarray*}
-\lambda & = & \sum_{j_m=1}^N\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')
+1 = \sum_{n=1}^N \pi_n^{(m)} = \frac{\sum_{n=1}^Np(Z_1^{(m)} = h_n^{(m)}\mid 
+X_{1:T},\Theta')}{\lambda_m}
 \end{eqnarray*}
 and hence 
 \begin{eqnarray*}
-a_{i_mj_m}^{(m)} &=& \frac{\sum_{t=2}^T\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}{\sum_{t=2}^T\sum_{j_m=1}^N\sum_{\{z_{t-1}:z_{t-1}^{(m)}=h_{i_m}^{(m)}\}}\sum_{\{z_t:z_t^{(m)}=h_{j_m}^{(m)}\}}p(z_{t},z_{t-1}\mid x_{1:T},\Theta')}
+\pi_n^{(m)} &=& \frac{p(Z_1^{(m)} = h_n^{(m)}\mid 
+X_{1:T},\Theta')}{\sum_{n'=1}^Np(Z_1^{(m)} = h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}.
 \end{eqnarray*}
 which is what we wanted to show.
 \end{proof}
 
 \begin{lemma}
-For a fixed set of model parameters, $\Theta'$, the function $\beta(\Theta,\Theta')$ achieves its maximum value at
+For a fixed set of model parameters, $\Theta'$, the function $\alpha(\Theta,\Theta')$ 
+achieves its maximum value at
 \begin{eqnarray*}
-b_{i_1,...,i_M}(d) &=& \frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{\sum_{d=1}^D\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')},
+a_{nn'}^{(m)} & = & 
+\frac{\sum_{t=2}^Tp(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}{\sum_{t=2}^Tp(Z_{t-1}^{(m)}=h_{n}^{(m)}\mid 
+X_{1:T},\Theta')}
 \end{eqnarray*}
-for $1\leq m\leq M$, $1\leq i_m\leq N$ and $1\leq d\leq D$.
+or written equivalently in bracket notation, 
+\begin{eqnarray*}
+a_{nn'}^{(m)} = \frac{\sum_{t=2}^T\langle 
+Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle_{nn'}}{\sum_{t=2}^T\langle 
+Z_t^{(m)}\rangle_n},
+\end{eqnarray*}
+for $1\leq n,n'\leq N$ and $1\leq m\leq M$.
+\end{lemma}
+
+\begin{proof}
+To begin, we will observe that equation (\ref{eqn:alpha}) can be 
+rewritten as 
+\begin{eqnarray*}
+\alpha(\Theta,\Theta') &=& \sum_{t=2}^T\sum_{Z_{1:T}}\log p(Z_t\mid 
+Z_{t-1})\cdot p(Z_{1:T}\mid X_{1:T},\Theta')\\
+&=& \sum_{t=2}^T\sum_{Z_{t}}\sum_{Z_{t-1}}\log p(Z_t\mid Z_{t-1})\cdot 
+p(Z_t,Z_{t-1}\mid X_{1:T},\Theta')\\
+& = & \sum_{t=2}^T\sum_{Z_{t}}\sum_{Z_{t-1}}\sum_{m=1}^M\log 
+p(Z_t^{(m)}\mid Z_{t-1}^{(m)})\cdot p(Z_t,Z_{t-1}\mid X_{1:T},\Theta'),
+\end{eqnarray*}
+where the last step follows from equation (\ref{eqn:trans2}).  If we 
+consider $\alpha$ as an equation in $a_{nn'}^{(m)}$ for $1\leq n,n'\leq 
+N$ and $1\leq m\leq M$, we can optimize $\alpha$ using the theory of 
+Lagrange multipliers by defining the auxiliary function 
+\begin{eqnarray*}
+&& L(\{a_{nn'}^{(m)}:1\leq n,n'\leq N,1\leq m\leq 
+M\},\lambda_1,...,\lambda_M) \\
+&=& \alpha(\Theta,\Theta') - \sum_{m=1}^M\lambda_m \cdot 
+g_m(\{a_{nn'}^{(m)}:1\leq n,n'\leq N\})
+\end{eqnarray*}
+where 
+\begin{eqnarray*}
+g_m(\{a_{nn'}^{(m)}:1\leq n,n'\leq N\}) = -1 + \sum_{n'=1}^N a_{nn'}^{(m)},
+\end{eqnarray*}
+and $\lambda_1,...,\lambda_M$ are Lagrange multipliers.  By setting the 
+gradient, $\nabla L$, equal to 0, we can solve for the values of 
+$a_{nn'}^{(m)}$ that optimize $\alpha$.  For any choice of $n,n'$ and 
+$m$, we have 
+\begin{eqnarray*}
+\frac{\partial L}{\partial a_{nn'}^{(m)}} &=& \frac{\partial}{\partial 
+a_{nn'}^{(m)}}\left(\sum_{t=2}^T\sum_{n=1}^N\sum_{n'=1}^N\log 
+a_{nn'}^{(m)}\cdot p(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')\right) - \lambda_m\\
+& = & \sum_{t=2}^T\frac{p(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}{
+a_{nn'}^{(m)}} - \lambda_m
+\end{eqnarray*}
+and 
+\begin{eqnarray*}
+\frac{\partial g_m}{\partial \lambda_m} = -1+\sum_{j=1}^Na_{nn'}^{(m)}.
+\end{eqnarray*}
+Setting these equal to 0, we get 
+\begin{eqnarray*}
+a_{nn'}^{(m)} =&& 
+\sum_{t=2}^T\frac{p(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}{\lambda_m}
+\end{eqnarray*}
+and 
+\begin{eqnarray*}
+1 = \sum_{n'=1}^Na_{nn'}^{(m)} = 
+\sum_{n'=1}^N\sum_{t=2}^T\frac{p(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}{\lambda_m}
+\end{eqnarray*}
+and hence 
+\begin{eqnarray*}
+a_{nn'}^{(m)} &=& 
+\frac{\sum_{t=2}^Tp(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}{\sum_{t=2}^T\sum_{n'=1}^Np(Z_{t-1}^{(m)}=h_{n}^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}
+\end{eqnarray*} 
+but since we can marginalize over $n'$, this is just 
+\begin{eqnarray*}
+a_{nn'}^{(m)} & = & 
+\frac{\sum_{t=2}^Tp(Z_{t-1}^{(m)}=h_n^{(m)},Z_{t}^{(m)}=h_{n'}^{(m)}\mid 
+X_{1:T},\Theta')}{\sum_{t=2}^Tp(Z_{t-1}^{(m)}=h_{n}^{(m)}\mid 
+X_{1:T},\Theta')},
+\end{eqnarray*}
+which is what we wanted to show.
+\end{proof}
+
+\begin{lemma}
+For a fixed set of model parameters, $\Theta'$, the function $\beta(\Theta,\Theta')$ achieves its 
+maximum value at
+\begin{eqnarray*}
+b_i(d)& = & 
+\frac{\sum_{t=1}^T\delta_{W_t,d}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}{\sum_{d'=1}^D\sum_{t=1}^T\delta_{W_t,d'}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}
+\end{eqnarray*}
+for $1\leq i\leq N^M$ and $1\leq d\leq D$, and the the $K\times MN$ 
+matrix 
+\begin{eqnarray*}
+W & = & \left(\sum_{t=1}^TV_t\langle Z_t^\intercal\rangle\right)\cdot 
+\left(\sum_{T=1}^T\langle 
+Z_tZ_t^\intercal\rangle\right)^\dagger
+\end{eqnarray*}
+where $W$ is the concatenation of the $W^{(m)}$ and $\dagger$ is the Moore-Penrose 
+pseudo-invers, and covariance matrix 
+\begin{eqnarray*}
+\Sigma & = & \frac{1}{T}\sum_{t=1}^T V_tV_t^\intercal - 
+\frac{1}{T}\sum_{t=1}^T\sum_{m=1}^MW^{(m)}\langle Z_t^{(m)}\rangle 
+V_t^\intercal. 
+\end{eqnarray*}
 \end{lemma}
 
 \begin{proof}
 To begin, we will observe 
 \begin{eqnarray*}
-\beta(\Theta,\Theta') &=& \sum_{t=1}^T\sum_{z_{1:T}}\log p_x(x_t\mid z_t)\cdot p(z_{1:T}\mid x_{1:T},\Theta')\\
-&=& \sum_{t=1}^T\sum_{z_{1:T}}\log p_x(x_t\mid z_t)\cdot p(z_t,z_{1:t-1},z_{t+1:T}\mid x_{1:T},\Theta')\\
-&=& \sum_{t=1}^T\sum_{z_t}\log p_x(x_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\sum_{z_{1:t-1},z_{t+1:T}}p(z_{1:t-1},z_{t+1:T}\mid z_t,x_{1:T},\Theta')\\
-&=& \sum_{t=1}^T\sum_{z_t}\log p_x(x_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\\
-&=& \sum_{t=1}^T\sum_{z_t}\left[\log p_x(w_t\mid z_t)+\log p_x(v_t\mid z_t)\right]\cdot p(z_t\mid x_{1:T},\Theta')
+\beta(\Theta,\Theta') &=& \sum_{t=1}^T\sum_{Z_{1:T}}\log p(X_t\mid 
+Z_t)\cdot p(Z_{1:T}\mid X_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{Z_{1:T}}\log p(X_t\mid Z_t)\cdot 
+p(Z_t,Z_{1:t-1},Z_{t+1:T}\mid X_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{Z_t}\log p(X_t\mid Z_t)\cdot p(Z_t\mid 
+X_{1:T},\Theta')\sum_{Z_{1:t-1},Z_{t+1:T}}p(Z_{1:t-1},Z_{t+1:T}\mid 
+Z_t,X_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{Z_t}\log p(X_t\mid Z_t)\cdot p(Z_t\mid X_{1:T},\Theta')\\
+&=& \sum_{t=1}^T\sum_{Z_t}\left(\log p(Y_t\mid Z_t)+\log p(V_t\mid 
+Z_t)\right)\cdot p(Z_t\mid X_{1:T},\Theta')
 \end{eqnarray*}
-for $x_t=w_t\oplus v_t$.  We will now proceed to optimize the categorical and continuous components separately.
+for $X_t=Y_t\oplus V_t$.  We will now proceed to optimize the categorical and continuous components separately.
 
 For the categorical part, we have 
 \begin{eqnarray*}
-&&\sum_{t=1}^T\sum_{z_t}\log p_x(w_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\\
-& = &\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log b_{i_1,\cdots ,i_M}(w_t)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta').
+\beta_{cat}(\Theta,\Theta')&:=&\sum_{t=1}^T\sum_{Z_t}\log p(Y_t\mid Z_t)\cdot p(Z_t\mid X_{1:T},\Theta')\\
+& = &\sum_{t=1}^T\sum_{i=1}^{N^M}\log b_{i}(Y_t)\cdot p(Z_t = s_i\mid X_{1:T},\Theta').
 \end{eqnarray*}
 subject to the addded constraint 
 \begin{eqnarray*}
-1 &=&\sum_{d=1}^Db_{i_1,\cdots ,i_M}(d).
+1 &=&\sum_{d=1}^Db_{i}(d).
 \end{eqnarray*}
-for any fixed set $\{i_1,...,i_M\}$.  In other words, we are maximizing the function 
+for any $i$.  If we consider $\beta_{cat}$ as a function 
+in the variables $b_{i}(d)$ for $1\leq i\leq N^M$ and $1\leq d\leq D$, 
+then we can define an auxiary function 
 \begin{eqnarray*}
-f(\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d})& = &\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log b_{i_1,\cdots ,i_M}(w_t)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')
+&&L(\{b_{i}(d):1\leq i\leq N^M, 1\leq d\leq 
+D\},\lambda_1,...,\lambda_{N^M})\\
+& = & \beta_{cat}(\Theta,\Theta') - 
+\sum_{i=1}^{N^M}\lambda_i(-1+\sum_{d=1}^Db_{i}(d))
+\end{eqnarray*} 
+where the $\lambda_1,...,\lambda_{N^M}$ are Lagrange multipliers.  Now 
+we by setting the gradient, $\nabla L$, equal to 0 we can solve for the 
+values of $b_i(d)$ that optimize $\beta_{cat}$.  Taking the partial 
+derivatives, we get
+\begin{eqnarray*}
+\frac{\partial L}{\partial b_i(d)} & = & 
+\frac{\sum_{t=1}^T\delta_{Y_t,d}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}{b_i(d)} - \lambda_i 
 \end{eqnarray*}
-subject to the constraint
+and 
 \begin{eqnarray*}
-g_{i_1,...,i_M}(\{b_{i_1,...,i_M}(d)\}_d)=&&-1+\sum_{d=1}^Db_{i_1,\cdots ,i_M}(d)=0.
+\frac{\partial L}{\partial \lambda_i} & = & 1-\sum_{d=1}^Db_{i}(d).
 \end{eqnarray*}
-Therefore, this optimization can be performed using the theory of Lagrange multipliers, by introducing the auxiliary function 
+Setting these expressions equal to 0 we get 
 \begin{eqnarray*}
-L(\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d}, \{\lambda_{i_1,...,i_M}\}_{i_1,...,i_M}) & = & f(\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d}) - ...\\
-&&\hspace{5mm} ...-\sum_{i_1,...,i_M}\lambda_{i_1,...,i_M}\cdot g_{i_1,...,i_M}(\{b_{i_1,...,i_M}(d)\}_d)
+b_i(d)& = & 
+\frac{\sum_{t=1}^T\delta_{Y_t,d}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}{\lambda_i }
 \end{eqnarray*}
-where $\lambda_{i_1,...,i_M}$ is a Lagrange multiplier for all $1\leq m\leq M$ and $1\leq i_m\leq N$, and solving the gradient for zero, that is,
+and 
 \begin{eqnarray*}
-\nabla_{\{b_{i_1,\cdots ,i_M}(d)\}_{i_1,...,i_M,d}, \{\lambda_{i_1,...,i_M}\}_{i_1,...,i_M}}L & = & 0.
+1=\sum_{d=1}^Db_{i}(d),
 \end{eqnarray*}
-In order for this gradient to be identically 0, we must simultaneously solve 
-\begin{eqnarray}\label{eqn:grad5}
--1+\sum_{d=1}^Db_{i_1,\cdots ,i_M}(d)=0
-\end{eqnarray}
-for each set $\{i_1,...,i_M\}$, and 
-\begin{eqnarray}\label{eqn:grad6}
-\frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{b_{i_1,...,i_M}(d)}-\lambda_{i_1,...,i_M} & = & 0.
-\end{eqnarray}
-Equation (\ref{eqn:grad6}) can be rewritten as 
+and combining these we arrive at 
 \begin{eqnarray*}
-b_{i_1,...,i_M}(d) &=& \frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{\lambda_{i_1,...,i_M}},
-\end{eqnarray*}
-and combining this with equation (\ref{eqn:grad5}) we have
-\begin{eqnarray*}
-\lambda_{i_1,...,i_M} & = & \sum_{d=1}^D\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')
-\end{eqnarray*}
-and hence 
-\begin{eqnarray*}
-b_{i_1,...,i_M}(d) &=& \frac{\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')}{\sum_{d=1}^D\sum_{t=1}^T\delta_t(d)\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')},
+b_i(d)& = & 
+\frac{\sum_{t=1}^T\delta_{Y_t,d}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}{\sum_{d'=1}^D\sum_{t=1}^T\delta_{Y_t,d'}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}
 \end{eqnarray*}
 which is what we wanted to show.
 
-For the continuous part, recall that there are $N^M$ many hidden state vectors of the for $(h_{i_1},...,h_{i_M})$ and for any such vector we have a corresponding $K$-dimensional mean vector 
-\[
-\mu_{i_1,...,i_M} = \left(\sum_{m=1}^M w_{1,i_m}^{(m)},...,\sum_{m=1}^M w_{K,i_m}^{(m)}\right).
-\]
-where $w_{k,i_m}^{(m)}$ is the contribution to the $k^{th}$ dimension by hidden state $i_m$ of system $m$. Our goal is the to optimize the function 
-\[
-f\left(\{w_{k,i_m}^{(m)}\}_{k,m,i_m}\right)=\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log p_x(v\mid h_{i_1}^{(1)},...,h_{i_M}^{(M)})\cdot p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta').
-\]
-To carry out this optimization, we make the following observation 
+For the continuous part, rather than carry out the derivation from scratch, 
+we will appeal to Appendix A of \cite{GJ95}.  Recall that $W^{(m)}$ is 
+a $K\times N$ matrix whose $kn^{th}$ entry is the contribution to 
+observation dimension $k$ for hidden state $n$ of system $m$.  Recall 
+also that $V_t$ is the $K\times 1$ continuous observation vector, 
+$\Sigma$ is the $K\times K$ covariance matrix, and $\langle Z_t^{(m)}\rangle$
+is an $N\times 1$ vector.  Then we can simplify the continuous part of 
+$\beta$ as 
 \begin{eqnarray*}
-&&\log p_x(v\mid h_{i_1}^{(1)},...,h_{i_M}^{(M)}) \\
-& = & -\frac{1}{2}(v-\mu_{i_1,...,i_M})\cdot \Sigma^{-1}\cdot (v-\mu_{i_1,...,i_M})^T - \log \sqrt{(2\pi)^K\mid \Sigma\mid}\\
-& = & -\frac{1}{2}(v-\mu_{i_1,...,i_M})\cdot \Sigma^{-1}\cdot (v-\mu_{i_1,...,i_M})^T - \log \sqrt{(2\pi)^K\mid \Sigma\mid}\\
-& = & -\frac{1}{2}\left(v_1-\sum_{m=1}^M w_{1,i_m}^{(m)},...,v_K-\sum_{m=1}^M w_{K,i_m}^{(m)}\right)\cdot \Sigma^{-1}\cdot 
-\begin{pmatrix}
-v_1-\sum_{m=1}^M w_{1,i_m}^{(m)}\\
-\vdots\\
-v_K-\sum_{m=1}^M w_{K,i_m}^{(m)}
-\end{pmatrix} - \log\sqrt{(2\pi)^K\mid \Sigma\mid}\\
-& = & -\frac{1}{2}\left(
-\sum_{k=1}^K\sigma_{kk}\left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)^2
--\sum_{k=1}^K\sum_{k'\neq k}2\sigma_{kk'}\left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)\left(v_{k'}-\sum_{m=1}^M w_{k',i_m}^{(m)}\right)
-\right) -...\\
-&& \hspace{5in}...- \sqrt{(2\pi)^K\mid \Sigma\mid}
+\beta_{cont}(\Theta,\Theta') & = & \sum_{t=1}^T\sum_{Z_t}\log p(V_t\mid 
+Z_t)\cdot p(Z_t\mid X_{1:T},\Theta')\\ 
+& = & -\frac{1}{2}\sum_{t=1}^T\sum_{Z_T}(V_t-\mu_t)^\intercal\cdot 
+\Sigma^{-1}\cdot (V_t-\mu_t)\cdot p(Z_t\mid X_{1:T},\Theta') - C\\
+& = & -\frac{1}{2}\sum_{t=1}^TV_t^\intercal\Sigma^{-1} 
+V_t-2\sum_{m=1}^MV_t^\intercal\Sigma^{-1}W^{(m)}\langle Z_t^{(m)}\rangle 
++...\\
+&&\hspace{2cm}...+\sum_{m=1}^M\sum_{n=1}^Mtr\left\{W^{(m)^\intercal}\Sigma^{-1} W^{(n)}
+\langle Z_t^{(n)}Z_t^{(m)^\intercal}\rangle\right\} - C
 \end{eqnarray*}
-where we define $\sigma_{ij}$ to be the $ij^\text{th}$ entry of $\Sigma^{-1}$.  Therefore, for any $w_{k,n}^{(\ell)}$, we can compute the partial derivative 
+where $'$ denotes the matrix transpose and $C$ is just a normalizing 
+constant.  Now we can find the optimal values for the weight 
+parameters, $W^{(M)}$, by taking the derivaive of $\beta_{cont}$ with 
+respect to $W^{(m)}$ and setting the result equal to 0.  That is, 
 \begin{eqnarray*}
-\frac{\partial f}{\partial w_{k,n}^{(\ell)}} & = & \sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N  p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')\cdot...\\
-&&...\cdot \left[-\cdot \sigma_{kk}\cdot \left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)\cdot \delta_{i_m,n}+...\right.\\
-&& \left....+\sum_{k'\neq k}\sigma_{kk'}\left(v_{k'}-\sum_{m=1}w_{k',i_m}^{(m)}\right)\cdot \delta_{i_m,n}\right]\\
-& = & \sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N  p(h_{i_1}^{(1)},...,h_{i_M}^{(M)}\mid x_{1:T},\Theta')\cdot...\\
-&&...\cdot \left[-\cdot \sigma_{kk}\cdot \left(v_k-\sum_{m=1}^M w_{k,i_m}^{(m)}\right)\cdot \delta_{i_m,n}+...\right.\\
-&& \left....+\sum_{k'\neq k}\sigma_{kk'}\left(v_{k'}-\sum_{m=1}^Mw_{k',i_m}^{(m)}\right)\cdot \delta_{i_m,n}\right]
+\frac{\partial \beta_{cont}}{\partial W^{(m)}} & = & 
+\sum_{t=1}^T\left(\sum_{n=1}^M W^{(n)}\langle 
+Z_t^{(n)}Z_t^{(m)^\intercal}\rangle - V_t\langle Z_t^{(m)^\intercal}\rangle\right) = 0,
+\end{eqnarray*}
+which results in a $K\times MN$ matrix $W$ which is the concatenation 
+of the $W^{(m)}$ and is defined by 
+\begin{eqnarray*}
+W & = & \left(\sum_{t=1}^TV_t\langle Z_t^\intercal\rangle\right)\cdot 
+\left(\sum_{T=1}^T\langle 
+Z_tZ_t^\intercal\rangle\right)^\dagger
+\end{eqnarray*}
+where $\dagger$ is the Moore-Penrose 
+pseudo-inverse\footnote{\textcolor{red}{I'm not sure why this trace 
+derivative works out...?}}. Similarly we can solve for the covariance 
+matrix that optimizes $\beta_{cont}$, namely, 
+\begin{eqnarray*}
+\Sigma & = & \frac{1}{T}\sum_{t=1}^T V_tV_t^\intercal - 
+\frac{1}{T}\sum_{t=1}^T\sum_{m=1}^MW^{(m)}\langle Z_t^{(m)}\rangle 
+V_t^\intercal. 
 \end{eqnarray*}
 
 
-
-
-we have 
-\begin{eqnarray*}
-&&\sum_{t=1}^T\sum_{z_t}\log p_x(v_t\mid z_t)\cdot p(z_t\mid x_{1:T},\Theta')\\
-& = &\sum_{t=1}^T\sum_{i_1=1}^N\cdots \sum_{i_M=1}^N\log p_{cont}(v_t\mid (h_{i_1},...,h_{i_M}) \cdot p((h_{i_1},...,h_{i_M})\mid x_{1:T},\Theta').
-\end{eqnarray*}
-where 
-\begin{eqnarray*}
-p_{cont}(v_t\mid (h_{i_1},...,h_{i_M})) & = & \frac{exp\left(-\frac{1}{2}(v- )\Sigma^{-1}(v-  )^T\right)}{\sqrt{(2\pi)^K \mid \Sigma\mid }}
-\end{eqnarray*}
 \end{proof}
 
 \bibliographystyle{siam}
