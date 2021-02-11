@@ -183,11 +183,12 @@ def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
     Arguments:
         hidden_states: (series) of hidden states (typically) generated
                 using generate_hidden_state_sequence(n_observations).
-        n_hidden_states: (int) number of hidden states.
+        ns_hidden_states: (array) number of hidden states per system.
         data: (dataframe) data with the same index as the series
             hidden_states and columns corresponding to categorical_features
             and guassian_features.
         categorical_features: (list) of categorical features as strings.
+        gaussian_features: (list) of gaussian features as strings.
 
     Returns:
         Training spec dictionary informed by the hidden state
