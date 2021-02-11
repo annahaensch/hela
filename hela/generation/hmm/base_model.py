@@ -178,7 +178,7 @@ class HMMGenerativeModel(ABC):
 
 def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
                                        categorical_features, gaussian_features):
-    """ Returns hmm training spec from hidden state sequence and data.
+    """ Returns fhmm training spec from hidden state sequence and data.
 
     Arguments:
         hidden_states: (series) of hidden states (typically) generated
@@ -191,8 +191,7 @@ def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
 
     Returns:
         Training spec dictionary informed by the hidden state
-        sequence and the data which can be used as input in the
-        hmm function `DiscreteHHHConfiguration.from_spec()`.
+        sequence and the data
     """
 
     spec = {"n_systems": len(ns_hidden_states)}
