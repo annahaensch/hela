@@ -14,6 +14,10 @@
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
 
+
+\newcommand{\bigzero}{\mbox{\normalfont\Large\bfseries 0}}
+
+
 \title{The dynamics of factored state hidden Markov models}
 \date{1 December 2020}
 
@@ -352,13 +356,13 @@ The sampling This process is described in its totality in Algorithm \ref{alg:gib
 \begin{algorithm}
   \caption{Gibbs Sampling Algorithm\label{alg:gibbs}}
   \begin{algorithmic}[1]
-    \Function{Gibbs}{model $p_0$, $p_x$, $p_z$; data $x_1,...,x_T$; hidden 
+    \Function{Gibbs}{model $\Theta$; data $x_{1:T}$; hidden 
     state space $\mathcal Z$; iterations 
-    $I$}
+    $R$}
     \State $\tt{z}\leftarrow \{z_1,...,z_T\}$ initialized at random where 
     $\tt{z}_t=\{z_t^{(1)},...,z_t^{(M)})\}$
-    \State ${\tt i}\leftarrow 0$
-	\While{${\tt i}<I$}
+    \State ${\tt r}\leftarrow 0$
+	\While{${\tt r}<R$}
       \For{all ${\tt t,m}$ in $\{0,\dots, 
       T\}\times \{0,\dots, M\}$ chosen uniformly at random} 
         \State ${\tt c} \leftarrow {\tt cumsum \{f_{t,m}(z):z\in \mathcal 
@@ -371,7 +375,7 @@ The sampling This process is described in its totality in Algorithm \ref{alg:gib
         \State ${\tt z_t^{(m)}}\leftarrow {\tt j}^{th}$ element of $\mathcal Z^{(m)}$
 
       \EndFor
-      \State ${\tt i}\leftarrow {\tt i+1}$
+      \State ${\tt r}\leftarrow {\tt r+1}$
       \EndWhile
       \State\Return ${\tt z}$
     \EndFunction
@@ -479,7 +483,11 @@ Since it will be helpful in what follows, we define
 \end{cases}
 \]
 
-\begin{lemma}
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% ~~~~~~~~~~~~~~~~ Lemma: Initial State Update Equations ~~~~~~~~~~~~~~
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+\begin{lemma}\label{lemma:initial}
 For a fixed set of model parameters, $\Theta'$, the function $\iota(\Theta,\Theta')$ achieves its maximum value at
 \begin{eqnarray*}
 \pi_n^{(m)} &=& \frac{p(Z_1^{(m)} = h_n^{(m)}\mid 
@@ -487,10 +495,10 @@ X_{1:T},\Theta')}{\sum_{n'=1}^Np(Z_1^{(m)} = h_{n'}^{(m)}\mid
 X_{1:T},\Theta')}
 \end{eqnarray*}
 or written equivalently in bracket notation
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:updateinitial}
 \pi_n^{(m)} &=&\frac{\langle Z_1^{(m)}\rangle_n}{\sum_{n'=1}^N\langle 
 Z_1^{(m)}\rangle_{n'}}
-\end{eqnarray*}
+\end{eqnarray}
 for $1\leq m\leq M$ and $1\leq n\leq N$.
 \end{lemma}
 
@@ -561,7 +569,11 @@ X_{1:T},\Theta')}.
 which is what we wanted to show.
 \end{proof}
 
-\begin{lemma}
+%
+% ~~~~~~~~~~~~~~~~ Lemma: Transition Update Equations ~~~~~~~~~~~~~~~~~
+%
+
+\begin{lemma}\label{lemma:transition}
 For a fixed set of model parameters, $\Theta'$, the function $\alpha(\Theta,\Theta')$ 
 achieves its maximum value at
 \begin{eqnarray*}
@@ -571,11 +583,11 @@ X_{1:T},\Theta')}{\sum_{t=2}^Tp(Z_{t-1}^{(m)}=h_{n}^{(m)}\mid
 X_{1:T},\Theta')}
 \end{eqnarray*}
 or written equivalently in bracket notation, 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:updatetransition}
 a_{nn'}^{(m)} = \frac{\sum_{t=2}^T\langle 
 Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle_{nn'}}{\sum_{t=2}^T\langle 
 Z_t^{(m)}\rangle_n},
-\end{eqnarray*}
+\end{eqnarray}
 for $1\leq n,n'\leq N$ and $1\leq m\leq M$.
 \end{lemma}
 
@@ -650,29 +662,32 @@ X_{1:T},\Theta')},
 which is what we wanted to show.
 \end{proof}
 
-\begin{lemma}
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% ~~~~~~~~~~~~~~~~ Lemma: Emission Update Equations ~~~~~~~~~~~~~~~~~~~
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+\begin{lemma}\label{lemma:emission}
 For a fixed set of model parameters, $\Theta'$, the function $\beta(\Theta,\Theta')$ achieves its 
 maximum value at
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:updatecat}
 b_i(d)& = & 
-\frac{\sum_{t=1}^T\delta_{W_t,d}\cdot p(Z_t = s_i\mid 
-X_{1:T},\Theta')}{\sum_{d'=1}^D\sum_{t=1}^T\delta_{W_t,d'}\cdot p(Z_t = s_i\mid 
+\frac{\sum_{t=1}^T\delta_{Y_t,d}\cdot p(Z_t = s_i\mid 
+X_{1:T},\Theta')}{\sum_{d'=1}^D\sum_{t=1}^T\delta_{Y_t,d'}\cdot p(Z_t = s_i\mid 
 X_{1:T},\Theta')}
-\end{eqnarray*}
+\end{eqnarray}
 for $1\leq i\leq N^M$ and $1\leq d\leq D$, and the the $K\times MN$ 
 matrix 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:updatemeans}
 W & = & \left(\sum_{t=1}^TV_t\langle Z_t^\intercal\rangle\right)\cdot 
 \left(\sum_{T=1}^T\langle 
 Z_tZ_t^\intercal\rangle\right)^\dagger
-\end{eqnarray*}
+\end{eqnarray}
 where $W$ is the concatenation of the $W^{(m)}$ and $\dagger$ is the Moore-Penrose 
 pseudo-invers, and covariance matrix 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:updatecovariance}
 \Sigma & = & \frac{1}{T}\sum_{t=1}^T V_tV_t^\intercal - 
 \frac{1}{T}\sum_{t=1}^T\sum_{m=1}^MW^{(m)}\langle Z_t^{(m)}\rangle 
 V_t^\intercal. 
-\end{eqnarray*}
+\end{eqnarray}
 \end{lemma}
 
 \begin{proof}
@@ -786,8 +801,241 @@ matrix that optimizes $\beta_{cont}$, namely,
 V_t^\intercal. 
 \end{eqnarray*}
 
-
 \end{proof}
+
+
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% ~~~~~~~~~~~~~~~~~~~~~ The Learning Algorithm ~~~~~~~~~~~~~~~~~~~~~~~
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+\subsubsection{The Learning Algorithm}
+With the update equations given explicitly in Lemmas 
+\ref{lemma:initial}, \ref{lemma:transition}, and \ref{lemma:emission} we 
+only need to approximate the bracket arrays 
+$\langle Z_{t}^{(m)}\rangle$,
+$\langle Z_{t-1}^{(m)}Z_{t}^{(m)^\intercal}\rangle$, and $\langle 
+Z_{t}^{(m)}Z_{t}^{(m')^\intercal}\rangle$ to carry out an approximate 
+version of {\em EM}. In what follows we will give a precise formulation 
+for the algorithm, with pseudocode given in Algorithm 
+\ref{alg:gibbs_learning} below.  All Python variables will be written 
+in typewriter font, although some liberties will be taken with syntax. 
+To begin, we set Python variables, {\tt T}, {\tt M}, {\tt N}, and {\tt 
+L} corresponding to $T, M, N$ and $K$.  A hidden state at time ${\tt t}$ will be 
+denoted by the ${\tt N\times M}$ array
+\[
+{\tt z_t} = \left[{\tt z_t^{(0)},...,z_t^{(M-1)}}\right]
+\]
+where each ${\tt z_t^{(m)}}$ is an ${\tt N\times 1}$ array equal to 0 
+in all but one place.  The set of $M$ many $K\times K$ mean matrices 
+will be stored as a $K\times M \times N\times N$ array, {\tt W}, where 
+{\tt W[m]} corresponds to $W^{(m)}$.  We will initialize a ${\tt T\times M\times 
+M\times N\times N}$ 
+dimensional array of zeros, ${\tt \Gamma}$, where for any ${\tt t}$, 
+\[
+{\tt \Gamma[t][m][m']}
+\]
+is an ${\tt N\times N}$ array with entry ${\tt n,n'}$
+corresponding to the 
+${\tt n}^{th}$ hidden state of Markov system ${\tt m}$ and the ${\tt 
+n'}^{th}$ hidden state of Markov system ${\tt m'}$. For each iteration 
+of Gibbs sampling, we will traverse the full sequence of observations. 
+For every pair in the set 
+\[
+{\tt P} = \{{\tt (m,m'):m\leq m'}\}
+\] 
+we will increment the entry of ${\tt \Gamma[t][m][m']}$ corresponding to ${\tt 
+z_t^{(m)}}$ and ${\tt z_t^{(m')}}$ by one.  After a sufficient number 
+of iterations, we normalize ${\tt \Gamma}$ by dividing by the total 
+number of iterations, at which point we have 
+\begin{eqnarray*}
+{\tt \Gamma[t]} &\sim&
+\left(\begin{array}{@{}c|c@{}|c@{}|c@{}}
+&&&\\
+  \begin{matrix}
+\langle Z_{t}^{(0)}Z_{t}^{(0)^\intercal}\rangle 
+  \end{matrix}
+  & 
+  \bigzero
+  &
+  & 
+  \bigzero \\
+  &&&\\
+  \hline
+  &&&\\
+  \begin{matrix}
+  \langle Z_{t}^{(1)}Z_{t}^{(0)^\intercal}\rangle 
+  \end{matrix}
+  & 
+  \begin{matrix}
+  \langle Z_{t}^{(1)}Z_{t}^{(1)^\intercal}\rangle 
+  \end{matrix}\,\,\,
+  & 
+  &
+  \bigzero
+  \\
+  &&&\\
+  \hline
+  &&&\\
+  &
+  &
+  \hspace{1cm}\ddots\hspace{1cm}
+  &
+  \\
+  &&&\\
+\hline
+&&&\\
+\begin{matrix}
+  \langle Z_{t}^{(M-1)}Z_{t}^{(0)^\intercal}\rangle 
+  \end{matrix}
+  &
+  \begin{matrix}
+  \langle Z_{t}^{(M-1)}Z_{t}^{(1)^\intercal}\rangle 
+  \end{matrix}\,\,
+  &
+  &
+\langle Z_{t}^{(M-1)}Z_{t}^{(M-1)^\intercal}\rangle \\
+&&&\\
+\end{array}\right),
+\end{eqnarray*}
+where each block above has dimenion $N\times N$, and the blocks along 
+the diagonal are themselves diagonal matrices, with
+\[
+{\tt diag}\langle Z_{t}^{(m)}Z_{t}^{(m)^\intercal}\rangle = \langle Z_{t}^{(m)}\rangle 
+\]
+for each $m$, where ${\tt diag}$ denotes the diagonal of a matrix.  
+
+With this, the update equation for $\pi_n^{(m)}$ given by 
+equation (\ref{eqn:updateinitial}) can be closely approximated as 
+\begin{eqnarray}\label{eqn:updateinitialapprox}
+\pi_n^{(m)} \sim\frac{{\tt \Gamma[1][m][m][n][n]}}{{\tt sum 
+\,\,diag\,\Gamma[1][m][m]}}.
+\end{eqnarray} 
+Similarly, update equation 
+(\ref{eqn:updatecovariance}) from Lemma \ref{lemma:emission} can be approximated by 
+\begin{eqnarray}\label{eqn:updatecovarianceapprox}
+\Sigma & \sim& 
+{\tt\frac{1}{T}}
+{\tt sum_t}
+\left[
+{\tt V_t*transV_t}
+\right] - 
+{\tt\frac{1}{T}}
+{\tt sum_{t,m} }
+\left[
+{\tt W[m] *diag\,\Gamma[t][m][m]*trans V_T}
+\right],
+\end{eqnarray}
+where ${\tt trans}$ denotes the transpose of an array.  For the next 
+part, it will be helpful to think of each ${\tt \Gamma[t]}$ as a ${\tt 
+MN\times MN}$ matrix, which can be achieved by concatenating across axes 
+appropriately, we will call this ``flattened" array ${\tt \Gamma\Gamma}$.  
+The update equation (\ref{eqn:updatemeans}) from Lemma 
+\ref{lemma:emission} can then be 
+approximated by 
+\begin{eqnarray}\label{eqn:updatemeansapprox}
+W & \sim & \left[{\tt sum_t\,\, V_t *diag\,\Gamma[t]}\right] * 
+\left[{\tt sum_t\,\,\Gamma\Gamma[t]@trans\,\Gamma\Gamma[t]}\right]^\dagger
+\end{eqnarray}
+where ${\tt @}$ denotes matrix multiplication and  
+${\tt \Lambda[t]}$ and $\dagger$ denotes the Moore-Penrose 
+pseudoinverse.\footnote{\textcolor{red}{I'm not sure of the best way to 
+compute this Moore-Penrose pseudoinverse, I think there might be the need to pull in some external 
+library capabilities here}}
+
+
+To approximate $\langle Z_{t-1}^{(m)}Z_{t}^{(m)^\intercal}\rangle$ we 
+will begin with an ${\tt M\times (T-1) \times N\times N}$ array of zeros which we 
+will call ${\tt \Xi}$\footnote{\textcolor{red}{This is just a capital 
+``Xi."  It's a bit silly for pseudocode, but my goal was to stick as 
+closely as possible to the ``typical" hmm notation}}.  Again, as we traverse 
+the full range of observations Markov systems we will gather transition statistics.  
+Specifically, at any time, ${\tt t>0}$, and Markov system, ${\tt m}$, 
+the entry in row ${\tt z_{t-1}^{(m)}}$ and column ${\tt z_t^{(m)}}$ 
+of ${\tt \Xi[t][m]}$ will be incremented by 1. After sufficient iterations and normalization, we have
+\begin{eqnarray*}
+{\tt \Xi} &\sim&
+\left(\begin{array}{@{}c|c@{}|c@{}}
+  \begin{matrix}
+\langle Z_{0}^{(0)}Z_{0}^{(0)^\intercal}\rangle 
+  \end{matrix}
+  & 
+  &
+    \begin{matrix}
+\langle Z_{0}^{(M-1)}Z_{0}^{(M-1)^\intercal}\rangle 
+  \end{matrix}\\
+  &&\\
+  \vdots&\hspace{1cm}\hdots\hspace{1cm}&\vdots\\
+  &&\\
+  \begin{matrix}
+\langle Z_{T-1}^{(0)}Z_{T-1}^{(0)^\intercal}\rangle 
+  \end{matrix}
+  & 
+  &
+    \begin{matrix}
+\langle Z_{T-1}^{(M-1)}Z_{T-1}^{(M-1)^\intercal}\rangle 
+  \end{matrix}
+ \end{array}\right)
+ \end{eqnarray*}
+Therefore, the update equation for $a_{nn'}^{(m)}$ as given in 
+equation (\ref{eqn:updatetransition}) can be approximated by 
+\begin{eqnarray}\label{eqn:updatetransapprox}
+a_{nn'}^{(m)}&\sim& \frac{{\tt sum_t\,\,\Xi[t][m][n][n']}}{{\tt 
+sum_t\,\,\Gamma[m][t][n]}},
+\end{eqnarray}
+where the computation above is carried out in a suitably vectorized 
+manner.
+
+To approximate the categorical emission probabilities, we will need to 
+gather one additional statistic.  Initializing ${\tt T\times N^M}$ 
+array of zeros, ${\tt \Lambda}$, where each entry corresponds to one of the $N^M$ 
+many possible hidden state vectors.  As we traverse the full range of 
+observations, for any time ${\tt t}$ we will increment the entry of 
+${\tt \Lambda}$ corresponding to ${\tt z_t}$ by 1.  After a sufficient 
+number of iterations we can normalize by diving ${\tt \Lambda}$ by the 
+total number of iterations, and then update equation 
+(\ref{eqn:updatecat}) can be approximated by 
+\begin{eqnarray}\label{eqn:updatecatapprox}
+b_i(d) & \sim & \frac{{\tt sum_{Y_t = d}\,\Lambda[t][i]}}{{\tt 
+sum_d\,sum_{Y_t = d}\,\Lambda[t][i]}}.
+\end{eqnarray}
+Of course all of the computations mentioned above can be made 
+significantly more efficient through simple vectorization. 
+
+\begin{algorithm}
+  \caption{Gibbs Approximate EM Algorithm\label{alg:gibbs_learning}}
+  \begin{algorithmic}[1]
+    \Function{GibbsEM}{model $\Theta$; data $x_{1:T}$; hidden 
+    state space $\mathcal Z$; iterations ${\tt R}$}
+    \State ${\tt \Gamma}\leftarrow$ {\tt np.zeros((T,M,N,N))}
+    \State ${\tt \Xi}\leftarrow$ {\tt np.zeros((M,T-1,N,N))}
+    \State ${\tt \Lambda}\leftarrow$ {\tt np.zeros((T,M**N))}
+    \State $\tt{z} \leftarrow$ {\sc Gibbs}($\Theta$;$x_{1:T}$;$\mathcal 
+		Z$;100) \Comment{initial burn down period}
+    \State ${\tt r}\leftarrow 0$
+	\While{${\tt r}<R$}
+      \For{all ${\tt t}$ in {\tt range(T)} chosen uniformly at random} 
+		\State increment ${\tt\Lambda[t][z_t]}$ by 1
+        \For{all {\tt m} in {\tt range(M)} chosen uniformly at random}
+			\If{${\tt t < T-1}$}
+				\State increment ${\tt \Xi[m][t][z_t^{(m)}][z_{t+1}^{(m)}]}$ by 1
+			\EndIf
+			\For{all ${\tt m'}$ in ${\tt range(m+1)}$}
+				\State increment ${\tt 
+				\Gamma[t][m][m'][z_t^{(m)}][z_{t}^{(m')}]}$ by 1
+			\EndFor
+			\State Carry out steps 6-9 of Algorithm \ref{alg:gibbs}
+		\EndFor
+      \EndFor
+      \State ${\tt r}\leftarrow {\tt r+1}$
+      \EndWhile
+      \State $({\tt \Gamma,\Xi,\Lambda})\leftarrow \frac{1}{R}({\tt 
+      \Gamma,\Xi,\Lambda})$
+      \State Update $\Theta$ according to equations 
+      (\ref{eqn:updateinitialapprox})-(\ref{eqn:updatecatapprox})
+      \State\Return ${\tt z},\Theta$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
 
 \bibliographystyle{siam}
 \bibliography{references}
