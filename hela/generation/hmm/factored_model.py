@@ -65,7 +65,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         N.B.: This training spec will be suitable input for the hmm
             function `DiscreteHMMConfiguration.from_spec()`.
         """
-        spec = {"n_systems": len(self.ns_hidden_states)}
+        training_spec = {"n_systems": len(self.ns_hidden_states)}
         states = []
         for i, n in enumerate(self.ns_hidden_states):
             states.append({
@@ -73,7 +73,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 "type": "finite",
                 "count": n
                 })
-        spec["hidden_states"] = states
+        training_spec["hidden_states"] = states
 
         model_parameter_constraints = {
             'transition_constraints': self.transition_matrices
@@ -109,7 +109,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 gmm_parameter_constraints[
                     'component_weights'] = self.component_weights
 
-            gaussian_parameter_constraints['means'] = self.means
+            gaussian_parameter_constraints = {'means' : self.means}
             gaussian_parameter_constraints['covariances'] = self.covariances
 
 
