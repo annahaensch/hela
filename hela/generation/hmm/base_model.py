@@ -194,16 +194,8 @@ def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
         Training spec dictionary informed by the hidden state
         sequence and the data
     """
-
-    spec = {"n_systems": len(ns_hidden_states)}
-    states = []
-    for i, n in enumerate(ns_hidden_states):
-        states.append({
-            "name": "system {}".format(i),
-            "type": "finite",
-            "count": n
-            })
-    spec["hidden_states"] = states
+    spec = {"hidden_state": {"type": "finite", "count": ns_hidden_states}}
+    spec["n_systems"] = len(ns_hidden_states)
 
     hidden_state_tuples = np.array(hidden_states.drop_duplicates())
     hidden_state_dict = {
@@ -280,6 +272,7 @@ def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
             ],
             index=data.index)
         emission_matrix = np.zeros((emissions.nunique(), np.prod(ns_hidden_states)))
+        
     # emission_matrix
         for i in list(
                 set.intersection(

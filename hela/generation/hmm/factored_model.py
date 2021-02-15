@@ -60,20 +60,13 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             self.covariances = self._generate_covariance()
 
     def generative_model_to_discrete_fhmm_training_spec(self):
-        """ Returns dictionary training spec suitable for FHMM training.
+        """ Returns dictionary training spec suitable for FHMM inference.
 
         N.B.: This training spec will be suitable input for the hmm
-            function `DiscreteHMMConfiguration.from_spec()`.
+            function `DiscreteFHMMConfiguration.from_spec()`.
         """
-        training_spec = {"n_systems": len(self.ns_hidden_states)}
-        states = []
-        for i, n in enumerate(self.ns_hidden_states):
-            states.append({
-                "name": "system {}".format(i),
-                "type": "finite",
-                "count": n
-                })
-        training_spec["hidden_states"] = states
+        training_spec = {"hidden_state": {"type": "finite", "count": self.ns_hidden_states}}
+        training_spec["n_systems"] = len(self.ns_hidden_states)
 
         model_parameter_constraints = {
             'transition_constraints': self.transition_matrices
@@ -101,7 +94,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                     'dist': 'gaussian',
                     'dims': 1
                 })
-            # TODO (isalj): gmm components flexibility
+            # TODO (isalj): incorporate gaussian mixture models
             if self.n_gmm_components > 0:
                 gmm_parameter_constraints = {
                     'n_gmm_components': self.n_gmm_components
@@ -109,8 +102,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 gmm_parameter_constraints[
                     'component_weights'] = self.component_weights
 
-            gaussian_parameter_constraints = {'means' : self.means}
-            gaussian_parameter_constraints['covariances'] = self.covariances
+                gaussian_parameter_constraints = {'means' : self.means}
+                gaussian_parameter_constraints['covariances'] = self.covariances
 
 
             model_parameter_constraints[
