@@ -60,7 +60,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             self.covariances = self._generate_covariance()
 
     def generative_model_to_discrete_fhmm_training_spec(self):
-        """ Returns dictionary training spec suitable for FHMM inference.
+        """ Returns dictionary training spec using parameters used to generate observations
+        and hidden state sequence.
 
         N.B.: This training spec will be suitable input for the hmm
             function `DiscreteFHMMConfiguration.from_spec()`.
@@ -71,8 +72,13 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         model_parameter_constraints = {
             'transition_constraints': self.transition_matrices
         }
+
+        # Construct inital state as n_systems x n_hidden_states array 
+        initial_state = np.zeros((len(self.ns_hidden_states),np.max(self.ns_hidden_states)))
+        for i in range(initial_state.shape[0]):
+            initial_state[i][self.initial_state_vector[i]] = 1
         model_parameter_constraints[
-            'initial_state_constraints'] = self.initial_state_vector
+            "initial_state_constraints"] = initial_state
 
         observations = []
         if self.n_categorical_features > 0:
@@ -102,12 +108,12 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 gmm_parameter_constraints[
                     'component_weights'] = self.component_weights
 
-                gaussian_parameter_constraints = {'means' : self.means}
-                gaussian_parameter_constraints['covariances'] = self.covariances
+                gmm_parameter_constraints = {'means' : self.means}
+                gmm_parameter_constraints['covariances'] = self.covariances
 
 
             model_parameter_constraints[
-                'gaussian_parameter_constraints'] = gaussian_parameter_constraints
+                'gmm_parameter_constraints'] = gmm_parameter_constraints
 
         training_spec[
             'model_parameter_constraints'] = model_parameter_constraints
@@ -255,6 +261,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             weights = np.random.uniform(-3, 3, (self.n_gaussian_features, max_hidden_state))
             if n < max_hidden_state:
                 weights[:,n:] = np.nan
+                # weights[:n,:] = np.nan
             # Mask all Nan entries
             weights = np.ma.masked_invalid(weights)
             means.append(weights)
