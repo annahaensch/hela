@@ -339,16 +339,16 @@ def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
     if categorical_features:
         categorical_features.sort()
         categorical_values = []
-    for feat in categorical_features:
-        values = list(data[feat].unique())
-        values.sort()
-        observations.append({
-                    "name": feat,
-                    "type": "finite",
-                    "values": values
-                })
-        categorical_values.append(values)
-        value_tuples = list(itertools.product(*categorical_values))
+        for feat in categorical_features:
+            values = list(data[feat].unique())
+            values.sort()
+            observations.append({
+                        "name": feat,
+                        "type": "finite",
+                        "values": values
+                    })
+            categorical_values.append(values)
+            value_tuples = list(itertools.product(*categorical_values))
     if gaussian_features:
         gaussian_features.sort()
         for feat in gaussian_features:
@@ -432,12 +432,12 @@ def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
         covariances = np.mean(np.array(covariances), axis=0)
         means = np.ma.masked_equal([np.transpose(m) for m in means], 0)
 
-    gmm_parameter_constraints = {
-        "means": means,
-        "covariances": covariances
-    }
-    model_parameter_constraints[
-                "gmm_parameter_constraints"] = gmm_parameter_constraints
+        gmm_parameter_constraints = {
+            "means": means,
+            "covariances": covariances
+        }
+        model_parameter_constraints[
+                    "gmm_parameter_constraints"] = gmm_parameter_constraints
 
     spec["model_parameter_constraints"] = model_parameter_constraints
 
