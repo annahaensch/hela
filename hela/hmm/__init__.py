@@ -7,7 +7,7 @@ from .discrete_models import (DiscreteHMM, DiscreteHMMConfiguration,
                               DiscreteHMMForecasting,
                               DiscreteHMMInferenceResults,
                               DiscreteHMMValidationMetrics)
-from .factored_models import FactoredHMMConfiguration
+from .factored_models import (FactoredHMMConfiguration, FactoredHMMInference)
 from .distributed import DistributedLearningAlgorithm
 from .utils import *
 from .validation import find_risk_at_horizons
