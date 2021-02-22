@@ -382,12 +382,18 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
             "transition_constraints"] = transition_matrices
     
     # Construct initial state vector from hidden state sequence.
-    initial_state_vector = np.zeros((len(ns_hidden_states),np.max(ns_hidden_states)))
-    for i in hidden_states.columns:
-        if ~np.isnan(hidden_states.iloc[0][i]):
-            initial_state_vector[i][hidden_states.iloc[0][i]] = 1
-        model_parameter_constraints[
-            "initial_state_constraints"] = initial_state_vector
+    ns_hidden_states = ns_hidden_states
+    initial_state_prob = np.zeros((len(ns_hidden_states),np.max(ns_hidden_states)))
+    initial_state_mask = np.zeros_like(initial_state_prob)
+    for i in range(len(ns_hidden_states)):
+        x = np.ogrid[0:np.max(ns_hidden_states)]
+        initial_state_mask[i] = np.where(x < ns_hidden_states[i],0,1)
+    
+    initial_vec = np.array(hidden_states[~(hidden_states.isna().any(axis = 1))].iloc[0])
+    for i in range(len(initial_vec)):
+        initial_state_prob[i][initial_vec[i]] = 1
+    model_parameter_constraints[
+            "initial_state_constraints"] = np.ma.masked_array(initial_state_prob,initial_state_mask)
 
     if categorical_features:
         value_tuple_dict = {str(list(v)): e for e, v in enumerate(value_tuples)}
