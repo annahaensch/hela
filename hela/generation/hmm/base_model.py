@@ -304,12 +304,12 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
     return spec
 
 def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
-                                       categorical_features, gaussian_features):
+                                       categorical_features = [], gaussian_features = []):
     """ Returns fhmm training spec from hidden state sequence and data.
 
     Arguments:
-        hidden_states: (series) of hidden states (typically) generated
-                using generate_hidden_state_sequence(n_observations).
+        hidden_states: (dataframe) of hidden state vectors (typically) 
+            generated using generate_hidden_state_sequence(n_observations).
         ns_hidden_states: (array) number of hidden states per system.
         data: (dataframe) data with the same index as the series
             hidden_states and columns corresponding to categorical_features
@@ -336,7 +336,7 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
     index=hidden_states.index)
 
     observations = []
-    if categorical_features:
+    if len(categorical_features) > 0:
         categorical_features.sort()
         categorical_values = []
         for feat in categorical_features:
@@ -349,7 +349,7 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
                     })
             categorical_values.append(values)
             value_tuples = list(itertools.product(*categorical_values))
-    if gaussian_features:
+    if len(gaussian_features) > 0:
         gaussian_features.sort()
         for feat in gaussian_features:
                 observations.append({
@@ -415,29 +415,29 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
         model_parameter_constraints["emission_constraints"] = emission_matrix
         spec["model_parameter_constraints"] = model_parameter_constraints
 
-    # Determine gmm parameter constraints from data.
+    # Determine gaussian parameter constraints from data.
     if gaussian_features:
-        gmm_parameter_constraints = {}
+        gaussian_parameter_constraints = {}
         means = np.zeros((len(ns_hidden_states),
                           np.max(ns_hidden_states),
                           len(gaussian_features)))
-        covariances = []
         for system in hidden_states.columns:
             for i in hidden_states[:][system].unique():
                 df = data.loc[hidden_states[system][hidden_states[system]==i].index,
                           gaussian_features]
                 means[system][int(i)] = np.mean(np.array(df), axis = 0)
-                covariances.append(np.array(
-                    np.cov(np.array(df), rowvar=False)))
-        covariances = np.mean(np.array(covariances), axis=0)
         means = np.ma.masked_equal([np.transpose(m) for m in means], 0)
+        gmm = mixture.GaussianMixture()
+        gmm.fit(data.loc[:,gaussian_features])
+        covariance = gmm.covariances_[0]
 
-        gmm_parameter_constraints = {
+
+        gaussian_parameter_constraints = {
             "means": means,
-            "covariances": covariances
+            "covariance": covariance
         }
         model_parameter_constraints[
-                    "gmm_parameter_constraints"] = gmm_parameter_constraints
+                    "gaussian_parameter_constraints"] = gaussian_parameter_constraints
 
     spec["model_parameter_constraints"] = model_parameter_constraints
 
