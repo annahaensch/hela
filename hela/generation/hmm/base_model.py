@@ -326,13 +326,13 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
     spec = {"hidden_state": {"type": "finite", "count": ns_hidden_states}}
     spec["n_systems"] = len(ns_hidden_states)
 
-    hidden_state_tuples = np.array(hidden_states.drop_duplicates())
-    hidden_state_dict = {
-        str(list(hidden_state_tuples[i])): i
-        for i in range(len(hidden_state_tuples))
-    }
+    # Get mappings between hidden state vectors and enumerations,
+    hidden_state_values = [[t for t in range(i)] for i in ns_hidden_states]
+    hidden_state_vectors = [list(t) for t in itertools.product(*hidden_state_values)]
+    hidden_state_vector_to_enum = {str(hidden_state_vectors[i]):i for i in range(len(hidden_state_vectors))}
+
     flattened_hidden_states = pd.Series(
-    [hidden_state_dict[str(list(v))] for v in np.array(hidden_states)],
+    [hidden_state_vector_to_enum[str(list(v))] for v in np.array(hidden_states)],
     index=hidden_states.index)
 
     observations = []
@@ -363,25 +363,23 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
     model_parameter_constraints = {}
 
     # Construct transition matrices from hidden state sequence.
-    transition_matrices = []
-    for n in ns_hidden_states:
-        transition_matrix = np.zeros((n, n))
-        transition_matrices.append(transition_matrix)
-    transition_matrices = np.array(transition_matrices)
+    transition_matrices = np.zeros((len(ns_hidden_states),np.max(ns_hidden_states),np.max(ns_hidden_states)))
 
-    for i in hidden_states.columns:
-        transition_matrix = transition_matrices[i]
-        for j in range(hidden_states[i].shape[0]-1):
-            current_state = hidden_states[i][j]
-            next_state = hidden_states[i][j+1]
-            if ~np.isnan(current_state) and ~np.isnan(next_state):
-                transition_matrix[int(current_state)][int(next_state)] += 1
-        for k in range(ns_hidden_states[i]):
-            if np.sum(transition_matrix[k]) == 0:
-                transition_matrix[k] = np.full(ns_hidden_states[k], 1)
-        transition_matrix = transition_matrix / np.sum(transition_matrix, axis=1).reshape(-1, 1)
-        transition_matrices[i] = transition_matrix
-    model_parameter_constraints["transition_constraints"] = transition_matrices
+    transition_mask = np.zeros_like(transition_matrices)
+    for i in range(len(ns_hidden_states)):
+        x, y = np.ogrid[:np.max(ns_hidden_states), :np.max(ns_hidden_states)]
+        transition_mask[i] = np.where((x < ns_hidden_states[i])&(y < ns_hidden_states[i]), 0, 1)
+
+    for i in range(hidden_states.shape[0])[1:]:
+        previous = [t for t in np.array(hidden_states.iloc[i-1])]
+        current = [t for t in np.array(hidden_states.iloc[i])]
+        for j in range(len(previous)):
+            transition_matrices[j][previous[j]][current[j]] +=1
+            
+    transition_matrices = np.ma.masked_array(transition_matrices,transition_mask)
+    transition_matrices = transition_matrices/transition_matrices.sum(axis = 2).reshape((len(ns_hidden_states),np.max(ns_hidden_states),1))
+    model_parameter_constraints[
+            "transition_constraints"] = transition_matrices
     
     # Construct initial state vector from hidden state sequence.
     initial_state_vector = np.zeros((len(ns_hidden_states),np.max(ns_hidden_states)))
