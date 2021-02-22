@@ -59,6 +59,68 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             self.means = self._generate_means()
             self.covariances = self._generate_covariance()
 
+    def generative_model_to_fhmm_training_spec(self):
+        """ Returns dictionary training spec using parameters used to generate observations
+        and hidden state sequence.
+
+        N.B.: This training spec will be suitable input for the hmm
+            function `FactoredHMMConfiguration.from_spec()`.
+        """
+        training_spec = {"hidden_state": {"type": "finite", "count": self.ns_hidden_states}}
+        training_spec["n_systems"] = len(self.ns_hidden_states)
+
+        model_parameter_constraints = {
+            'transition_constraints': self.transition_matrices
+        }
+
+        # Construct inital state as n_systems x n_hidden_states array 
+        initial_state = np.zeros((len(self.ns_hidden_states),np.max(self.ns_hidden_states)))
+        for i in range(initial_state.shape[0]):
+            initial_state[i][self.initial_state_vector[i]] = 1
+        model_parameter_constraints[
+            "initial_state_constraints"] = initial_state
+
+        observations = []
+        if self.n_categorical_features > 0:
+            categorical_values = self.categorical_values
+            for c in categorical_values.columns:
+                observations.append({
+                    'name': c,
+                    'type': 'finite',
+                    'values': categorical_values[c].unique()
+                })
+            model_parameter_constraints[
+                'emission_constraints'] = self.emission_matrix
+
+        if self.n_gaussian_features > 0:
+            for g in self.gaussian_values.columns:
+                observations.append({
+                    'name': g,
+                    'type': 'continuous',
+                    'dist': 'gaussian',
+                    'dims': 1
+                })
+            # TODO (isalj): incorporate gaussian mixture models
+            if self.n_gmm_components > 0:
+                gmm_parameter_constraints = {
+                    'n_gmm_components': self.n_gmm_components
+                }
+                gmm_parameter_constraints[
+                    'component_weights'] = self.component_weights
+
+                gmm_parameter_constraints = {'means' : self.means}
+                gmm_parameter_constraints['covariances'] = self.covariances
+
+
+            model_parameter_constraints[
+                'gmm_parameter_constraints'] = gmm_parameter_constraints
+
+        training_spec[
+            'model_parameter_constraints'] = model_parameter_constraints
+        training_spec['observations'] = observations
+
+        return training_spec
+
     def generate_hidden_state_sequence(self, n_observations, frequency="D"):
         """ Generates sequence of hidden states with correct distribution
 
@@ -199,6 +261,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             weights = np.random.uniform(-3, 3, (self.n_gaussian_features, max_hidden_state))
             if n < max_hidden_state:
                 weights[:,n:] = np.nan
+                # weights[:n,:] = np.nan
             # Mask all Nan entries
             weights = np.ma.masked_invalid(weights)
             means.append(weights)
