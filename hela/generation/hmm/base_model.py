@@ -303,7 +303,7 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
 
     return spec
 
-def data_to_discrete_fhmm_training_spec(hidden_states, ns_hidden_states, data,
+def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
                                        categorical_features, gaussian_features):
     """ Returns fhmm training spec from hidden state sequence and data.
 

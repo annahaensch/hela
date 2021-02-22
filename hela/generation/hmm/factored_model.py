@@ -59,12 +59,12 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             self.means = self._generate_means()
             self.covariances = self._generate_covariance()
 
-    def generative_model_to_discrete_fhmm_training_spec(self):
+    def generative_model_to_fhmm_training_spec(self):
         """ Returns dictionary training spec using parameters used to generate observations
         and hidden state sequence.
 
         N.B.: This training spec will be suitable input for the hmm
-            function `DiscreteFHMMConfiguration.from_spec()`.
+            function `FactoredHMMConfiguration.from_spec()`.
         """
         training_spec = {"hidden_state": {"type": "finite", "count": self.ns_hidden_states}}
         training_spec["n_systems"] = len(self.ns_hidden_states)

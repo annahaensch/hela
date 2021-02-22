@@ -14,7 +14,7 @@ from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
 from .utils import *
 
 
-class DiscreteFHMMConfiguration(HMMConfiguration):
+class FactoredHMMConfiguration(HMMConfiguration):
     """ Intilialize FHMM configuration from specification dictionary. """
 
     def __init__(self, hidden_state_type=None):
@@ -22,19 +22,19 @@ class DiscreteFHMMConfiguration(HMMConfiguration):
         self.ns_hidden_states = None
 
     def _from_spec(self, spec):
-        """ Discrete FHMM specific implementation of `from_spec`. """
+        """ Factored HMM specific implementation of `from_spec`. """
         self.ns_hidden_states = spec['hidden_state']['count']
         self.n_systems = spec['n_systems']
-        self.model_type = 'DiscreteFHMM'
+        self.model_type = 'FactoredHMM'
         return self
 
     def _to_model(self, random_state):
-        """ Discrete FHMM specific implementation of `to_model`. """
+        """ Factored HMM specific implementation of `to_model`. """
 
-        return DiscreteFHMM.from_config(self, random_state)
+        return FactoredHMM.from_config(self, random_state)
 
-class DiscreteFHMM(HiddenMarkovModel):
-    """ Model class for dicrete hidden Markov models """
+class FactoredHMM(HiddenMarkovModel):
+    """ Model class for factored hidden Markov models """
 
     def __init__(self, model_config=None):
         super().__init__(model_config)
@@ -61,7 +61,7 @@ class DiscreteFHMM(HiddenMarkovModel):
     def from_config(cls, model_config, random_state):
 
         raise NotImplementedError(
-         "FHMM model not yet implemented")
+         "FHMM not yet implemented")
 
 # class GaussianMixtureModel(DiscreteHMM):
 
