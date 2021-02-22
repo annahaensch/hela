@@ -106,12 +106,29 @@ class FactoredHMM(HiddenMarkovModel):
                     "distribution type: {}".format(
                         " ,".join(non_gaussian_distributions)))
 
-        #model.log_transition = model.log_transition_from_constraints(
-        #    model_config.model_parameter_constraints['transition_constraints'])
+        transition = model_config.model_parameter_constraints['transition_constraints']
+        log_transition = []
+        for i in range(len(transition)):
+            trans = transition[i].copy()
+            zero_mask = transition == 0
+            trans = np.where(trans!=0,trans,1)
+            log_trans = np.log(trans)
+            log_trans[zero_mask] = LOG_ZERO
+            log_transition.append(log_trans)
+        model.log_transition = log_transition
 
-        #model.log_initial_state = model.log_initial_state_from_constraints(
-        #    model_config.model_parameter_constraints[
-        #        'initial_state_constraints'])
+        initial_state = model_config.model_parameter_constraints['initial_state_constraints']
+        log_initial_state = []
+        for i in range(len(initial_state)):
+            init_state = initial_state[i].copy()
+            zero_mask = init_state == 0
+            init_state= np.where(init_state!=0,init_state,1)
+            log_init_state = np.log(init_state)
+            log_init_state[zero_mask] = LOG_ZERO
+            log_initial_state.append(log_init_state)
+        model.log_initial_state = log_initial_state
+
+        # TODO: (AH) add option to randomly seed transition and initial state.
 
         return model
 
