@@ -107,26 +107,20 @@ class FactoredHMM(HiddenMarkovModel):
                         " ,".join(non_gaussian_distributions)))
 
         transition = model_config.model_parameter_constraints['transition_constraints']
-        log_transition = []
-        for i in range(len(transition)):
-            trans = transition[i].copy()
-            zero_mask = transition == 0
-            trans = np.where(trans!=0,trans,1)
-            log_trans = np.log(trans)
-            log_trans[zero_mask] = LOG_ZERO
-            log_transition.append(log_trans)
-        model.log_transition = log_transition
+        trans_mask = transition.mask
+        zero_mask = transition == 0
+        temp_masked_trans = np.ma.masked_array(np.where(transition!=0,transition,1),trans_mask).filled(fill_value=1)
+        log_transition = np.log(temp_masked_trans)
+        log_transition[zero_mask] = LOG_ZERO
+        model.log_transition = np.ma.masked_array(log_transition,trans_mask)
 
         initial_state = model_config.model_parameter_constraints['initial_state_constraints']
-        log_initial_state = []
-        for i in range(len(initial_state)):
-            init_state = initial_state[i].copy()
-            zero_mask = init_state == 0
-            init_state= np.where(init_state!=0,init_state,1)
-            log_init_state = np.log(init_state)
-            log_init_state[zero_mask] = LOG_ZERO
-            log_initial_state.append(log_init_state)
-        model.log_initial_state = log_initial_state
+        initial_state_mask = initial_state.mask
+        zero_mask = initial_state == 0
+        temp_masked_initial_state = np.ma.masked_array(np.where(initial_state!=0,initial_state,1),initial_state_mask).filled(fill_value=1)
+        log_initial_state = np.log(temp_masked_initial_state)
+        log_initial_state[zero_mask] = LOG_ZERO
+        model.log_initial_state = np.ma.masked_array(log_initial_state,initial_state_mask)
 
         # TODO: (AH) add option to randomly seed transition and initial state.
 
