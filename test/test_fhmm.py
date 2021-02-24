@@ -24,7 +24,7 @@ def n_hidden_states(random):
 @pytest.fixture(scope="module")
 def generative_model(random, n_hidden_states):
     gen_model = gen.FactoredHMMGenerativeModel(
-        ns_hidden_states=[3, 2, 2],
+        ns_hidden_states=[3, 2],
         n_categorical_features=2,
         n_gaussian_features=1)
 
@@ -57,7 +57,7 @@ def test_model_loads_from_spec(generative_model):
     assert model.ns_hidden_states == fhmm_training_spec['hidden_state']['count']
 
 
-def test_model_learning_and_imputation(generative_model):
+def test_model_sampling_and_inference(generative_model):
 
     fhmm_training_spec = generative_model["fhmm_training_spec"]
     dataset = generative_model["dataset"]
@@ -67,6 +67,17 @@ def test_model_learning_and_imputation(generative_model):
     model = model_config.to_model()
     inf = model.to_inference_interface(dataset)
 
-    gibbs_states = inf.gibbs_sample(dataset, iterations=1)
+    Gamma, Xi, gibbs_states = inf.gibbs_sampling(
+        dataset, iterations=1, burn_down_period=1)
 
     assert np.all(gibbs_states.index == dataset.index)
+
+    Gamma, Xi, gibbs_states = inf.gibbs_sampling(
+        dataset,
+        iterations=5,
+        burn_down_period=1,
+        gather_statistics=True,
+        hidden_state_vector_df=gibbs_states)
+
+    assert Gamma.shape[0] == dataset.shape[0]
+    assert np.all(np.sum(Xi, axis=3) == 1)
