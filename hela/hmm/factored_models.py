@@ -203,16 +203,20 @@ class FactoredHMM(ABC):
 
 class CategoricalModel(FactoredHMM):
     def __init__(self,
-                 hidden_state_vector_to_enum,
-                 hidden_state_enum_to_vector,
+                 model_config,
+                 ns_hidden_states = None,
+                 hidden_state_vector_to_enum = None,
+                 hidden_state_enum_to_vector = None,
                  n_hidden_states=None,
                  categorical_features=None,
                  categorical_values=None,
                  categorical_vector_to_enum=None,
                  categorical_enum_to_vector =None,
                  log_emission_matrix=None):
-        self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
-        self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
+        super().__init__(model_config = model_config, 
+            ns_hidden_states = ns_hidden_states,
+            hidden_state_vector_to_enum = hidden_state_vector_to_enum,
+            hidden_state_enum_to_vector = hidden_state_enum_to_vector)
         self.categorical_features = categorical_features
         self.categorical_values = categorical_values
         self.categorical_vector_to_enum  = categorical_vector_to_enum 
@@ -223,11 +227,10 @@ class CategoricalModel(FactoredHMM):
     def from_config(cls, model_config):
         """ Return instantiated CategoricalModel object)
         """
-        hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum
-        hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
-
-        categorical_model = cls(hidden_state_vector_to_enum = hidden_state_vector_to_enum,
-            hidden_state_enum_to_vector = hidden_state_enum_to_vector)
+        categorical_model = cls(model_config = model_config, 
+            ns_hidden_states = model_config.ns_hidden_states,
+            hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum,
+            hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector)
         categorical_model.categorical_features = model_config.categorical_features
         categorical_model.categorical_values = model_config.categorical_values
         categorical_model.categorical_vector_to_enum = model_config.categorical_vector_to_enum
@@ -267,14 +270,18 @@ class CategoricalModel(FactoredHMM):
 
 class GaussianModel(FactoredHMM):
     def __init__(self,
-                 ns_hidden_states,
+                 model_config,
+                 ns_hidden_states = None,
                  hidden_state_vector_to_enum = None,
                  hidden_state_enum_to_vector = None,
                  gaussian_features=None,
                  dims=None,
                  means=None,
-                 covariance=None,
-                 model_config = None):
+                 covariance=None):
+        super().__init__(model_config = model_config, 
+            ns_hidden_states = ns_hidden_states,
+            hidden_state_vector_to_enum = hidden_state_vector_to_enum,
+            hidden_state_enum_to_vector = hidden_state_enum_to_vector)
         self.ns_hidden_states = ns_hidden_states
         self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
         self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
@@ -287,10 +294,11 @@ class GaussianModel(FactoredHMM):
     def from_config(cls, model_config):
         """ Return instantiated GaussianModel object)
         """
-        gaussian_model = cls(ns_hidden_states=model_config.ns_hidden_states)
-        gaussian_model.hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum
-        gaussian_model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
-
+        gaussian_model = cls(model_config = model_config, 
+            ns_hidden_states = model_config.ns_hidden_states,
+            hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum,
+            hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector)
+       
         gaussian_features= model_config.gaussian_features
         gaussian_values = model_config.gaussian_values
         gaussian_params = model_config.model_parameter_constraints['gaussian_parameter_constraints']
@@ -318,31 +326,36 @@ class GaussianModel(FactoredHMM):
         ns_hidden_states = self.ns_hidden_states
         means = self.means
 
-        # Rewrite hidden_state_vector as a list of column vectors.
-        column_vectors = [np.array([1 if j == hidden_state_vector[i] else 0 for j in range(np.max(ns_hidden_states))]).reshape(-1,1) for i in range(len(ns_hidden_states))]
+        # Rewrite hidden_state_vector as a list of column vectors.  
+        column_vectors = [np.array([1 if j == hidden_state_vector[i] 
+            else 0 for j in range(np.max(ns_hidden_states))]).reshape(-1,1
+            ) for i in range(len(ns_hidden_states))]
 
-        return np.sum(np.array([means[m].data @ column_vectors[m] for m in range(len(ns_hidden_states))]), axis = 0)
+        return np.sum(np.array([means[m].data @ column_vectors[m] for 
+            m in range(len(ns_hidden_states))]), axis = 0)
 
 
     def get_emission_log_probabilities(self, data):
-        """ Returns emission log_probabilities for categorical data
+        """ Returns emission log_probabilities for gaussian data
 
         Arguments: 
             data: dataframe of observed categorical data
 
         Returns: 
             Dataframe where entry [t,i] is log P(x_t | h_i) (i.e. the conditional 
-            probability of the gaussian emission, x_t, observed at time t, 
+            log probability of the gaussian emission, x_t, observed at time t, 
             given hidden state h_i at time t).  Here hidden states are 
             enumerated in the "flattened" sense.
         """
-        ns_hidden_states = self.ns_hidden_states
-
         vectors = [v for k,v in self.hidden_state_enum_to_vector.items()]
-        means = {k : self.mean_for_hidden_state_vector(v) for k,v in self.hidden_state_enum_to_vector.items()}
+        means = {k : self.mean_for_hidden_state_vector(v) for k,v in 
+            self.hidden_state_enum_to_vector.items()}
         cov = self.covariance
-        stats.multivariate_normal.logpdf(np.array(data.loc[:,self.gaussian_features]),[0,0],[[1,0],[0,1]])
-        log_prob = pd.DataFrame(index = data.index, columns = [i for i in range(len(means))])
+
+        # Initialize dataframe that will hold log probablites for observations 
+        # (rows) conditioned on hidden states (columns)
+        log_prob = pd.DataFrame(index = data.index, columns = [i for i in 
+            range(len(means))]) 
         for k,m in means.items():
             log_prob.loc[:,k] = stats.multivariate_normal.logpdf(np.array(
                 data.loc[:,self.gaussian_features]),m.reshape(1,-1)[0],cov)
@@ -376,6 +389,7 @@ class FactoredHMMInference(ABC):
         return pd.DataFrame(log_prob, 
                             columns = [k for k in self.model.hidden_state_enum_to_vector.keys()],
                             index = data.index)
+
 
 
     def gibbs_sample(self, data, iterations, hidden_state_vector_df = None):
@@ -435,13 +449,26 @@ class FactoredHMMInference(ABC):
 
 
                     updated_state_prob = np.exp(log_prob)
-                    if np.sum(updated_state_prob) == 0:
-                        updated_state_prob = np.full(len(updated_state_prob), 1)
-                    updated_state_prob = updated_state_prob / np.sum(
-                            updated_state_prob)
-                    cumulative_prob = np.cumsum(updated_state_prob)
-                    updated_state = np.where(
-                            cumulative_prob >= sample_parameter[t])[0][0]
-                    hidden_state_vector_df.iloc[t,m] = updated_state
+                    hidden_state_vector_df.iloc[t,m] = _sample(updated_state_prob,sample_parameter[t])
         
         return hidden_state_vector_df
+
+
+def _sample(probability_distribution,sample_parameter):
+    """ Returns a sample using discrete inverse transform.
+
+    Arguments:
+        probability_distribution: array of probabilities
+        sample_parameter: (int between 0 and 1)
+
+    Returns: 
+        Sample with prescribed probability distribution
+    """
+    if np.sum(probability_distribution) == 0:
+        probability_distribution = np.full(len(probability_distribution), 1)
+    probability_distribution = probability_distribution / np.sum(
+            probability_distribution)
+    cumulative_prob = np.cumsum(probability_distribution)
+    updated_state = np.where(
+            cumulative_prob >= sample_parameter)[0][0]
+    return updated_state
