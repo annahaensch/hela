@@ -3,10 +3,9 @@
 
 from .base_models import (HiddenMarkovModel, HMMConfiguration, HMMForecasting,
                           HMMValidationMetrics, LearningAlgorithm)
-from .discrete_models import (DiscreteHMM, DiscreteHMMConfiguration,
-                              DiscreteHMMForecasting,
-                              DiscreteHMMInferenceResults,
-                              DiscreteHMMValidationMetrics)
+from .discrete_models import (
+    DiscreteHMM, DiscreteHMMConfiguration, DiscreteHMMForecasting,
+    DiscreteHMMInferenceResults, DiscreteHMMValidationMetrics)
 from .factored_models import (FactoredHMMConfiguration, FactoredHMMInference)
 from .distributed import DistributedLearningAlgorithm
 from .utils import *

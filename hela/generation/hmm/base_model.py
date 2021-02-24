@@ -175,6 +175,7 @@ class HMMGenerativeModel(ABC):
                 i + 1) % n_hidden_states] = 1 - transition_matrix[i][i]
         return transition_matrix
 
+
 def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
                                        categorical_features, gaussian_features,
                                        n_gmm_components):
@@ -303,8 +304,12 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
 
     return spec
 
-def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
-                                       categorical_features = [], gaussian_features = []):
+
+def data_to_fhmm_training_spec(hidden_states,
+                               ns_hidden_states,
+                               data,
+                               categorical_features=[],
+                               gaussian_features=[]):
     """ Returns fhmm training spec from hidden state sequence and data.
 
     Arguments:
@@ -328,12 +333,20 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
 
     # Get mappings between hidden state vectors and enumerations,
     hidden_state_values = [[t for t in range(i)] for i in ns_hidden_states]
-    hidden_state_vectors = [list(t) for t in itertools.product(*hidden_state_values)]
-    hidden_state_vector_to_enum = {str(hidden_state_vectors[i]):i for i in range(len(hidden_state_vectors))}
+    hidden_state_vectors = [
+        list(t) for t in itertools.product(*hidden_state_values)
+    ]
+    hidden_state_vector_to_enum = {
+        str(hidden_state_vectors[i]): i
+        for i in range(len(hidden_state_vectors))
+    }
 
     flattened_hidden_states = pd.Series(
-    [hidden_state_vector_to_enum[str(list(v))] for v in np.array(hidden_states)],
-    index=hidden_states.index)
+        [
+            hidden_state_vector_to_enum[str(list(v))]
+            for v in np.array(hidden_states)
+        ],
+        index=hidden_states.index)
 
     observations = []
     if len(categorical_features) > 0:
@@ -343,57 +356,64 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
             values = list(data[feat].unique())
             values.sort()
             observations.append({
-                        "name": feat,
-                        "type": "finite",
-                        "values": values
-                    })
+                "name": feat,
+                "type": "finite",
+                "values": values
+            })
             categorical_values.append(values)
             value_tuples = list(itertools.product(*categorical_values))
     if len(gaussian_features) > 0:
         gaussian_features.sort()
         for feat in gaussian_features:
-                observations.append({
-                    "name": feat,
-                    "type": "continuous",
-                    "dist": "gaussian",
-                    "dims": 1
-                })
-    spec["observations"] = observations    
+            observations.append({
+                "name": feat,
+                "type": "continuous",
+                "dist": "gaussian",
+                "dims": 1
+            })
+    spec["observations"] = observations
 
     model_parameter_constraints = {}
 
     # Construct transition matrices from hidden state sequence.
-    transition_matrices = np.zeros((len(ns_hidden_states),np.max(ns_hidden_states),np.max(ns_hidden_states)))
+    transition_matrices = np.zeros((len(ns_hidden_states),
+                                    np.max(ns_hidden_states),
+                                    np.max(ns_hidden_states)))
 
     transition_mask = np.zeros_like(transition_matrices)
     for i in range(len(ns_hidden_states)):
         x, y = np.ogrid[:np.max(ns_hidden_states), :np.max(ns_hidden_states)]
-        transition_mask[i] = np.where((x < ns_hidden_states[i])&(y < ns_hidden_states[i]), 0, 1)
+        transition_mask[i] = np.where((x < ns_hidden_states[i]) &
+                                      (y < ns_hidden_states[i]), 0, 1)
 
     for i in range(hidden_states.shape[0])[1:]:
-        previous = [t for t in np.array(hidden_states.iloc[i-1])]
+        previous = [t for t in np.array(hidden_states.iloc[i - 1])]
         current = [t for t in np.array(hidden_states.iloc[i])]
         for j in range(len(previous)):
-            transition_matrices[j][previous[j]][current[j]] +=1
-            
-    transition_matrices = np.ma.masked_array(transition_matrices,transition_mask)
-    transition_matrices = transition_matrices/transition_matrices.sum(axis = 2).reshape((len(ns_hidden_states),np.max(ns_hidden_states),1))
-    model_parameter_constraints[
-            "transition_constraints"] = transition_matrices
-    
+            transition_matrices[j][previous[j]][current[j]] += 1
+
+    transition_matrices = np.ma.masked_array(transition_matrices,
+                                             transition_mask)
+    transition_matrices = transition_matrices / transition_matrices.sum(
+        axis=2).reshape((len(ns_hidden_states), np.max(ns_hidden_states), 1))
+    model_parameter_constraints["transition_constraints"] = transition_matrices
+
     # Construct initial state vector from hidden state sequence.
     ns_hidden_states = ns_hidden_states
-    initial_state_prob = np.zeros((len(ns_hidden_states),np.max(ns_hidden_states)))
+    initial_state_prob = np.zeros((len(ns_hidden_states),
+                                   np.max(ns_hidden_states)))
     initial_state_mask = np.zeros_like(initial_state_prob)
     for i in range(len(ns_hidden_states)):
         x = np.ogrid[0:np.max(ns_hidden_states)]
-        initial_state_mask[i] = np.where(x < ns_hidden_states[i],0,1)
-    
-    initial_vec = np.array(hidden_states[~(hidden_states.isna().any(axis = 1))].iloc[0])
+        initial_state_mask[i] = np.where(x < ns_hidden_states[i], 0, 1)
+
+    initial_vec = np.array(
+        hidden_states[~(hidden_states.isna().any(axis=1))].iloc[0])
     for i in range(len(initial_vec)):
         initial_state_prob[i][initial_vec[i]] = 1
     model_parameter_constraints[
-            "initial_state_constraints"] = np.ma.masked_array(initial_state_prob,initial_state_mask)
+        "initial_state_constraints"] = np.ma.masked_array(
+            initial_state_prob, initial_state_mask)
 
     if categorical_features:
         value_tuple_dict = {str(list(v)): e for e, v in enumerate(value_tuples)}
@@ -403,9 +423,10 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
                 for i in np.array(data[categorical_features])
             ],
             index=data.index)
-        emission_matrix = np.zeros((emissions.nunique(), np.prod(ns_hidden_states)))
-        
-    # Construct emission matrix from hidden state sequence and data.
+        emission_matrix = np.zeros((emissions.nunique(),
+                                    np.prod(ns_hidden_states)))
+
+        # Construct emission matrix from hidden state sequence and data.
         for i in list(
                 set.intersection(
                     set(hidden_states[~hidden_states.isna()].index),
@@ -422,26 +443,24 @@ def data_to_fhmm_training_spec(hidden_states, ns_hidden_states, data,
     # Determine gaussian parameter constraints from data.
     if gaussian_features:
         gaussian_parameter_constraints = {}
-        means = np.zeros((len(ns_hidden_states),
-                          np.max(ns_hidden_states),
+        means = np.zeros((len(ns_hidden_states), np.max(ns_hidden_states),
                           len(gaussian_features)))
         for system in hidden_states.columns:
             for i in hidden_states[:][system].unique():
-                df = data.loc[hidden_states[system][hidden_states[system]==i].index,
-                          gaussian_features]
-                means[system][int(i)] = np.mean(np.array(df), axis = 0)
+                df = data.loc[hidden_states[system][hidden_states[system] == i]
+                              .index, gaussian_features]
+                means[system][int(i)] = np.mean(np.array(df), axis=0)
         means = np.ma.masked_equal([np.transpose(m) for m in means], 0)
         gmm = mixture.GaussianMixture()
-        gmm.fit(data.loc[:,gaussian_features])
+        gmm.fit(data.loc[:, gaussian_features])
         covariance = gmm.covariances_[0]
-
 
         gaussian_parameter_constraints = {
             "means": means,
             "covariance": covariance
         }
         model_parameter_constraints[
-                    "gaussian_parameter_constraints"] = gaussian_parameter_constraints
+            "gaussian_parameter_constraints"] = gaussian_parameter_constraints
 
     spec["model_parameter_constraints"] = model_parameter_constraints
 

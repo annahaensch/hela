@@ -72,9 +72,8 @@ class DiscreteHMM(HiddenMarkovModel):
         model.continuous_values = model_config.continuous_values
         model.continuous_features = model_config.continuous_features
         gaussian_features = [
-            i for i in model.continuous_features
-            if model.continuous_values.loc['distribution', i].lower() ==
-            'gaussian'
+            i for i in model.continuous_features if model.continuous_values.loc[
+                'distribution', i].lower() == 'gaussian'
         ]
         if len(gaussian_features) > 0:
             model.gaussian_mixture_model = GaussianMixtureModel.from_config(
@@ -192,6 +191,7 @@ class DiscreteHMM(HiddenMarkovModel):
 
 
 class CategoricalModel(DiscreteHMM):
+
     def __init__(self,
                  n_hidden_states=None,
                  finite_features=None,
@@ -286,8 +286,7 @@ class CategoricalModel(DiscreteHMM):
             if l in finite_state_data.unique():
                 l_index = finite_state_data[finite_state_data == l].index
                 l_gamma_df = gamma_df.loc[l_index]
-                log_emission_matrix[l] = logsumexp(
-                    np.array(l_gamma_df), axis=0)
+                log_emission_matrix[l] = logsumexp(np.array(l_gamma_df), axis=0)
         log_emission_matrix -= logsumexp(gamma, axis=0)
         return log_emission_matrix
 
@@ -332,6 +331,7 @@ class CategoricalModel(DiscreteHMM):
 
 
 class GaussianMixtureModel(DiscreteHMM):
+
     def __init__(self,
                  n_hidden_states=None,
                  gaussian_features=None,
@@ -466,8 +466,7 @@ class GaussianMixtureModel(DiscreteHMM):
             log_emission[i] = logsumexp(
                 log_emission_by_component[i] + log_weights[i], axis=1)
 
-        return pd.DataFrame(
-            log_emission.transpose(), index=gaussian_data.index)
+        return pd.DataFrame(log_emission.transpose(), index=gaussian_data.index)
 
     def update_means(self, gaussian_data, gamma_by_component):
         """ Return updated means for current hmm parameters.
@@ -486,10 +485,10 @@ class GaussianMixtureModel(DiscreteHMM):
             for m in range(n_gmm_components):
                 means[i, m] = np.sum(
                     np.array([g[m] for g in np.exp(gamma_by_component)[i]]
-                             ).reshape(-1, 1) * np.asarray(gaussian_data),
+                            ).reshape(-1, 1) * np.asarray(gaussian_data),
                     axis=0) / np.sum(
                         np.array([g[m] for g in np.exp(gamma_by_component)[i]
-                                  ]).reshape(-1, 1))
+                                 ]).reshape(-1, 1))
         return means
 
     def update_covariances(self, gaussian_data, gamma_by_component):
@@ -514,8 +513,8 @@ class GaussianMixtureModel(DiscreteHMM):
                     error[t].reshape(-1, 1) @ error[t].reshape(1, -1)
                     for t in range(len(error))
                 ])
-                gamma = np.array(
-                    [g[m] for g in gamma_by_component[i]]).reshape(-1, 1, 1)
+                gamma = np.array([g[m] for g in gamma_by_component[i]]).reshape(
+                    -1, 1, 1)
                 covariances[i][m] = np.sum(
                     gamma * error_prod, axis=0) / np.sum(
                         gamma, axis=0)
@@ -640,8 +639,7 @@ class DiscreteHMMInferenceResults(ABC):
             finite_state_data = get_finite_observations_from_data_as_states(
                 self.model, data)
             log_probability += np.array(
-                self.model.categorical_model.log_probability(
-                    finite_state_data))
+                self.model.categorical_model.log_probability(finite_state_data))
         if self.model.gaussian_mixture_model is not None:
             gaussian_data = get_gaussian_observations_from_data(
                 self.model, data)
@@ -676,8 +674,8 @@ class DiscreteHMMInferenceResults(ABC):
         transition = np.exp(self.model.log_transition)
         log_probability = np.array(
             self.predict_hidden_state_log_probability(data))
-        probability = np.exp(log_probability -
-                             logsumexp(log_probability, axis=1).reshape(-1, 1))
+        probability = np.exp(
+            log_probability - logsumexp(log_probability, axis=1).reshape(-1, 1))
 
         viterbi_matrix = np.empty((data.shape[0], len(transition)))
         backpoint_matrix = np.empty((data.shape[0], len(transition)))
@@ -906,8 +904,7 @@ class DiscreteHMMInferenceResults(ABC):
                             set(finite_values[finite_values[feat] == val]
                                 .index))
                     eligible_values_index_list = [
-                        i
-                        for i in set.intersection(*eligible_values_index_list)
+                        i for i in set.intersection(*eligible_values_index_list)
                     ]
                 eligible_values_index_list.sort()
                 eligible_emissions = np.array(
@@ -958,8 +955,7 @@ class DiscreteHMMInferenceResults(ABC):
                 if method == 'argmax':
                     new_covariances = np.empty((np.array(covariances).shape[0],
                                                 np.array(covariances).shape[1],
-                                                len(index_nan),
-                                                len(index_nan)))
+                                                len(index_nan), len(index_nan)))
                     new_means = np.empty((np.array(means).shape[0],
                                           np.array(means).shape[1],
                                           len(index_nan)))
@@ -1095,8 +1091,8 @@ class DiscreteHMMInferenceResults(ABC):
             beta = np.empty((log_probability.shape))
             beta[0] = 0
             for t in range(1, len(beta)):
-                beta_t = beta[t - 1,
-                              None] + log_transition + log_prob[len(beta) - t]
+                beta_t = beta[t - 1, None] + log_transition + log_prob[len(beta)
+                                                                       - t]
                 beta[t] = logsumexp(beta_t, axis=1)
 
             beta = np.flip(beta, axis=0)
@@ -1571,8 +1567,8 @@ class DiscreteHMMValidationMetrics(HMMValidationMetrics):
         covariances = self.model.gaussian_mixture_model.covariances
         component_weights = self.model.gaussian_mixture_model.component_weights
 
-        redacted_index = redacted_gaussian_data[
-            redacted_gaussian_data.isnull().any(axis=1)].index
+        redacted_index = redacted_gaussian_data[redacted_gaussian_data.isnull()
+                                                .any(axis=1)].index
         imputed_likelihood = np.empty(len(redacted_index))
         actual_likelihood = np.empty(len(redacted_index))
         for i in range(len(redacted_index)):
