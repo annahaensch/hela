@@ -266,6 +266,22 @@ class FactoredHMM(ABC):
             if np.all(np.ma.masked_array(v, mask) == masked_vec)
         ]
 
+    def vector_to_column_vectors(self, hidden_state_vector):
+        """ Returns column vectors associated to hidden_state_vector
+
+        Arguments: 
+            hidden_state_vector: (array) hidden state vector.
+        Returns:
+            List of column vectors with 0 and 1 entries.
+        """
+        return [
+            np.array([
+                1 if j == hidden_state_vector[i] else 0
+                for j in range(np.max(self.ns_hidden_states))
+            ]).reshape(-1, 1)
+            for i in range(len(self.ns_hidden_states))
+        ]
+
 
 class CategoricalModel(FactoredHMM):
 
@@ -409,13 +425,7 @@ class GaussianModel(FactoredHMM):
         means = self.means
 
         # Rewrite hidden_state_vector as a list of column vectors.
-        column_vectors = [
-            np.array([
-                1 if j == hidden_state_vector[i] else 0
-                for j in range(np.max(ns_hidden_states))
-            ]).reshape(-1, 1)
-            for i in range(len(ns_hidden_states))
-        ]
+        column_vectors = self.vector_to_column_vectors(hidden_state_vector)
 
         return np.sum(
             np.array([
@@ -539,35 +549,53 @@ class FactoredHMMInference(ABC):
 
         return np.exp(log_prob)
 
-    def gibbs_sample(self, data, iterations, hidden_state_vector_df=None):
+    def gibbs_sampling(self,
+                       data,
+                       iterations,
+                       burn_down_period=100,
+                       gather_statistics=False,
+                       hidden_state_vector_df=None):
         """ Samples one timestep and fHMM system
 
         Arguments: 
             data: (dataframe) observed timeseries data.
-            iterations: (int) number of rounds of sampling to carry out
+            iterations: (int) number of rounds of sampling to carry out.
+            burn_down_period: (int) number of iterations for burn down before 
+                gathering statistics.
+            gather_statistics: (bool) indicates whether to gather statistics while 
+                iterating.
             hidden_state_vector_df: (dataframe) timeseries of hidden state vectors
                 with the same index as "data".  If default "None" is given, then
                 this dataframe will be seeded randomly.
 
-        Returns: The updated hidden state for the given timeseries index and 
-            fHMM system.
+        Returns: The arrays Gamma and Xi containing statistics, and an updated hidden 
+            state vector
         """
         model = self.model
 
-        # Seed hidden state vector dataframe if none is given.
+        # Initialize dataframe of hidden state vectors if none is given.
         if hidden_state_vector_df is None:
             hidden_state_enum_df = np.random.choice(
-                list(self.model.hidden_state_enum_to_vector.keys()),
-                data.shape[0])
+                list(model.hidden_state_enum_to_vector.keys()), data.shape[0])
             hidden_state_vector_df = pd.DataFrame(
                 [
-                    self.model.hidden_state_enum_to_vector[v]
+                    model.hidden_state_enum_to_vector[v]
                     for v in hidden_state_enum_df
                 ],
                 index=data.index,
-                columns=[i for i in range(len(self.model.ns_hidden_states))])
+                columns=[i for i in range(len(model.ns_hidden_states))])
 
-        for r in range(iterations):
+        # Collect Statistics in Gamma and Xi, with Gibbs sampling at each stage.
+        Gamma = None
+        Xi = None
+        if gather_statistics == True:
+            Gamma = np.zeros((data.shape[0], np.sum(model.ns_hidden_states),
+                              np.sum(model.ns_hidden_states)))
+            Xi = np.zeros((len(model.ns_hidden_states), data.shape[0] - 1,
+                           np.sum(model.ns_hidden_states),
+                           np.sum(model.ns_hidden_states)))
+
+        for r in range(iterations + burn_down_period):
             sample_times = np.random.choice(
                 [i for i in range(data.shape[0])], data.shape[0], replace=False)
             sample_systems = np.random.choice(
@@ -581,9 +609,44 @@ class FactoredHMMInference(ABC):
             for t in sample_times:
                 h_current = (hidden_state_vector_df.iloc[t, :]).to_list()
                 n_next = None
+                column_vectors = self.model.vector_to_column_vectors(h_current)
+
+                if t < data.shape[0] - 1:
+                    h_next = np.array(hidden_state_vector_df.iloc[t + 1, :])
+                    next_column_vectors = self.model.vector_to_column_vectors(
+                        h_next)
+
+                if r >= burn_down_period:
+                    if gather_statistics == True:
+                        for i in range(len(model.ns_hidden_states)):
+
+                            skip_rows = int(np.sum(model.ns_hidden_states[:i]))
+                            N = model.ns_hidden_states[i]
+
+                            count = (column_vectors[i]
+                                     @ column_vectors[i].reshape(1, -1))[:N, :N]
+                            Gamma[t][skip_rows:skip_rows + N, skip_rows:
+                                     skip_rows + N] += (
+                                         column_vectors[i] @ column_vectors[
+                                             i].reshape(1, -1))[:N, :N]
+
+                            if t < data.shape[0] - 1:
+                                count = (column_vectors[i] @ column_vectors[i]
+                                         .reshape(1, -1))[:N, :N]
+                                Xi[i][t][:N, :N] += count
+
+                            for j in range(i):
+
+                                skip_columns = int(
+                                    np.sum(model.ns_hidden_states[:j]))
+                                M = model.ns_hidden_states[j]
+
+                                count = (column_vectors[i] @ column_vectors[j]
+                                         .reshape(1, -1))[:N, :M]
+                                Gamma[t][skip_rows:skip_rows + N, skip_columns:
+                                         skip_columns + M] += count
+
                 for m in sample_systems:
-                    if t < data.shape[0] - 1:
-                        h_next = np.array(hidden_state_vector_df.iloc[t + 1, :])
 
                     updated_state_prob = self.probability_distribution_across_hidden_states(
                         data,
@@ -595,7 +658,16 @@ class FactoredHMMInference(ABC):
                     hidden_state_vector_df.iloc[t, m] = _sample(
                         updated_state_prob, sample_parameter[t])
 
-        return hidden_state_vector_df
+        # Normalize gathered statistics
+        if gather_statistics == True:
+            Gamma = Gamma.astype(np.float32) / iterations
+            Xi = Xi.astype(np.float32)
+            Xi = Xi + (np.sum(Xi, axis=2).reshape(
+                Xi.shape[0], Xi.shape[1], Xi.shape[2], -1) == 0).astype(int)
+            Xi = Xi / np.sum(
+                Xi, axis=3).reshape(Xi.shape[0], Xi.shape[1], Xi.shape[2], -1)
+
+        return Gamma, Xi, hidden_state_vector_df
 
 
 def _sample(probability_distribution, sample_parameter):
