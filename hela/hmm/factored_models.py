@@ -101,6 +101,8 @@ class FactoredHMM(ABC):
                 hidden_state_vectors = None,
                 hidden_state_vector_to_enum = None,
                 hidden_state_enum_to_vector = None,
+                hidden_state_delta_vector = None,
+                hidden_state_delta_enum = None,
                 categorical_features = None,
                 gaussian_features = None,
                 log_transition = None,
@@ -116,6 +118,8 @@ class FactoredHMM(ABC):
         self.hidden_state_vectors = hidden_state_vectors
         self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
         self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
+        self.hidden_state_delta_vector = hidden_state_delta_vector
+        self.hidden_state_delta_enum = hidden_state_delta_enum
 
         self.categorical_features = categorical_features
         self.gaussian_features = gaussian_features
@@ -138,6 +142,9 @@ class FactoredHMM(ABC):
         model.hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum
         model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
 
+        model.hidden_state_delta_vector = {m:{str(v):model.hidden_state_vectors_matching_away_from_m(m,v) for v in model.hidden_state_vectors} for m in range(len(model.ns_hidden_states))}
+
+        model.hidden_state_delta_enum = {m:{model.hidden_state_vector_to_enum[str(v)]:sorted([model.hidden_state_vector_to_enum[str(w)] for w in model.hidden_state_vectors_matching_away_from_m(m,v)]) for v in model.hidden_state_vectors} for m in range(len(model.ns_hidden_states))}
 
         # Get categorical features from model_config.
         model.categorical_features = model_config.categorical_features
@@ -248,7 +255,7 @@ class CategoricalModel(FactoredHMM):
         
         return categorical_model
 
-    def get_emission_log_probabilities(self,data):
+    def emission_log_probabilities(self,data):
         """ Returns emission log_probabilities for categorical data
 
         Arguments: 
@@ -335,7 +342,7 @@ class GaussianModel(FactoredHMM):
             m in range(len(ns_hidden_states))]), axis = 0)
 
 
-    def get_emission_log_probabilities(self, data):
+    def emission_log_probabilities(self, data):
         """ Returns emission log_probabilities for gaussian data
 
         Arguments: 
@@ -370,27 +377,76 @@ class FactoredHMMInference(ABC):
         self.model = model
         self.data = data
 
-    def get_emission_log_probabilities(self, data):
+    def emission_log_probabilities(self, data):
         """ Returns emission log_probabilities for observed data
-
         Arguments: 
             data: dataframe of observed categorical data
-
         Returns: 
             Dataframe where entry [t,i] is log P(x_t | h_i) (i.e. the conditional 
             log probability of the observation, x_t, given hidden state h_i at 
             time t).  Here hidden states are enumerated in the "flattened" sense.
         """
         log_prob = np.zeros((data.shape[0], np.prod(self.model.ns_hidden_states)))
+        
         if self.model.categorical_model:
-            log_prob += np.array(self.model.categorical_model.get_emission_log_probabilities(data))
+            log_prob += np.array(self.model.categorical_model.emission_log_probabilities(data))
+        
         if self.model.gaussian_model:
-            log_prob += np.array(self.model.gaussian_model.get_emission_log_probabilities(data))
+            log_prob += np.array(self.model.gaussian_model.emission_log_probabilities(data))
+        
         return pd.DataFrame(log_prob, 
                             columns = [k for k in self.model.hidden_state_enum_to_vector.keys()],
                             index = data.index)
 
+    def probability_distribution_across_hidden_states(self,
+                                                      data,
+                                                      current_hidden_state,
+                                                      idx,
+                                                      system, 
+                                                      emission_log_probabilities,
+                                                      next_hidden_state = None):
+        """ Returns probability distribution across hidden states.
 
+        Arguments:
+            data: (dataframe) observations.
+            current_hidden_state: (array) hidden state vector corresponding to idx.
+            idx: (int) iloc in index of data
+            system: (int) indicates fHMM Markov system under consideration
+            emission_log_probabilities: (df) row t and column j correspond to the log
+                probability of the emission observed at time t given hidden state j (
+                where hidden state is taken in the "flattened" sense).
+            next_hidden_state: (array) hidden state vector corresponding to idx.
+
+        Returns: 
+            Array of probability distributions given data. The ith entry of this 
+            array will be the probability of hidden state i given the observations
+            at data.iloc[idx,:] and hidden states in systems away from m.  
+            
+            (Note: this is exactly the function "f" referenced on line 6 of Algorithm 1
+            of the technical note.)
+        """
+        model = self.model
+        ns_hidden_states = model.ns_hidden_states
+        log_prob = np.zeros(model.ns_hidden_states[system])
+        
+        # Get list of eligible flattened hidden states.
+        eligible_states = model.hidden_state_delta_enum[system][model.hidden_state_vector_to_enum[str(current_hidden_state)]]
+                        
+        # Add emission log probabilities.
+        log_prob += np.array(emission_log_probabilities.loc[data.index[idx],eligible_states])
+        
+        # Add initial state log probabilities if idx  is 0.
+        if idx == 0:
+            log_prob += model.log_initial_state[system][:ns_hidden_states[system]]
+        
+        # Add transition log probabilities untill idx corresponds to the last observed data.
+        if idx < data.shape[0]-1:
+            log_prob += np.array(model.log_transition[system
+                                                     ][:,next_hidden_state[system]]
+                                )[:ns_hidden_states[system]]
+            
+        
+        return np.exp(log_prob)
 
     def gibbs_sample(self, data, iterations, hidden_state_vector_df = None):
         """ Samples one timestep and fHMM system
@@ -406,9 +462,6 @@ class FactoredHMMInference(ABC):
             fHMM system.
         """
         model = self.model
-        ns_hidden_states = model.ns_hidden_states
-        log_initial_state = model.log_initial_state
-        log_transition = model.log_transition
         
         # Seed hidden state vector dataframe if none is given.
         if hidden_state_vector_df is None:
@@ -416,39 +469,30 @@ class FactoredHMMInference(ABC):
             hidden_state_vector_df = pd.DataFrame([self.model.hidden_state_enum_to_vector[v] for v in hidden_state_enum_df],
                                                   index = data.index,
                                                   columns = [i for i in range(len(self.model.ns_hidden_states))])
-        # Get emission probability for categorical and gaussian emissions.
-        emission_log_prob_df = self.get_emission_log_probabilities(data)
-        
+
         for r in range(iterations):
             sample_times = np.random.choice([i for i in range(data.shape[0])],
                                              data.shape[0], 
                                              replace = False)
-            sample_systems = np.random.choice([i for i in range(len(ns_hidden_states))],
-                                               len(ns_hidden_states),replace = False)
+            sample_systems = np.random.choice([i for i in range(len(self.model.ns_hidden_states))],
+                                               len(self.model.ns_hidden_states),replace = False)
             sample_parameter = np.random.uniform(0, 1, data.shape[0])
+
+            emission = self.emission_log_probabilities(data)
             
             for t in sample_times:
-                h_current = np.array(hidden_state_vector_df.iloc[t,:])  
+                h_current = (hidden_state_vector_df.iloc[t,:]).to_list()
+                n_next = None
                 for m in sample_systems:
-                    log_prob = np.zeros(ns_hidden_states[m])
-                    
-                    # Add emission log probabilities.
-                    eligible_vectors = self.model.hidden_state_vectors_matching_away_from_m(m,h_current)
-                    eligible_vectors.sort()
-                    eligible_states = [self.model.hidden_state_vector_to_enum[str(v)] for v in eligible_vectors]            
-                    log_prob += np.array(emission_log_prob_df.iloc[t,eligible_states])
-                    
-                    # Add initial state log probabilities
-                    if t == 0:
-                        log_prob += log_initial_state[m][:ns_hidden_states[m]]
-                    
-                    # Add transition probabilities
                     if t < data.shape[0] -1:
                         h_next = np.array(hidden_state_vector_df.iloc[t+1,:])
-                        log_prob += np.array(log_transition[m][:,h_next[m]])[:ns_hidden_states[m]]
 
-
-                    updated_state_prob = np.exp(log_prob)
+                    updated_state_prob = self.probability_distribution_across_hidden_states(data,
+                                                      current_hidden_state = h_current,
+                                                      idx = t,
+                                                      system = m, 
+                                                      emission_log_probabilities = emission,
+                                                      next_hidden_state = h_next)
                     hidden_state_vector_df.iloc[t,m] = _sample(updated_state_prob,sample_parameter[t])
         
         return hidden_state_vector_df
