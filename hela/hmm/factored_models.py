@@ -141,8 +141,8 @@ class FactoredHMM(ABC):
             hidden_state_delta_enum=None,
             categorical_features=None,
             gaussian_features=None,
-            log_transition=None,
-            log_initial_state=None,
+            transition_matrix=None,
+            initial_state_matrix=None,
             categorical_model=None,
             # TODO (isalju): incorporate gaussian mixture models
             gaussian_model=None):
@@ -160,8 +160,8 @@ class FactoredHMM(ABC):
         self.categorical_features = categorical_features
         self.gaussian_features = gaussian_features
 
-        self.log_transition = log_transition
-        self.log_initial_state = log_initial_state
+        self.transition_matrix = transition_matrix
+        self.initial_state_matrix = initial_state_matrix
 
         self.categorical_model = categorical_model
         # TODO (isalju): incorporate gaussian mixture models
@@ -208,32 +208,56 @@ class FactoredHMM(ABC):
         if len(model.gaussian_features) > 0:
             model.gaussian_model = GaussianModel.from_config(model_config)
 
-        transition = model_config.model_parameter_constraints[
+        model.transition_matrix = model_config.model_parameter_constraints[
             'transition_constraints']
-        trans_mask = transition.mask
-        zero_mask = transition == 0
-        temp_masked_trans = np.ma.masked_array(
-            np.where(transition != 0, transition, 1),
-            trans_mask).filled(fill_value=1)
-        log_transition = np.log(temp_masked_trans)
-        log_transition[zero_mask] = LOG_ZERO
-        model.log_transition = np.ma.masked_array(log_transition, trans_mask)
+        #trans_mask = transition.mask
+        #zero_mask = transition == 0
+        #temp_masked_trans = np.ma.masked_array(
+        #    np.where(transition != 0, transition, 1),
+        #    trans_mask).filled(fill_value=1)
+        #log_transition = np.log(temp_masked_trans)
+        #log_transition[zero_mask] = LOG_ZERO
+        #model.log_transition = np.ma.masked_array(log_transition, trans_mask)
 
-        initial_state = model_config.model_parameter_constraints[
+        model.initial_state_matrix = model_config.model_parameter_constraints[
             'initial_state_constraints']
-        initial_state_mask = initial_state.mask
-        zero_mask = initial_state == 0
-        temp_masked_initial_state = np.ma.masked_array(
-            np.where(initial_state != 0, initial_state, 1),
-            initial_state_mask).filled(fill_value=1)
-        log_initial_state = np.log(temp_masked_initial_state)
-        log_initial_state[zero_mask] = LOG_ZERO
-        model.log_initial_state = np.ma.masked_array(log_initial_state,
-                                                     initial_state_mask)
+        #initial_state_mask = initial_state.mask
+        #zero_mask = initial_state == 0
+        #temp_masked_initial_state = np.ma.masked_array(
+        #    np.where(initial_state != 0, initial_state, 1),
+        #    initial_state_mask).filled(fill_value=1)
+        #log_initial_state = np.log(temp_masked_initial_state)
+        #log_initial_state[zero_mask] = LOG_ZERO
+        #model.log_initial_state = np.ma.masked_array(log_initial_state,
+        #                                             initial_state_mask)
 
         # TODO: (AH) add option to randomly seed transition and initial state.
 
         return model
+
+    def train_model(self, data, method = 'gibbs', iterations = 2, gibbs_iterations = 1, burn_down_period = 2):
+    	""" Return trained model
+
+    	Arguments: 
+    		data: (df) observations used for training
+    		method: (str) method to use for training
+    		iterations: (int) number of iterations to carry out
+
+    	Rerturns:
+    		New instance of FactoredHMM fit to data.
+    	"""
+
+    	new_model = self.copy()
+    	hidden_state_vector_df = None
+    	for r in range(iterations):
+    		inf = new_model.to_inference_interface(data)
+    		Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(data, 
+					    			iterations = gibbs_iterations, 
+					    			burn_down_period = burn_down_period, 
+					    			gather_statistics = True,
+					    			hidden_state_vector_df = hidden_state_vector_df)
+
+    	return new_model
 
     def to_inference_interface(self, data):
         """ Returns FactoredHMMInference object
@@ -323,21 +347,21 @@ class CategoricalModel(FactoredHMM):
         categorical_model.categorical_vector_to_enum = model_config.categorical_vector_to_enum
         categorical_model.categorical_enum_to_vector = model_config.categorical_enum_to_vector
 
-        # Get log emission matrix, masking to prevent log(0) errors.
-        emission_matrix = model_config.model_parameter_constraints[
+        # Get emission matrix, masking to prevent log(0) errors.
+        categorical_model.emission_matrix = model_config.model_parameter_constraints[
             'emission_constraints']
-        zero_mask = emission_matrix == 0
-        log_emission_matrix = np.where(emission_matrix != 0, emission_matrix, 1)
-        log_emission_matrix = np.log(log_emission_matrix)
-        log_emission_matrix[zero_mask] = LOG_ZERO
-        categorical_model.log_emission_matrix = log_emission_matrix
+        #zero_mask = emission_matrix == 0
+        #log_emission_matrix = np.where(emission_matrix != 0, emission_matrix, 1)
+        #log_emission_matrix = np.log(log_emission_matrix)
+        #log_emission_matrix[zero_mask] = LOG_ZERO
+        #categorical_model.log_emission_matrix = log_emission_matrix
 
         # TODO: (AH) Add option to randomly seed emission matrix.
 
         return categorical_model
 
-    def emission_log_probabilities(self, data):
-        """ Returns emission log_probabilities for categorical data
+    def emission_probabilities(self, data):
+        """ Returns emission probabilities for categorical data
 
         Arguments: 
             data: dataframe of observed categorical data
@@ -352,10 +376,10 @@ class CategoricalModel(FactoredHMM):
             self.categorical_vector_to_enum[str(list(v))]
             for v in np.array(data.loc[:, self.categorical_features])
         ]
-        log_emission = self.log_emission_matrix
+        emission = self.emission_matrix
 
         return pd.DataFrame(
-            [log_emission[v] for v in flattened_observations],
+            [emission[v] for v in flattened_observations],
             columns=[k for k in self.hidden_state_enum_to_vector.keys()],
             index=data.index)
 
@@ -434,8 +458,8 @@ class GaussianModel(FactoredHMM):
             ]),
             axis=0)
 
-    def emission_log_probabilities(self, data):
-        """ Returns emission log_probabilities for gaussian data
+    def emission_probabilities(self, data):
+        """ Returns emission probabilities for gaussian data
 
         Arguments: 
             data: dataframe of observed categorical data
@@ -453,16 +477,16 @@ class GaussianModel(FactoredHMM):
         }
         cov = self.covariance
 
-        # Initialize dataframe that will hold log probablites for observations
+        # Initialize dataframe that will hold probablites for observations
         # (rows) conditioned on hidden states (columns)
-        log_prob = pd.DataFrame(
+        prob = pd.DataFrame(
             index=data.index, columns=[i for i in range(len(means))])
         for k, m in means.items():
-            log_prob.loc[:, k] = stats.multivariate_normal.logpdf(
+            prob.loc[:, k] = stats.multivariate_normal.pdf(
                 np.array(data.loc[:, self.gaussian_features]),
                 m.reshape(1, -1)[0], cov)
 
-        return log_prob
+        return prob
 
 
 class FactoredHMMInference(ABC):
@@ -471,7 +495,7 @@ class FactoredHMMInference(ABC):
         self.model = model
         self.data = data
 
-    def emission_log_probabilities(self, data):
+    def emission_probabilities(self, data):
         """ Returns emission log_probabilities for observed data
         Arguments: 
             data: dataframe of observed categorical data
@@ -480,19 +504,19 @@ class FactoredHMMInference(ABC):
             log probability of the observation, x_t, given hidden state h_i at 
             time t).  Here hidden states are enumerated in the "flattened" sense.
         """
-        log_prob = np.zeros((data.shape[0],
-                             np.prod(self.model.ns_hidden_states)))
+        prob = np.full((data.shape[0],
+                             np.prod(self.model.ns_hidden_states)), 1).astype(np.float64)
 
         if self.model.categorical_model:
-            log_prob += np.array(
-                self.model.categorical_model.emission_log_probabilities(data))
+            prob *= np.array(
+                self.model.categorical_model.emission_probabilities(data))
 
         if self.model.gaussian_model:
-            log_prob += np.array(
-                self.model.gaussian_model.emission_log_probabilities(data))
+            prob *= np.array(
+                self.model.gaussian_model.emission_probabilities(data))
 
         return pd.DataFrame(
-            log_prob,
+            prob,
             columns=[k for k in self.model.hidden_state_enum_to_vector.keys()],
             index=data.index)
 
@@ -502,7 +526,7 @@ class FactoredHMMInference(ABC):
             current_hidden_state,
             idx,
             system,
-            emission_log_probabilities,
+            emission_probabilities,
             next_hidden_state=None):
         """ Returns probability distribution across hidden states.
 
@@ -511,7 +535,7 @@ class FactoredHMMInference(ABC):
             current_hidden_state: (array) hidden state vector corresponding to idx.
             idx: (int) iloc in index of data
             system: (int) indicates fHMM Markov system under consideration
-            emission_log_probabilities: (df) row t and column j correspond to the log
+            emission_probabilities: (df) row t and column j correspond to the log
                 probability of the emission observed at time t given hidden state j (
                 where hidden state is taken in the "flattened" sense).
             next_hidden_state: (array) hidden state vector corresponding to idx.
@@ -526,28 +550,28 @@ class FactoredHMMInference(ABC):
         """
         model = self.model
         ns_hidden_states = model.ns_hidden_states
-        log_prob = np.zeros(model.ns_hidden_states[system])
+        prob = np.full(model.ns_hidden_states[system],1).astype(np.float64)
 
         # Get list of eligible flattened hidden states.
         eligible_states = model.hidden_state_delta_enum[system][
             model.hidden_state_vector_to_enum[str(current_hidden_state)]]
 
-        # Add emission log probabilities.
-        log_prob += np.array(
-            emission_log_probabilities.loc[data.index[idx], eligible_states])
+        # Add emission probabilities.
+        prob *= np.array(
+            emission_probabilities.loc[data.index[idx], eligible_states])
 
-        # Add initial state log probabilities if idx  is 0.
+        # Add initial state probabilities if idx  is 0.
         if idx == 0:
-            log_prob += model.log_initial_state[system][:ns_hidden_states[
+            prob *= model.initial_state_matrix[system][:ns_hidden_states[
                 system]]
 
-        # Add transition log probabilities untill idx corresponds to the last observed data.
+        # Add transition probabilities untill idx corresponds to the last observed data.
         if idx < data.shape[0] - 1:
-            log_prob += np.array(
-                model.log_transition[system][:, next_hidden_state[
+            prob *= np.array(
+                model.transition_matrix[system][:, next_hidden_state[
                     system]])[:ns_hidden_states[system]]
 
-        return np.exp(log_prob)
+        return prob
 
     def gibbs_sampling(self,
                        data,
@@ -604,7 +628,7 @@ class FactoredHMMInference(ABC):
                 replace=False)
             sample_parameter = np.random.uniform(0, 1, data.shape[0])
 
-            emission = self.emission_log_probabilities(data)
+            emission = self.emission_probabilities(data)
 
             for t in sample_times:
                 h_current = (hidden_state_vector_df.iloc[t, :]).to_list()
@@ -653,8 +677,9 @@ class FactoredHMMInference(ABC):
                         current_hidden_state=h_current,
                         idx=t,
                         system=m,
-                        emission_log_probabilities=emission,
+                        emission_probabilities=emission,
                         next_hidden_state=h_next)
+                    
                     hidden_state_vector_df.iloc[t, m] = _sample(
                         updated_state_prob, sample_parameter[t])
 
@@ -668,6 +693,14 @@ class FactoredHMMInference(ABC):
                 Xi, axis=3).reshape(Xi.shape[0], Xi.shape[1], Xi.shape[2], -1)
 
         return Gamma, Xi, hidden_state_vector_df
+
+class FactoredHMMLearning(ABC):
+
+    def __init__(self, model, data):
+        self.model = model
+        self.data = data
+
+
 
 
 def _sample(probability_distribution, sample_parameter):
