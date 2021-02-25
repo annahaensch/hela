@@ -10,18 +10,17 @@ from .base_model import HMMGenerativeModel
 class FactoredHMMGenerativeModel(HMMGenerativeModel):
     """ Class for generative factored HMM """
 
-    def __init__(
-            self,
-            ns_hidden_states=None,
-            random_state=0,
-            n_categorical_features=0,
-            n_categorical_values=(),
-            categorical_values=None,
-            n_gaussian_features=None,
-            gaussian_values=None,
-            n_gmm_components=1
-            # TODO @AH: incorporate gaussian mixture models.
-    ):
+    def __init__(self,
+                 ns_hidden_states=None,
+                 random_state=0,
+                 n_categorical_features=0,
+                 n_categorical_values=(),
+                 categorical_values=None,
+                 n_gaussian_features=None,
+                 gaussian_values=None,
+                 n_gmm_components=1
+                 # TODO @AH: incorporate gaussian mixture models.
+                ):
         super().__init__(
             random_state=random_state,
             n_categorical_features=n_categorical_features,
@@ -66,19 +65,24 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         N.B.: This training spec will be suitable input for the hmm
             function `FactoredHMMConfiguration.from_spec()`.
         """
-        training_spec = {"hidden_state": {"type": "finite", "count": self.ns_hidden_states}}
+        training_spec = {
+            "hidden_state": {
+                "type": "finite",
+                "count": self.ns_hidden_states
+            }
+        }
         training_spec["n_systems"] = len(self.ns_hidden_states)
 
         model_parameter_constraints = {
             'transition_constraints': self.transition_matrices
         }
 
-        # Construct inital state as n_systems x n_hidden_states array 
-        initial_state = np.zeros((len(self.ns_hidden_states),np.max(self.ns_hidden_states)))
+        # Construct inital state as n_systems x n_hidden_states array
+        initial_state = np.zeros((len(self.ns_hidden_states),
+                                  np.max(self.ns_hidden_states)))
         for i in range(initial_state.shape[0]):
             initial_state[i][self.initial_state_vector[i]] = 1
-        model_parameter_constraints[
-            "initial_state_constraints"] = initial_state
+        model_parameter_constraints["initial_state_constraints"] = initial_state
 
         observations = []
         if self.n_categorical_features > 0:
@@ -108,9 +112,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 gmm_parameter_constraints[
                     'component_weights'] = self.component_weights
 
-                gmm_parameter_constraints = {'means' : self.means}
+                gmm_parameter_constraints = {'means': self.means}
                 gmm_parameter_constraints['covariances'] = self.covariances
-
 
             model_parameter_constraints[
                 'gmm_parameter_constraints'] = gmm_parameter_constraints
@@ -170,7 +173,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             and categorical and gaussian feature parameters.
         """
         random = self.random
-        flattened_hidden_states = self.flatten_hidden_state_sequence(hidden_states)
+        flattened_hidden_states = self.flatten_hidden_state_sequence(
+            hidden_states)
         n_observations = flattened_hidden_states.shape[0]
 
         # Generated categorical data.
@@ -204,7 +208,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             for _, row in hidden_states.iterrows():
                 hidden_state = np.array(row)
                 mean = np.sum(
-                    [[m[hidden_state[i]] for m in means[i]]
+                    [[m[hidden_state[i]]
+                      for m in means[i]]
                      for i in range(len(hidden_state))],
                     axis=0)
                 observation_sequence.append(
@@ -258,9 +263,10 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         means = []
         max_hidden_state = np.max(self.ns_hidden_states)
         for n in self.ns_hidden_states:
-            weights = np.random.uniform(-3, 3, (self.n_gaussian_features, max_hidden_state))
+            weights = np.random.uniform(
+                -3, 3, (self.n_gaussian_features, max_hidden_state))
             if n < max_hidden_state:
-                weights[:,n:] = np.nan
+                weights[:, n:] = np.nan
                 # weights[:n,:] = np.nan
             # Mask all Nan entries
             weights = np.ma.masked_invalid(weights)
