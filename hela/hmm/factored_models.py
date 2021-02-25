@@ -257,6 +257,8 @@ class FactoredHMM(ABC):
 					    			gather_statistics = True,
 					    			hidden_state_vector_df = hidden_state_vector_df)
 
+    		
+
     	return new_model
 
     def to_inference_interface(self, data):
@@ -623,13 +625,14 @@ class FactoredHMMInference(ABC):
             sample_times = np.random.choice(
                 [i for i in range(data.shape[0])], data.shape[0], replace=False)
             sample_systems = np.random.choice(
-                [i for i in range(len(self.model.ns_hidden_states))],
+                [i for i in range(len(model.ns_hidden_states))],
                 len(self.model.ns_hidden_states),
                 replace=False)
             sample_parameter = np.random.uniform(0, 1, data.shape[0])
 
             emission = self.emission_probabilities(data)
 
+            csum = np.concatenate(([0],np.cumsum(model.ns_hidden_states)))
             for t in sample_times:
                 h_current = (hidden_state_vector_df.iloc[t, :]).to_list()
                 n_next = None
@@ -644,13 +647,10 @@ class FactoredHMMInference(ABC):
                     if gather_statistics == True:
                         for i in range(len(model.ns_hidden_states)):
 
-                            skip_rows = int(np.sum(model.ns_hidden_states[:i]))
                             N = model.ns_hidden_states[i]
-
                             count = (column_vectors[i]
                                      @ column_vectors[i].reshape(1, -1))[:N, :N]
-                            Gamma[t][skip_rows:skip_rows + N, skip_rows:
-                                     skip_rows + N] += (
+                            Gamma[t][csum[i]:csum[i+1], csum[i]:csum[i+1]] += (
                                          column_vectors[i] @ column_vectors[
                                              i].reshape(1, -1))[:N, :N]
 
@@ -661,14 +661,11 @@ class FactoredHMMInference(ABC):
 
                             for j in range(i):
 
-                                skip_columns = int(
-                                    np.sum(model.ns_hidden_states[:j]))
                                 M = model.ns_hidden_states[j]
-
                                 count = (column_vectors[i] @ column_vectors[j]
                                          .reshape(1, -1))[:N, :M]
-                                Gamma[t][skip_rows:skip_rows + N, skip_columns:
-                                         skip_columns + M] += count
+                                Gamma[t][csum[i]:csum[i+1], csum[j]:
+                                         csum[j+1]] += count
 
                 for m in sample_systems:
 
@@ -679,7 +676,7 @@ class FactoredHMMInference(ABC):
                         system=m,
                         emission_probabilities=emission,
                         next_hidden_state=h_next)
-                    
+
                     hidden_state_vector_df.iloc[t, m] = _sample(
                         updated_state_prob, sample_parameter[t])
 
