@@ -122,7 +122,7 @@ class FactoredHMMConfiguration(ABC):
     def to_model(self):
         """ Factored HMM specific implementation of `to_model`. """
 
-        return FactoredHMM.from_config(self)
+        return FactoredHMM.from_config(model_config = self)
 
 
 class FactoredHMM(ABC):
@@ -147,6 +147,7 @@ class FactoredHMM(ABC):
             # TODO (isalju): incorporate gaussian mixture models
             gaussian_model=None):
 
+        self.model_config = model_config
         self.random_state = random_state
         self.trained = trained
 
@@ -210,28 +211,9 @@ class FactoredHMM(ABC):
 
         model.transition_matrix = model_config.model_parameter_constraints[
             'transition_constraints']
-        #trans_mask = transition.mask
-        #zero_mask = transition == 0
-        #temp_masked_trans = np.ma.masked_array(
-        #    np.where(transition != 0, transition, 1),
-        #    trans_mask).filled(fill_value=1)
-        #log_transition = np.log(temp_masked_trans)
-        #log_transition[zero_mask] = LOG_ZERO
-        #model.log_transition = np.ma.masked_array(log_transition, trans_mask)
 
         model.initial_state_matrix = model_config.model_parameter_constraints[
             'initial_state_constraints']
-        #initial_state_mask = initial_state.mask
-        #zero_mask = initial_state == 0
-        #temp_masked_initial_state = np.ma.masked_array(
-        #    np.where(initial_state != 0, initial_state, 1),
-        #    initial_state_mask).filled(fill_value=1)
-        #log_initial_state = np.log(temp_masked_initial_state)
-        #log_initial_state[zero_mask] = LOG_ZERO
-        #model.log_initial_state = np.ma.masked_array(log_initial_state,
-        #                                             initial_state_mask)
-
-        # TODO: (AH) add option to randomly seed transition and initial state.
 
         return model
 
@@ -257,7 +239,8 @@ class FactoredHMM(ABC):
 					    			gather_statistics = True,
 					    			hidden_state_vector_df = hidden_state_vector_df)
 
-    		
+    		csum = np.concatenate(([0],self.ns_hidden_states))
+    		new_model.initial_state_matrix = np.array([Gamma[1].diagonal()[csum[i]:csum[i+1]] for i in range(len(model.ns_hidden_states))])
 
     	return new_model
 
@@ -292,21 +275,24 @@ class FactoredHMM(ABC):
             if np.all(np.ma.masked_array(v, mask) == masked_vec)
         ]
 
-    def vector_to_column_vectors(self, hidden_state_vector):
-        """ Returns column vectors associated to hidden_state_vector
 
-        Arguments: 
-            hidden_state_vector: (array) hidden state vector.
-        Returns:
-            List of column vectors with 0 and 1 entries.
-        """
-        return [
-            np.array([
-                1 if j == hidden_state_vector[i] else 0
-                for j in range(np.max(self.ns_hidden_states))
-            ]).reshape(-1, 1)
-            for i in range(len(self.ns_hidden_states))
-        ]
+    def vector_to_column_vectors(self, hidden_state_vector):
+	    """ Returns column vectors associated to hidden_state_vector
+
+	    Arguments: 
+	        hidden_state_vector: (array) hidden state vector.
+	    Returns:
+	        Array of column vectors with 0 and 1 entries.
+	    """
+	    column_list = [
+	        np.array([
+	            1 if j == hidden_state_vector[i] else 0
+	            for j in range(np.max(self.ns_hidden_states))
+	        ])
+	        for i in range(len(self.ns_hidden_states))
+	    	]
+	    
+	    return np.array(column_list).transpose()
 
 
 class CategoricalModel(FactoredHMM):
@@ -453,12 +439,7 @@ class GaussianModel(FactoredHMM):
         # Rewrite hidden_state_vector as a list of column vectors.
         column_vectors = self.vector_to_column_vectors(hidden_state_vector)
 
-        return np.sum(
-            np.array([
-                means[m].data @ column_vectors[m]
-                for m in range(len(ns_hidden_states))
-            ]),
-            axis=0)
+        return np.sum([means[i].data @ column_vectors[:,i].reshape(-1,1) for i in range(len(means))], axis = 0)
 
     def emission_probabilities(self, data):
         """ Returns emission probabilities for gaussian data
@@ -611,17 +592,17 @@ class FactoredHMMInference(ABC):
                 index=data.index,
                 columns=[i for i in range(len(model.ns_hidden_states))])
 
-        # Collect Statistics in Gamma and Xi, with Gibbs sampling at each stage.
         Gamma = None
         Xi = None
-        if gather_statistics == True:
-            Gamma = np.zeros((data.shape[0], np.sum(model.ns_hidden_states),
-                              np.sum(model.ns_hidden_states)))
-            Xi = np.zeros((len(model.ns_hidden_states), data.shape[0] - 1,
-                           np.sum(model.ns_hidden_states),
-                           np.sum(model.ns_hidden_states)))
 
         for r in range(iterations + burn_down_period):
+
+        	# Gather statistics
+            if r >= burn_down_period:
+                if gather_statistics == True:
+                    Gamma, Xi = self.gather_statistics(hidden_state_vector_df, Gamma, Xi)
+
+            # Carry out sampling
             sample_times = np.random.choice(
                 [i for i in range(data.shape[0])], data.shape[0], replace=False)
             sample_systems = np.random.choice(
@@ -633,39 +614,13 @@ class FactoredHMMInference(ABC):
             emission = self.emission_probabilities(data)
 
             csum = np.concatenate(([0],np.cumsum(model.ns_hidden_states)))
+
             for t in sample_times:
                 h_current = (hidden_state_vector_df.iloc[t, :]).to_list()
                 n_next = None
-                column_vectors = self.model.vector_to_column_vectors(h_current)
 
                 if t < data.shape[0] - 1:
                     h_next = np.array(hidden_state_vector_df.iloc[t + 1, :])
-                    next_column_vectors = self.model.vector_to_column_vectors(
-                        h_next)
-
-                if r >= burn_down_period:
-                    if gather_statistics == True:
-                        for i in range(len(model.ns_hidden_states)):
-
-                            N = model.ns_hidden_states[i]
-                            count = (column_vectors[i]
-                                     @ column_vectors[i].reshape(1, -1))[:N, :N]
-                            Gamma[t][csum[i]:csum[i+1], csum[i]:csum[i+1]] += (
-                                         column_vectors[i] @ column_vectors[
-                                             i].reshape(1, -1))[:N, :N]
-
-                            if t < data.shape[0] - 1:
-                                count = (column_vectors[i] @ column_vectors[i]
-                                         .reshape(1, -1))[:N, :N]
-                                Xi[i][t][:N, :N] += count
-
-                            for j in range(i):
-
-                                M = model.ns_hidden_states[j]
-                                count = (column_vectors[i] @ column_vectors[j]
-                                         .reshape(1, -1))[:N, :M]
-                                Gamma[t][csum[i]:csum[i+1], csum[j]:
-                                         csum[j+1]] += count
 
                 for m in sample_systems:
 
@@ -682,14 +637,55 @@ class FactoredHMMInference(ABC):
 
         # Normalize gathered statistics
         if gather_statistics == True:
-            Gamma = Gamma.astype(np.float32) / iterations
-            Xi = Xi.astype(np.float32)
-            Xi = Xi + (np.sum(Xi, axis=2).reshape(
-                Xi.shape[0], Xi.shape[1], Xi.shape[2], -1) == 0).astype(int)
-            Xi = Xi / np.sum(
-                Xi, axis=3).reshape(Xi.shape[0], Xi.shape[1], Xi.shape[2], -1)
+            Gamma = Gamma / iterations
+            Xi = Xi / iterations
 
         return Gamma, Xi, hidden_state_vector_df
+
+
+    def gather_statistics(self,hidden_state_vector_df, Gamma = None, Xi = None):
+	    """ Compiles Gamma and Xi statistics 
+	    
+	    Arguments: 
+	        hidden_state_df: (df) hidden state vectors
+	        Gamma: (array) array of dimension hidden_state_vector_df.shape[0]
+	            x np.sum(self.model.ns_hidden_states) x np.sum(
+	            self.model.ns_hidden_states)
+	        Xi: (masked array) array with dimensions len(self.model.ns_hidden_states)
+	            x hidden_state_vector_df.shape[0] x np.max(self.model.ns_hidden_states)
+	            x np.max(self.model.ns_hidden_states).
+	    
+	    Returns: 
+	        Arrays Gamma and Xi
+	    """
+	    model = self.model
+	    ns_hidden_states = model.ns_hidden_states
+	    csum = np.concatenate(([0],np.cumsum(ns_hidden_states)))
+	    V = np.array(hidden_state_vector_df)
+	    
+	    # Initialize Gamma and/or Xi if None is given.
+	    if Gamma is None:
+	        Gamma = np.zeros((hidden_state_vector_df.shape[0], csum[-1], csum[-1]))
+	    if Xi is None:
+	        Xi_mask = np.array([(hidden_state_vector_df.shape[0] - 1) * [
+	        	model.transition_matrix.mask[i]] for i in range(len(ns_hidden_states))])
+	        Xi_array = np.zeros((len(ns_hidden_states), hidden_state_vector_df.shape[0] - 1,
+	                   np.max(ns_hidden_states),
+	                   np.max(ns_hidden_states))) 
+	        Xi = np.ma.masked_array(Xi_array, Xi_mask, fill = 0)
+	        
+	    # Update Gamma
+	    Gamma_pos = np.concatenate([[(i,) + t for t in list(itertools.combinations_with_replacement([csum[i] + v[i] for i in range(len(v))],2))] for i,v in enumerate(V)])
+	    times, cols, rows = zip(*Gamma_pos)
+	    Gamma[times,rows,cols] += 1
+	    
+	    # Update Xi
+	    Xi_pos = np.concatenate([[(j,i)+(V[i][j],V[i+1][j]) for j in range(len(V[i]))] for i in range(len(V[:-1]))])
+	    systems, times, rows, cols = zip(*Xi_pos)
+	    Xi[systems,times,rows,cols] += 1
+	    
+	    return Gamma, Xi
+
 
 class FactoredHMMLearning(ABC):
 
