@@ -559,7 +559,7 @@ class FactoredHMMInference(ABC):
     def gibbs_sampling(self,
                        data,
                        iterations,
-                       burn_down_period=100,
+                       burn_down_period=10,
                        gather_statistics=False,
                        hidden_state_vector_df=None):
         """ Samples one timestep and fHMM system
@@ -667,12 +667,9 @@ class FactoredHMMInference(ABC):
 	    if Gamma is None:
 	        Gamma = np.zeros((hidden_state_vector_df.shape[0], csum[-1], csum[-1]))
 	    if Xi is None:
-	        Xi_mask = np.array([(hidden_state_vector_df.shape[0] - 1) * [
-	        	model.transition_matrix.mask[i]] for i in range(len(ns_hidden_states))])
-	        Xi_array = np.zeros((len(ns_hidden_states), hidden_state_vector_df.shape[0] - 1,
+	        Xi = np.zeros((len(ns_hidden_states), hidden_state_vector_df.shape[0] - 1,
 	                   np.max(ns_hidden_states),
 	                   np.max(ns_hidden_states))) 
-	        Xi = np.ma.masked_array(Xi_array, Xi_mask, fill = 0)
 	        
 	    # Update Gamma
 	    Gamma_pos = np.concatenate([[(i,) + t for t in list(itertools.combinations_with_replacement([csum[i] + v[i] for i in range(len(v))],2))] for i,v in enumerate(V)])
