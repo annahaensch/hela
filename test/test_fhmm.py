@@ -80,4 +80,12 @@ def test_model_sampling_and_inference(generative_model):
         hidden_state_vector_df=gibbs_states)
 
     assert Gamma.shape[0] == dataset.shape[0]
-    assert np.all(np.sum(Xi, axis=3) == 1)
+
+    # Make sure that the subdiagonal terms of Gamma sum to 1.
+    csum = np.concatenate(([0],np.cumsum(model.ns_hidden_states)))
+    Gamma_sum = np.array([[g.diagonal()[csum[i]:csum[i+1]] for i in range(len(model.ns_hidden_states))] for g in Gamma])
+    assert np.all([[np.sum(d) == 1 for d in g] for g in Gamma_sum])
+    
+    # Make sure that each block of Xi sums to 1 (i.e. for any system, m, and
+    # timestamp, t, the full entries of Xi[m][t] sum to 1).
+    assert np.all(np.sum(np.sum(Xi, axis = 3), axis = 2) == 1)
