@@ -119,10 +119,10 @@ class FactoredHMMConfiguration(ABC):
 
         return model_config
 
-    def to_model(self):
+    def to_model(self, set_random_state=0):
         """ Factored HMM specific implementation of `to_model`. """
-
-        return FactoredHMM.from_config(model_config = self)
+        random_state = np.random.RandomState(set_random_state)
+        return FactoredHMM.from_config(self, random_state)
 
 
 class FactoredHMM(ABC):
@@ -169,9 +169,9 @@ class FactoredHMM(ABC):
         self.gaussian_model = gaussian_model
 
     @classmethod
-    def from_config(cls, model_config):
+    def from_config(cls, model_config, random_state):
         model = cls(model_config=model_config)
-        model.random_state = model_config.random_state
+        model.random_state = random_state
 
         # Get mappings between hidden state vectors and enumerations
         model.ns_hidden_states = model_config.ns_hidden_states
@@ -209,40 +209,87 @@ class FactoredHMM(ABC):
         if len(model.gaussian_features) > 0:
             model.gaussian_model = GaussianModel.from_config(model_config)
 
+        # TODO: (AH) These matrix copies are here because model training was 
+        # chaning the underlying model config. This is probably easy to fix.
         model.transition_matrix = model_config.model_parameter_constraints[
-            'transition_constraints']
+            'transition_constraints'].copy()
 
         model.initial_state_matrix = model_config.model_parameter_constraints[
-            'initial_state_constraints']
+            'initial_state_constraints'].copy()
 
         return model
 
-    def train_model(self, data, method = 'gibbs', iterations = 2, gibbs_iterations = 1, burn_down_period = 2):
-    	""" Return trained model
+    def train_model(self, 
+                    data, 
+                    method = 'gibbs', 
+                    iterations = 2, 
+                    gibbs_iterations = 1, 
+                    burn_down_period = 2):
+        """ Return trained model
 
-    	Arguments: 
-    		data: (df) observations used for training
-    		method: (str) method to use for training
-    		iterations: (int) number of iterations to carry out
+        Arguments: 
+            data: (df) observations used for training
+            method: (str) method to use for training
+            iterations: (int) number of learning iterations to carry out
+            gibbs_iterations: (int) number of iterations of gibbs sampling 
+                to carry out in each iteration of learning.
+            burn_down_period: (int) number of iterations to carry out in 
+                initializing burn down period before gathering statistics.
 
-    	Rerturns:
-    		New instance of FactoredHMM fit to data.
-    	"""
+        Returns:
+            New instance of FactoredHMM fit to data.
+        """
+        
+        new_model = self.model_config.to_model()
+        ns_hidden_states = model.ns_hidden_states
+        hidden_state_vector_df = None
+        for r in range(iterations):
+            inf = new_model.to_inference_interface(data)
+            Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(data, 
+                                    iterations = gibbs_iterations, 
+                                    burn_down_period = burn_down_period, 
+                                    gather_statistics = True,
+                                    hidden_state_vector_df = hidden_state_vector_df)
+            
+            # Update initial state matrix
+            csum = np.concatenate(([0],np.cumsum(ns_hidden_states)))
+            new_model.initial_state_matrix = np.array([Gamma[0].diagonal()[csum[i]:csum[i+1]] for i in range(len(ns_hidden_states))])
+            
+            # Update transition matrices.
+            Xi_sum = np.sum(Xi, axis = 1)
+            Gamma_sum = [np.sum((Gamma)[:-1], axis = 0).diagonal()[csum[i]:csum[i+1]
+                                                           ].reshape(-1,1) for i in range(len(ns_hidden_states))]
+            for m in range(len(Xi_sum)):
+                new_model.transition_matrix[m][:ns_hidden_states[m],:ns_hidden_states[m]
+                                              ] = Xi_sum[m][:model.ns_hidden_states[m],:ns_hidden_states[m]] / Gamma_sum[m]
 
-    	new_model = self.copy()
-    	hidden_state_vector_df = None
-    	for r in range(iterations):
-    		inf = new_model.to_inference_interface(data)
-    		Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(data, 
-					    			iterations = gibbs_iterations, 
-					    			burn_down_period = burn_down_period, 
-					    			gather_statistics = True,
-					    			hidden_state_vector_df = hidden_state_vector_df)
-
-    		csum = np.concatenate(([0],self.ns_hidden_states))
-    		new_model.initial_state_matrix = np.array([Gamma[1].diagonal()[csum[i]:csum[i+1]] for i in range(len(model.ns_hidden_states))])
-
-    	return new_model
+            # Update emission parameters
+            if new_model.categorical_model:
+                cat_data = pd.DataFrame([model.categorical_model.categorical_vector_to_enum[str(list(v))] for v in np.array(
+                    data.loc[:,model.categorical_model.categorical_features])])
+                vector_indices = [zip(*[(csum[j] +v[j],csum[j] +v[j]) for j in range(len(v))]
+                              ) for k,v in model.hidden_state_enum_to_vector.items()]
+                for i in range(len(vector_indices)):
+                    rows, columns = vector_indices[i]
+                    Gamma_sum = np.sum(Gamma[:,rows,columns], axis = 1)
+                    for k,v in model.categorical_model.categorical_enum_to_vector.items():
+                        idx = cat_data[cat_data[0] == k].index
+                        new_model.categorical_model.emission_matrix[k][i] = np.sum(Gamma_sum[idx])/np.sum(Gamma_sum)
+             
+            if new_model.gaussian_model:
+                # Update Covariance
+                gauss_data = np.array(data.loc[:,self.gaussian_model.gaussian_features])
+                Gamma_sum = [np.sum([means[i][:model.ns_hidden_states[i],:model.ns_hidden_states[i]
+                                 ].data@ g.diagonal()[csum[i]:csum[i+1]].reshape(-1,1) for i in range(
+                    len(model.ns_hidden_states))], axis = 0)for g in Gamma]
+                
+                new_model.covariance = np.sum(np.array([d.reshape(-1,1) @ d.reshape(1,-1) for d in gauss_data]
+                                                      ) / len(gauss_data), axis = 0) - np.sum(
+                    [Gamma_sum[j] @ gauss_data[j].reshape(1,-1) for j in range(len(Gamma_sum))], axis = 0) / len(Gamma)
+            
+                # TODO: update W (i.e. means)
+                
+        return Xi, Gamma, hidden_state_vector_df, new_model
 
     def to_inference_interface(self, data):
         """ Returns FactoredHMMInference object
