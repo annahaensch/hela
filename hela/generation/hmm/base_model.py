@@ -392,16 +392,19 @@ def data_to_fhmm_training_spec(hidden_states,
         for j in range(len(previous)):
             transition_matrices[j][previous[j]][current[j]] += 1
 
-    
-    zero_rows = (np.sum(transition_matrices, axis=2).reshape(len(ns_hidden_states),-1,1) == 0).astype(int)
-    systems, over = zip(*np.concatenate([[(i,j) for j in range(
-        ns_hidden_states[i],np.max(ns_hidden_states))] for i in range(len(ns_hidden_states)
-        ) if ns_hidden_states[i] < np.max(ns_hidden_states)]))
-    
+    zero_rows = (np.sum(transition_matrices, axis=2).reshape(
+        len(ns_hidden_states), -1, 1) == 0).astype(int)
+    systems, over = zip(*np.concatenate(
+        [[(i, j)
+          for j in range(ns_hidden_states[i], np.max(ns_hidden_states))]
+         for i in range(len(ns_hidden_states))
+         if ns_hidden_states[i] < np.max(ns_hidden_states)]))
+
     transition_matrices += zero_rows
-    transition_matrices[systems,:,over] = 0
-    transition_matrices = transition_matrices / np.sum(transition_matrices, axis = 2).reshape(len(ns_hidden_states),-1,1)
-    transition_matrices[systems,over,:] = 0
+    transition_matrices[systems, :, over] = 0
+    transition_matrices = transition_matrices / np.sum(
+        transition_matrices, axis=2).reshape(len(ns_hidden_states), -1, 1)
+    transition_matrices[systems, over, :] = 0
 
     model_parameter_constraints["transition_constraints"] = transition_matrices
 
