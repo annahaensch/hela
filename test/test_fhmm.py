@@ -65,7 +65,7 @@ def test_model_sampling_and_inference(generative_model):
 
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
     model = model_config.to_model()
-    inf = model.to_inference_interface(dataset)
+    inf = model.load_inference_interface(dataset)
 
     Gamma, Xi, gibbs_states = inf.gibbs_sampling(
         dataset, iterations=1, burn_down_period=1)
@@ -102,24 +102,40 @@ def test_learning_with_gibbs(generative_model):
     factored_hidden_states = generative_model["factored_hidden_states"]
 
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
-    model = model_config.to_model()
-    inf = model.to_inference_interface(dataset)
+    untrained_model = model_config.to_model()
+    inf = untrained_model.load_inference_interface(dataset)
+    alg = untrained_model.load_learning_interface()
 
-    Xi, Gamma, df, new_model = model.train_model(
-        dataset,
+    model = alg.run(
+        data=dataset,
         method='gibbs',
-        iterations=4,
+        training_iterations=4,
         gibbs_iterations=5,
         burn_down_period=2)
 
     # Check that (up to floating point errors) the transition and emission
     # probabilities sum to the proper value.
     assert np.all(
-        np.sum(np.sum(new_model.transition_matrix, axis=2), axis=1) -
+        np.sum(np.sum(model.transition_matrix, axis=2), axis=1) -
         model.ns_hidden_states < 1e-08)
 
-    assert np.all((np.sum(new_model.categorical_model.emission_matrix, axis=0) -
-                   1) < 1e-08)
+    assert np.all(
+        (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)
 
-    # TODO: (AH) add assertion to test that complete data likelihood is
-    # increasing with each iteration.
+    # Check that complete data likelihood is increasing with each iteration.
+    old_spec = untrained_model.factored_hmm_to_discrete_hmm()
+    old_hmm_config = hmm.DiscreteHMMConfiguration.from_spec(old_spec)
+    old_hmm_model = old_hmm_config.to_model()
+    old_hmm_inf = old_hmm_model.load_inference_interface()
+    old_log_prob = old_hmm_inf.predict_hidden_state_log_probability(dataset)
+    old_likelihood = logsumexp(
+        old_hmm_inf._compute_forward_probabilities(old_log_prob)[-1])
+
+    spec = model.factored_hmm_to_discrete_hmm()
+    hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
+    hmm_model = hmm_config.to_model()
+    hmm_inf = hmm_model.load_inference_interface()
+    log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
+    likelihood = logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1])
+
+    assert old_likelihood < likelihood
