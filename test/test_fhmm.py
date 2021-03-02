@@ -109,7 +109,7 @@ def test_learning_with_gibbs(generative_model):
     model = alg.run(
         data=dataset,
         method='gibbs',
-        training_iterations=4,
+        training_iterations=5,
         gibbs_iterations=5,
         burn_down_period=2)
 
@@ -123,21 +123,23 @@ def test_learning_with_gibbs(generative_model):
         (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)
 
     # Check that complete data likelihood is increasing with each iteration.
-    old_spec = hmm._factored_hmm_to_discrete_hmm(untrained_model)
-    old_hmm_config = hmm.DiscreteHMMConfiguration.from_spec(old_spec)
-    old_hmm_model = old_hmm_config.to_model()
-    old_hmm_inf = old_hmm_model.load_inference_interface()
-    old_log_prob = old_hmm_inf.predict_hidden_state_log_probability(dataset)
-    old_likelihood = logsumexp(
-        old_hmm_inf._compute_forward_probabilities(old_log_prob)[-1])
-    old_likelihood = int(-1 * old_likelihood / dataset.shape[0])
+    likelihood = []
+    for m in alg.model_results:
+        spec = hmm._factored_hmm_to_discrete_hmm(m)
+        hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
+        hmm_model = hmm_config.to_model()
+        hmm_inf = hmm_model.load_inference_interface()
+        log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
+        likelihood.append(
+            logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1]))
 
-    spec = hmm._factored_hmm_to_discrete_hmm(model)
-    hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
-    hmm_model = hmm_config.to_model()
-    hmm_inf = hmm_model.load_inference_interface()
-    log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
-    likelihood = logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1])
-    likelihood = int(-1 * likelihood / dataset.shape[0])
+    # Check that cummulative sum of negative log likelihoods is
+    # concave down by checking sign of approx. second derivative.
+    csum = np.cumsum([-l for l in likelihood])
+    concavity = [
+        csum[i] - 2 * csum[i + 1] + csum[i - 2]
+        for i in range(2,
+                       len(csum) - 1)
+    ]
 
-    assert old_likelihood >= likelihood
+    assert np.all(np.array(concavity) < 0)
