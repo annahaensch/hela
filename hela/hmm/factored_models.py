@@ -267,9 +267,9 @@ class FactoredHMM(ABC):
         Gamma = update_statistics["Gamma"]
         Xi = update_statistics["Xi"]
 
-        inf = new_model.load_inference_interface(data)
+        #inf = new_model.load_inference_interface(data)
 
-        # Update initial state matrix
+        # Update and verify initial state matrix.
         new_model.initial_state_matrix = np.array([
             Gamma[0].diagonal()[csum[i]:csum[i + 1]]
             for i in range(len(ns_hidden_states))
@@ -280,7 +280,7 @@ class FactoredHMM(ABC):
         assert np.all([np.abs(np.sum(t)-1) < 1e-08 for t in 
             new_model.initial_state_matrix]), msg
         
-        # Update transition matrices.
+        # Update and verify transition matrices.
         Xi_sum = np.sum(Xi, axis=1)
         Gamma_sum = [
             np.sum((Gamma)[:-1],
@@ -297,75 +297,23 @@ class FactoredHMM(ABC):
         assert np.abs(np.sum(new_model.transition_matrix) - np.sum(
             new_model.ns_hidden_states)) < 1e-08, msg
 
-        # Update categorical emission parameters
+        # Update and verify categorical emission parameters.
         if self.categorical_model:
             new_model.categorical_model.emission_matrix = self.categorical_model.update_emission_matrix(data, Gamma,Xi)
 
             msg = "Emission update returns invalid array: {}".format(
                 new_model.categorical_model.emission_matrix)
-            assert np.all(np.abs(np.sum(new_model.categorical_model.emission_matrix, axis = 0) - 1) < 1e-08), msg
+            assert np.all(np.abs(np.sum(new_model.categorical_model.
+                emission_matrix, axis = 0) - 1) < 1e-08), msg
 
+        # Update and verify gaussian emission parameters.
         if self.gaussian_model:
-            # Update Covariance
-            means = new_model.gaussian_model.means
-
-            gauss_data = np.array(
-                data.loc[:, self.gaussian_model.gaussian_features])
-            # Update means.
-            Gamma_sum = np.sum(
-                gauss_data.reshape(data.shape[0], -1, 1) @ np.array(
-                    [g.diagonal().reshape(1, -1) for g in Gamma]),
-                axis=0)
-            Gamma_inv = np.linalg.pinv(
-                np.sum(
-                    np.array([g.diagonal().reshape(-1, 1) for g in Gamma])
-                    @ np.array([g.diagonal().reshape(1, -1) for g in Gamma]),
-                    axis=0))
-            means_concat = Gamma_sum @ Gamma_inv
-            for i in range(len(ns_hidden_states)):
-                means[i, :ns_hidden_states[i], :ns_hidden_states[i]] = [
-                    w[csum[i]:csum[i + 1]] for w in means_concat
-                ]
+            
+            # Update means
+            new_model.gaussian_model.means = self.gaussian_model.update_means(data,Gamma)
 
             # Update covariance.
-            Gamma_sum = [
-                np.sum(
-                    [
-                        means[i][:ns_hidden_states[i], :ns_hidden_states[i]]
-                        .data @ g.diagonal()[csum[i]:csum[i +
-                                                          1]].reshape(-1, 1)
-                        for i in range(len(ns_hidden_states))
-                    ],
-                    axis=0)
-                for g in Gamma
-            ]
-
-            new_model.gaussian_model.covariance = np.sum(
-                np.array(
-                    [d.reshape(-1, 1) @ d.reshape(1, -1)
-                     for d in gauss_data]) / len(gauss_data),
-                axis=0) - np.sum(
-                    [
-                        Gamma_sum[j] @ gauss_data[j].reshape(1, -1)
-                        for j in range(len(Gamma_sum))
-                    ],
-                    axis=0) / len(Gamma)
-
-            # Update Means
-            Gamma_sum = np.sum(
-                gauss_data.reshape(data.shape[0], -1, 1) @ np.array(
-                    [g.diagonal().reshape(1, -1) for g in Gamma]),
-                axis=0)
-            Gamma_inv = np.linalg.pinv(
-                np.sum(
-                    np.array([g.diagonal().reshape(-1, 1) for g in Gamma])
-                    @ np.array([g.diagonal().reshape(1, -1) for g in Gamma]),
-                    axis=0))
-            means_concat = Gamma_sum @ Gamma_inv
-            for i in range(len(ns_hidden_states)):
-                means[i, :ns_hidden_states[i], :ns_hidden_states[i]] = [
-                    w[csum[i]:csum[i + 1]] for w in means_concat
-                ]
+            new_model.gaussian_model.covariance = self.gaussian_model.update_covariance(new_model.gaussian_model.means,data,Gamma)
 
         return new_model
 
@@ -519,6 +467,7 @@ class CategoricalModel(FactoredHMM):
 
     def update_emission_matrix(self, data, Gamma, Xi):
         """ Returns updated emission matrix 
+
         Arguments: 
             data: (df) dataframe of timeseries observations.
             Gamma: (array) update array typically obtained 
@@ -656,6 +605,82 @@ class GaussianModel(FactoredHMM):
 
         return prob
 
+    def update_means(self, data, Gamma):
+        """ Returns updated means.
+
+        Arguments: 
+            data: (df) dataframe of timeseries observations.
+            Gamma: (array) update array typically obtained 
+                from running `gibbs_sampling`.
+        
+        Returns: 
+            Updated means for gaussian model.
+        """
+        csum = np.concatenate(([0], np.cumsum(self.ns_hidden_states)))
+        means = np.ma.masked_array(np.zeros_like(self.means.data),
+                   self.means.mask,
+                  self.means.fill_value)
+
+        ns_hidden_states = self.ns_hidden_states
+        gauss_data = np.array(
+            data.loc[:, self.gaussian_features])
+
+        Gamma_sum = np.sum(
+            gauss_data.reshape(data.shape[0], -1, 1) @ np.array(
+                [g.diagonal().reshape(1, -1) for g in Gamma]),
+            axis=0)
+        Gamma_inv = np.linalg.pinv(
+            np.sum(
+                np.array([g.diagonal().reshape(-1, 1) for g in Gamma])
+                @ np.array([g.diagonal().reshape(1, -1) for g in Gamma]),
+                axis=0))
+        means_concat = Gamma_sum @ Gamma_inv
+        for i in range(len(ns_hidden_states)):
+            means[i, :ns_hidden_states[i], :ns_hidden_states[i]] = [
+                w[csum[i]:csum[i + 1]] for w in means_concat
+            ]
+
+        return means
+
+    def update_covariance(self, means, data, Gamma):
+        """ Update covariance matrix.
+
+        Arguments: 
+            means: (masked array) updated means
+            data: (df) dataframe of timeseries observations.
+            Gamma: (array) update array typically obtained 
+                from running `gibbs_sampling`.
+
+        Returns:
+            Covariance matrix relative to input means and data.
+        """
+        ns_hidden_states = self.ns_hidden_states
+        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
+        gauss_data = np.array(data.loc[:,self.gaussian_features])
+
+        Gamma_sum = [
+            np.sum(
+                [
+                    means[i][:ns_hidden_states[i], :ns_hidden_states[i]]
+                    .data @ g.diagonal()[csum[i]:csum[i +
+                                                      1]].reshape(-1, 1)
+                    for i in range(len(ns_hidden_states))
+                ],
+                axis=0)
+            for g in Gamma
+        ]
+
+        covariance = np.sum(
+            np.array(
+                [d.reshape(-1, 1) @ d.reshape(1, -1)
+                 for d in gauss_data]) / len(gauss_data),
+            axis=0) - np.sum(
+                [
+                    Gamma_sum[j] @ gauss_data[j].reshape(1, -1)
+                    for j in range(len(Gamma_sum))
+                ],
+                axis=0) / len(Gamma)
+        return covariance
 
 class FactoredHMMLearningAlgorithm(ABC):
     """ Abstract base class for HMM learning algorithms """
