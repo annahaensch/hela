@@ -317,83 +317,6 @@ class FactoredHMM(ABC):
 
         return new_model
 
-    def factored_hmm_to_discrete_hmm(self):
-        """ Returns discrete hmm training spec
-        """
-        n_hidden_states = np.prod(self.ns_hidden_states)
-        training_spec = {
-            'hidden_state': {
-                'type': 'finite',
-                'count': n_hidden_states
-            }
-        }
-
-        model_parameter_constraints = {}
-        observations = []
-        if len(self.categorical_features) > 0:
-            categorical_values = self.categorical_model.categorical_values
-            for c in categorical_values.columns:
-                observations.append({
-                    'name': c,
-                    'type': 'finite',
-                    'values': categorical_values[c].unique()
-                })
-            model_parameter_constraints[
-                'emission_constraints'] = self.categorical_model.emission_matrix
-
-        if len(self.gaussian_features) > 0:
-            for g in self.gaussian_features:
-                observations.append({
-                    'name': g,
-                    'type': 'continuous',
-                    'dist': 'gaussian',
-                    'dims': 1
-                })
-            gmm_parameter_constraints = {'n_gmm_components': 1}
-            gmm_parameter_constraints['means'] = [
-                self.gaussian_model.mean_for_hidden_state_vector(v).reshape(
-                    1, -1) for v in self.hidden_state_vectors
-            ]
-            gmm_parameter_constraints['covariances'] = n_hidden_states * [[
-                self.gaussian_model.covariance
-            ]]
-            gmm_parameter_constraints['component_weights'] = np.array(
-                n_hidden_states * [[[1]]])
-
-            model_parameter_constraints[
-                'gmm_parameter_constraints'] = gmm_parameter_constraints
-
-        transition_matrix = np.zeros((n_hidden_states, n_hidden_states))
-
-        enum_pairs = list(
-            itertools.permutations(
-                self.hidden_state_enum_to_vector.keys(), 2)) + [
-                    (k, k) for k in self.hidden_state_enum_to_vector.keys()
-                ]
-
-        trans_pairs = [
-            (v, w,
-             np.prod([
-                 self.transition_matrix[i][self.hidden_state_enum_to_vector[v][
-                     i]][self.hidden_state_enum_to_vector[w][i]]
-                 for i in range(len(self.ns_hidden_states))
-             ]))
-            for v, w in enum_pairs
-        ]
-
-        old, new, transition_prob = zip(*trans_pairs)
-
-        transition_matrix[old, new] = transition_prob
-
-        model_parameter_constraints[
-            'transition_constraints'] = transition_matrix
-
-        training_spec[
-            'model_parameter_constraints'] = model_parameter_constraints
-        training_spec['observations'] = observations
-
-        return training_spec
-
 
 class CategoricalModel(FactoredHMM):
 
@@ -1011,13 +934,6 @@ class FactoredHMMInference(ABC):
         return Gamma, Xi
 
 
-class FactoredHMMLearning(ABC):
-
-    def __init__(self, model, data):
-        self.model = model
-        self.data = data
-
-
 def _sample(probability_distribution, sample_parameter):
     """ Returns a sample using discrete inverse transform.
 
@@ -1035,3 +951,81 @@ def _sample(probability_distribution, sample_parameter):
     cumulative_prob = np.cumsum(probability_distribution)
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
+
+
+def _factored_hmm_to_discrete_hmm(self):
+    """ Returns discrete hmm training spec
+    """
+    n_hidden_states = np.prod(self.ns_hidden_states)
+    training_spec = {
+        'hidden_state': {
+            'type': 'finite',
+            'count': n_hidden_states
+        }
+    }
+
+    model_parameter_constraints = {}
+    observations = []
+    if len(self.categorical_features) > 0:
+        categorical_values = self.categorical_model.categorical_values
+        for c in categorical_values.columns:
+            observations.append({
+                'name': c,
+                'type': 'finite',
+                'values': categorical_values[c].unique()
+            })
+        model_parameter_constraints[
+            'emission_constraints'] = self.categorical_model.emission_matrix
+
+    if len(self.gaussian_features) > 0:
+        for g in self.gaussian_features:
+            observations.append({
+                'name': g,
+                'type': 'continuous',
+                'dist': 'gaussian',
+                'dims': 1
+            })
+        gmm_parameter_constraints = {'n_gmm_components': 1}
+        gmm_parameter_constraints['means'] = [
+            self.gaussian_model.mean_for_hidden_state_vector(v).reshape(
+                1, -1) for v in self.hidden_state_vectors
+        ]
+        gmm_parameter_constraints['covariances'] = n_hidden_states * [[
+            self.gaussian_model.covariance
+        ]]
+        gmm_parameter_constraints['component_weights'] = np.array(
+            n_hidden_states * [[[1]]])
+
+        model_parameter_constraints[
+            'gmm_parameter_constraints'] = gmm_parameter_constraints
+
+    transition_matrix = np.zeros((n_hidden_states, n_hidden_states))
+
+    enum_pairs = list(
+        itertools.permutations(
+            self.hidden_state_enum_to_vector.keys(), 2)) + [
+                (k, k) for k in self.hidden_state_enum_to_vector.keys()
+            ]
+
+    trans_pairs = [
+        (v, w,
+         np.prod([
+             self.transition_matrix[i][self.hidden_state_enum_to_vector[v][
+                 i]][self.hidden_state_enum_to_vector[w][i]]
+             for i in range(len(self.ns_hidden_states))
+         ]))
+        for v, w in enum_pairs
+    ]
+
+    old, new, transition_prob = zip(*trans_pairs)
+
+    transition_matrix[old, new] = transition_prob
+
+    model_parameter_constraints[
+        'transition_constraints'] = transition_matrix
+
+    training_spec[
+        'model_parameter_constraints'] = model_parameter_constraints
+    training_spec['observations'] = observations
+
+    return training_spec
