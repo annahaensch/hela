@@ -176,6 +176,9 @@ class FactoredHMM(ABC):
         Arguments: 
             model_config: output of `from_spec`.
             random_state: (int) set random state.
+
+        Returns: 
+            Instantiated FactoredHMM instace.
         """
         model = cls(model_config=model_config)
         model.random_state = random_state
@@ -237,7 +240,7 @@ class FactoredHMM(ABC):
         Arguments: 
             hidden_state_vector: (array) hidden state vector.
         Returns:
-            Array of column vectors with 0 and 1 entries.
+            Array of one-hot column vectors with 0 and 1 entries.
         """
         column_list = [
             np.array([
@@ -251,22 +254,32 @@ class FactoredHMM(ABC):
 
     def update_model_parameters_with_gibbs(self, data, update_statistics):
         """ Returns updated model
+
+        Arguments: 
+            data: (df) observed timeseries data
+            update_statistics: (arrays) Gamma and Xi update arrays 
+                typically obtained from running `gibbs_sampling`.
         """
         new_model = self.model_config.to_model()
         ns_hidden_states = self.ns_hidden_states
-        hidden_state_vector_df = None
+        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
+        
         Gamma = update_statistics["Gamma"]
         Xi = update_statistics["Xi"]
 
         inf = new_model.load_inference_interface(data)
 
         # Update initial state matrix
-        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
         new_model.initial_state_matrix = np.array([
             Gamma[0].diagonal()[csum[i]:csum[i + 1]]
             for i in range(len(ns_hidden_states))
         ])
 
+        msg = "Initial state update returns invalid array: {}.".format(
+            new_model.initial_state_matrix)
+        assert np.all([np.abs(np.sum(t)-1) < 1e-08 for t in 
+            new_model.initial_state_matrix]), msg
+        
         # Update transition matrices.
         Xi_sum = np.sum(Xi, axis=1)
         Gamma_sum = [
@@ -279,26 +292,18 @@ class FactoredHMM(ABC):
                 m], :ns_hidden_states[m]] = Xi_sum[m][:ns_hidden_states[
                     m], :ns_hidden_states[m]] / Gamma_sum[m]
 
-        # Update emission parameters
+        msg = "Transition update returns invalid array: {}".format(
+            new_model.transition_matrix)
+        assert np.abs(np.sum(new_model.transition_matrix) - np.sum(
+            new_model.ns_hidden_states)) < 1e-08, msg
+
+        # Update categorical emission parameters
         if self.categorical_model:
-            cat_data = pd.DataFrame([
-                self.categorical_model.categorical_vector_to_enum[str(list(v))]
-                for v in np.array(
-                    data.loc[:, self.categorical_model.categorical_features])
-            ])
-            vector_indices = [
-                zip(*[(csum[j] + v[j], csum[j] + v[j])
-                      for j in range(len(v))])
-                for k, v in self.hidden_state_enum_to_vector.items()
-            ]
-            for i in range(len(vector_indices)):
-                rows, columns = vector_indices[i]
-                Gamma_sum = np.sum(Gamma[:, rows, columns], axis=1)
-                for k, v in self.categorical_model.categorical_enum_to_vector.items(
-                ):
-                    idx = cat_data[cat_data[0] == k].index
-                    new_model.categorical_model.emission_matrix[k][i] = np.sum(
-                        Gamma_sum[idx]) / np.sum(Gamma_sum)
+            new_model.categorical_model.emission_matrix = self.categorical_model.update_emission_matrix(data, Gamma,Xi)
+
+            msg = "Emission update returns invalid array: {}".format(
+                new_model.categorical_model.emission_matrix)
+            assert np.all(np.abs(np.sum(new_model.categorical_model.emission_matrix, axis = 0) - 1) < 1e-08), msg
 
         if self.gaussian_model:
             # Update Covariance
@@ -512,6 +517,40 @@ class CategoricalModel(FactoredHMM):
             columns=[k for k in self.hidden_state_enum_to_vector.keys()],
             index=data.index)
 
+    def update_emission_matrix(self, data, Gamma, Xi):
+        """ Returns updated emission matrix 
+        Arguments: 
+            data: (df) dataframe of timeseries observations.
+            Gamma: (array) update array typically obtained 
+                from running `gibbs_sampling`.
+            Xi: (array) update array typically obtained from 
+                running `gibbs_sampling`.
+
+        Returns: 
+            Updated emission matrix.
+        """
+        csum = np.concatenate(([0], np.cumsum(self.ns_hidden_states)))
+        emission_matrix = np.zeros_like(self.emission_matrix)
+        cat_data = pd.DataFrame([
+            self.categorical_vector_to_enum[str(list(v))]
+            for v in np.array(
+                data.loc[:, self.categorical_features])
+        ])
+        vector_indices = [
+            zip(*[(csum[j] + v[j], csum[j] + v[j])
+                  for j in range(len(v))])
+            for k, v in self.hidden_state_enum_to_vector.items()
+        ]
+        for i in range(len(vector_indices)):
+            rows, columns = vector_indices[i]
+            Gamma_sum = np.sum(Gamma[:, rows, columns], axis=1)
+            for k, v in self.categorical_enum_to_vector.items(
+            ):
+                idx = cat_data[cat_data[0] == k].index
+                emission_matrix[k][i] = np.sum(
+                    Gamma_sum[idx]) / np.sum(Gamma_sum)
+
+        return emission_matrix
 
 class GaussianModel(FactoredHMM):
 
