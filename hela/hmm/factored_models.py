@@ -625,15 +625,11 @@ class GaussianModel(FactoredHMM):
         gauss_data = np.array(
             data.loc[:, self.gaussian_features])
 
-        Gamma_sum = np.sum(
-            gauss_data.reshape(data.shape[0], -1, 1) @ np.array(
-                [g.diagonal().reshape(1, -1) for g in Gamma]),
-            axis=0)
-        Gamma_inv = np.linalg.pinv(
-            np.sum(
-                np.array([g.diagonal().reshape(-1, 1) for g in Gamma])
-                @ np.array([g.diagonal().reshape(1, -1) for g in Gamma]),
-                axis=0))
+        Gamma_sum = np.sum([gauss_data[i].reshape(-1,1) @ Gamma[i
+        ].diagonal().reshape(1,-1) for i in range(len(Gamma))
+                       ], axis = 0)
+        Gamma_inv = np.linalg.pinv(np.sum(Gamma, axis = 0))
+        
         means_concat = Gamma_sum @ Gamma_inv
         for i in range(len(ns_hidden_states)):
             means[i, :ns_hidden_states[i], :ns_hidden_states[i]] = [
