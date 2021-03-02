@@ -52,13 +52,13 @@ class FactoredHMMConfiguration(ABC):
     def from_spec(cls, spec, random_state=0):
         """ Factored HMM specific implementation of `from_spec`. 
 
-		Arguments: 
-			spec: (dict) model specification.
-			random_state: (int) value to set random state.
+        Arguments: 
+            spec: (dict) model specification.
+            random_state: (int) value to set random state.
 
-		Returns: 
-			Model configuration which can be used to instantiate 
-			an instance of FactoredHMM.
+        Returns: 
+            Model configuration which can be used to instantiate 
+            an instance of FactoredHMM.
         """
         model_config = cls(ns_hidden_states=spec['hidden_state']['count'])
         model_config.model_type = 'FactoredHMM'
@@ -140,8 +140,6 @@ class FactoredHMM(ABC):
             hidden_state_vectors=None,
             hidden_state_vector_to_enum=None,
             hidden_state_enum_to_vector=None,
-            hidden_state_delta_vector=None,
-            hidden_state_delta_enum=None,
             categorical_features=None,
             gaussian_features=None,
             transition_matrix=None,
@@ -158,8 +156,6 @@ class FactoredHMM(ABC):
         self.hidden_state_vectors = hidden_state_vectors
         self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
         self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
-        self.hidden_state_delta_vector = hidden_state_delta_vector
-        self.hidden_state_delta_enum = hidden_state_delta_enum
 
         self.categorical_features = categorical_features
         self.gaussian_features = gaussian_features
@@ -175,6 +171,12 @@ class FactoredHMM(ABC):
 
     @classmethod
     def from_config(cls, model_config, random_state):
+        """ Instantiates FactoredHMM instance.
+
+        Arguments: 
+            model_config: output of `from_spec`.
+            random_state: (int) set random state.
+        """
         model = cls(model_config=model_config)
         model.random_state = random_state
         model.training_data = None
@@ -185,26 +187,6 @@ class FactoredHMM(ABC):
         model.hidden_state_vectors = model_config.hidden_state_vectors
         model.hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum
         model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
-
-        model.hidden_state_delta_vector = {
-            m: {
-                str(v): model.hidden_state_vectors_matching_away_from_m(m, v)
-                for v in model.hidden_state_vectors
-            }
-            for m in range(len(model.ns_hidden_states))
-        }
-
-        model.hidden_state_delta_enum = {
-            m: {
-                model.hidden_state_vector_to_enum[str(v)]: sorted([
-                    model.hidden_state_vector_to_enum[str(w)]
-                    for w in model.hidden_state_vectors_matching_away_from_m(
-                        m, v)
-                ])
-                for v in model.hidden_state_vectors
-            }
-            for m in range(len(model.ns_hidden_states))
-        }
 
         # Get categorical features from model_config.
         model.categorical_features = model_config.categorical_features
@@ -248,25 +230,6 @@ class FactoredHMM(ABC):
         """
         return FactoredHMMLearningAlgorithm(self)
 
-    def hidden_state_vectors_matching_away_from_m(self, m, vector):
-        """ Returns a list of vectors
-
-        Arguments: 
-            m: (int) index indicating one of the fHMM Markov systems.
-            vector: (array) hidden state vector
-
-        Returns: 
-            List of all hidden state vectors agreeing with vector in all
-            but the mth component.
-        """
-
-        mask = [1 if i == m else 0 for i in range(len(self.ns_hidden_states))]
-        masked_vec = np.ma.masked_array(vector, mask)
-
-        return [
-            v for v in self.hidden_state_vectors
-            if np.all(np.ma.masked_array(v, mask) == masked_vec)
-        ]
 
     def vector_to_column_vectors(self, hidden_state_vector):
         """ Returns column vectors associated to hidden_state_vector
@@ -824,8 +787,10 @@ class FactoredHMMInference(ABC):
         prob = np.full(model.ns_hidden_states[system], 1).astype(np.float64)
 
         # Get list of eligible flattened hidden states.
-        eligible_states = model.hidden_state_delta_enum[system][
-            model.hidden_state_vector_to_enum[str(current_hidden_state)]]
+        eligible_states = np.array(ns_hidden_states[system] * [current_hidden_state])
+        val = list(range(model.ns_hidden_states[system]))
+        eligible_states[val,system] = val
+        eligible_states = [model.hidden_state_vector_to_enum[str(list(v))] for v in eligible_states]
 
         # Add emission probabilities.
         prob *= np.array(
