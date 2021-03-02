@@ -50,12 +50,21 @@ class FactoredHMMConfiguration(ABC):
 
     @classmethod
     def from_spec(cls, spec, random_state=0):
-        """ Factored HMM specific implementation of `from_spec`. """
+        """ Factored HMM specific implementation of `from_spec`. 
+
+		Arguments: 
+			spec: (dict) model specification.
+			random_state: (int) value to set random state.
+
+		Returns: 
+			Model configuration which can be used to instantiate 
+			an instance of FactoredHMM.
+        """
         model_config = cls(ns_hidden_states=spec['hidden_state']['count'])
         model_config.model_type = 'FactoredHMM'
         model_config.random_state = random_state
 
-        # Get mappings between hidden state vectors and enumerations,
+        # Get mappings between hidden state vectors and enumerations.
         hidden_state_values = [
             [t for t in range(i)] for i in model_config.ns_hidden_states
         ]
@@ -77,6 +86,8 @@ class FactoredHMMConfiguration(ABC):
             for obs in spec['observations']
             if obs['type'] == 'finite'
         }
+
+        # Add categorical observation data to model config.
         if len(categorical_observations) > 0:
             categorical_observations = {
                 k: categorical_observations[k]
@@ -84,24 +95,17 @@ class FactoredHMMConfiguration(ABC):
             }
             values = [sorted(v) for k, v in categorical_observations.items()]
             categorical_vectors = [list(t) for t in itertools.product(*values)]
-            categorical_features = [
-                k for k, v in categorical_observations.items()
-            ]
+            categorical_features = sorted(list(categorical_observations.keys()))
             categorical_values = pd.DataFrame(
                 categorical_vectors, columns=categorical_features)
 
             model_config.categorical_features = categorical_features
             model_config.categorical_values = categorical_values
-            model_config.categorical_vector_to_enum = {
-                str([t
-                     for t in np.array(categorical_values.loc[i, :])]): i
-                for i in categorical_values.index
-            }
-            model_config.categorical_enum_to_vector = {
-                i: [t for t in np.array(categorical_values.loc[i, :])]
-                for i in categorical_values.index
-            }
+            model_config.categorical_vector_to_enum = {str(list(row)):i for i,row in model_config.categorical_values.iterrows()}
+            model_config.categorical_enum_to_vector = {i:list(row) for i,row in model_config.categorical_values.iterrows()}
+            
 
+        # Add gaussian observation data to model config.
         continuous_features = [
             obs for obs in spec['observations'] if obs['type'] == 'continuous'
         ]
