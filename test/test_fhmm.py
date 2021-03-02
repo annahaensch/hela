@@ -123,19 +123,21 @@ def test_learning_with_gibbs(generative_model):
         (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)
 
     # Check that complete data likelihood is increasing with each iteration.
-    old_spec = untrained_model.factored_hmm_to_discrete_hmm()
+    old_spec = hmm._factored_hmm_to_discrete_hmm(untrained_model)
     old_hmm_config = hmm.DiscreteHMMConfiguration.from_spec(old_spec)
     old_hmm_model = old_hmm_config.to_model()
     old_hmm_inf = old_hmm_model.load_inference_interface()
     old_log_prob = old_hmm_inf.predict_hidden_state_log_probability(dataset)
     old_likelihood = logsumexp(
         old_hmm_inf._compute_forward_probabilities(old_log_prob)[-1])
+    old_likelihood = int(-1 * old_likelihood / dataset.shape[0])
 
-    spec = model.factored_hmm_to_discrete_hmm()
+    spec = hmm._factored_hmm_to_discrete_hmm(model)
     hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
     hmm_model = hmm_config.to_model()
     hmm_inf = hmm_model.load_inference_interface()
     log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
     likelihood = logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1])
+    likelihood = int(-1 * likelihood / dataset.shape[0])
 
-    assert old_likelihood < likelihood
+    assert old_likelihood >= likelihood
