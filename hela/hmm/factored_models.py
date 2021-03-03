@@ -415,22 +415,23 @@ class CategoricalModel(FactoredHMM):
         """
         csum = np.concatenate(([0], np.cumsum(self.ns_hidden_states)))
         emission_matrix = np.zeros_like(self.emission_matrix)
-        cat_data = pd.DataFrame([
-            self.categorical_vector_to_enum[str(list(v))]
-            for v in np.array(data.loc[:, self.categorical_features])
-        ])
-        vector_indices = [
-            zip(*[(csum[j] + v[j], csum[j] + v[j])
-                  for j in range(len(v))])
-            for k, v in self.hidden_state_enum_to_vector.items()
-        ]
-        for i in range(len(vector_indices)):
-            rows, columns = vector_indices[i]
-            Gamma_sum = np.sum(Gamma[:, rows, columns], axis=1)
-            for k, v in self.categorical_enum_to_vector.items():
-                idx = cat_data[cat_data[0] == k].index
-                emission_matrix[k][i] = np.sum(
-                    Gamma_sum[idx]) / np.sum(Gamma_sum)
+        for i, h_vec in self.hidden_state_enum_to_vector.items():
+            Gamma_split = [[
+                g.diagonal()[csum[i]:csum[i + 1]]
+                for i in range(len(self.ns_hidden_states))
+            ]
+                           for g in Gamma]
+            Gamma_at_v = [
+                np.prod([g[i][h_vec[i]]
+                         for i in range(len(h_vec))])
+                for g in Gamma_split
+            ]
+            for d, cat_vec in self.categorical_enum_to_vector.items():
+                data_at_d = np.all(
+                    np.array(data.loc[:, self.categorical_features]) == cat_vec,
+                    axis=1).astype(int)
+                emission_matrix[d][i] = np.sum(
+                    data_at_d * Gamma_at_v) / np.sum(Gamma_at_v)
 
         return emission_matrix
 
