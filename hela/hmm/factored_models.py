@@ -50,12 +50,21 @@ class FactoredHMMConfiguration(ABC):
 
     @classmethod
     def from_spec(cls, spec, random_state=0):
-        """ Factored HMM specific implementation of `from_spec`. """
+        """ Factored HMM specific implementation of `from_spec`. 
+
+        Arguments: 
+            spec: (dict) model specification.
+            random_state: (int) value to set random state.
+
+        Returns: 
+            Model configuration which can be used to instantiate 
+            an instance of FactoredHMM.
+        """
         model_config = cls(ns_hidden_states=spec['hidden_state']['count'])
         model_config.model_type = 'FactoredHMM'
         model_config.random_state = random_state
 
-        # Get mappings between hidden state vectors and enumerations,
+        # Get mappings between hidden state vectors and enumerations.
         hidden_state_values = [
             [t for t in range(i)] for i in model_config.ns_hidden_states
         ]
@@ -77,6 +86,8 @@ class FactoredHMMConfiguration(ABC):
             for obs in spec['observations']
             if obs['type'] == 'finite'
         }
+
+        # Add categorical observation data to model config.
         if len(categorical_observations) > 0:
             categorical_observations = {
                 k: categorical_observations[k]
@@ -84,24 +95,22 @@ class FactoredHMMConfiguration(ABC):
             }
             values = [sorted(v) for k, v in categorical_observations.items()]
             categorical_vectors = [list(t) for t in itertools.product(*values)]
-            categorical_features = [
-                k for k, v in categorical_observations.items()
-            ]
+            categorical_features = sorted(list(categorical_observations.keys()))
             categorical_values = pd.DataFrame(
                 categorical_vectors, columns=categorical_features)
 
             model_config.categorical_features = categorical_features
             model_config.categorical_values = categorical_values
             model_config.categorical_vector_to_enum = {
-                str([t
-                     for t in np.array(categorical_values.loc[i, :])]): i
-                for i in categorical_values.index
+                str(list(row)): i
+                for i, row in model_config.categorical_values.iterrows()
             }
             model_config.categorical_enum_to_vector = {
-                i: [t for t in np.array(categorical_values.loc[i, :])]
-                for i in categorical_values.index
+                i: list(row)
+                for i, row in model_config.categorical_values.iterrows()
             }
 
+        # Add gaussian observation data to model config.
         continuous_features = [
             obs for obs in spec['observations'] if obs['type'] == 'continuous'
         ]
@@ -119,10 +128,10 @@ class FactoredHMMConfiguration(ABC):
 
         return model_config
 
-    def to_model(self):
+    def to_model(self, set_random_state=0):
         """ Factored HMM specific implementation of `to_model`. """
-
-        return FactoredHMM.from_config(self)
+        random_state = np.random.RandomState(set_random_state)
+        return FactoredHMM.from_config(self, random_state)
 
 
 class FactoredHMM(ABC):
@@ -132,71 +141,60 @@ class FactoredHMM(ABC):
             self,
             model_config,
             random_state=None,
-            trained=False,
             ns_hidden_states=None,
             hidden_state_vectors=None,
             hidden_state_vector_to_enum=None,
             hidden_state_enum_to_vector=None,
-            hidden_state_delta_vector=None,
-            hidden_state_delta_enum=None,
             categorical_features=None,
             gaussian_features=None,
-            log_transition=None,
-            log_initial_state=None,
+            transition_matrix=None,
+            initial_state_matrix=None,
             categorical_model=None,
             # TODO (isalju): incorporate gaussian mixture models
-            gaussian_model=None):
+            gaussian_model=None,
+            training_dict={}):
 
+        self.model_config = model_config
         self.random_state = random_state
-        self.trained = trained
 
         self.ns_hidden_states = ns_hidden_states
         self.hidden_state_vectors = hidden_state_vectors
         self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
         self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
-        self.hidden_state_delta_vector = hidden_state_delta_vector
-        self.hidden_state_delta_enum = hidden_state_delta_enum
 
         self.categorical_features = categorical_features
         self.gaussian_features = gaussian_features
 
-        self.log_transition = log_transition
-        self.log_initial_state = log_initial_state
+        self.transition_matrix = transition_matrix
+        self.initial_state_matrix = initial_state_matrix
 
         self.categorical_model = categorical_model
         # TODO (isalju): incorporate gaussian mixture models
         self.gaussian_model = gaussian_model
 
+        self.training_dict = training_dict
+
     @classmethod
-    def from_config(cls, model_config):
+    def from_config(cls, model_config, random_state):
+        """ Instantiates FactoredHMM instance.
+
+        Arguments: 
+            model_config: output of `from_spec`.
+            random_state: (int) set random state.
+
+        Returns: 
+            Instantiated FactoredHMM instace.
+        """
         model = cls(model_config=model_config)
-        model.random_state = model_config.random_state
+        model.random_state = random_state
+        model.training_data = None
+        model.training_dict = {"trained": False}
 
         # Get mappings between hidden state vectors and enumerations
         model.ns_hidden_states = model_config.ns_hidden_states
         model.hidden_state_vectors = model_config.hidden_state_vectors
         model.hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum
         model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
-
-        model.hidden_state_delta_vector = {
-            m: {
-                str(v): model.hidden_state_vectors_matching_away_from_m(m, v)
-                for v in model.hidden_state_vectors
-            }
-            for m in range(len(model.ns_hidden_states))
-        }
-
-        model.hidden_state_delta_enum = {
-            m: {
-                model.hidden_state_vector_to_enum[str(v)]: sorted([
-                    model.hidden_state_vector_to_enum[str(w)]
-                    for w in model.hidden_state_vectors_matching_away_from_m(
-                        m, v)
-                ])
-                for v in model.hidden_state_vectors
-            }
-            for m in range(len(model.ns_hidden_states))
-        }
 
         # Get categorical features from model_config.
         model.categorical_features = model_config.categorical_features
@@ -208,34 +206,17 @@ class FactoredHMM(ABC):
         if len(model.gaussian_features) > 0:
             model.gaussian_model = GaussianModel.from_config(model_config)
 
-        transition = model_config.model_parameter_constraints[
-            'transition_constraints']
-        trans_mask = transition.mask
-        zero_mask = transition == 0
-        temp_masked_trans = np.ma.masked_array(
-            np.where(transition != 0, transition, 1),
-            trans_mask).filled(fill_value=1)
-        log_transition = np.log(temp_masked_trans)
-        log_transition[zero_mask] = LOG_ZERO
-        model.log_transition = np.ma.masked_array(log_transition, trans_mask)
+        # TODO: (AH) These matrix copies are here because model training was
+        # chaning the underlying model config. This is probably easy to fix.
+        model.transition_matrix = model_config.model_parameter_constraints[
+            'transition_constraints'].copy()
 
-        initial_state = model_config.model_parameter_constraints[
-            'initial_state_constraints']
-        initial_state_mask = initial_state.mask
-        zero_mask = initial_state == 0
-        temp_masked_initial_state = np.ma.masked_array(
-            np.where(initial_state != 0, initial_state, 1),
-            initial_state_mask).filled(fill_value=1)
-        log_initial_state = np.log(temp_masked_initial_state)
-        log_initial_state[zero_mask] = LOG_ZERO
-        model.log_initial_state = np.ma.masked_array(log_initial_state,
-                                                     initial_state_mask)
-
-        # TODO: (AH) add option to randomly seed transition and initial state.
+        model.initial_state_matrix = model_config.model_parameter_constraints[
+            'initial_state_constraints'].copy()
 
         return model
 
-    def to_inference_interface(self, data):
+    def load_inference_interface(self, data):
         """ Returns FactoredHMMInference object
 
         Arguments: 
@@ -246,25 +227,16 @@ class FactoredHMM(ABC):
         """
         return FactoredHMMInference(self, data)
 
-    def hidden_state_vectors_matching_away_from_m(self, m, vector):
-        """ Returns a list of vectors
+    def load_learning_interface(self):
+        """ Returns FactoredHMMInference object
 
         Arguments: 
-            m: (int) index indicating one of the fHMM Markov systems.
-            vector: (array) hidden state vector
+            data: timeseries data for which to perform inference
 
-        Returns: 
-            List of all hidden state vectors agreeing with vector in all
-            but the mth component.
+        Returns:
+            Initialized FactoredHMMInference object
         """
-
-        mask = [1 if i == m else 0 for i in range(len(self.ns_hidden_states))]
-        masked_vec = np.ma.masked_array(vector, mask)
-
-        return [
-            v for v in self.hidden_state_vectors
-            if np.all(np.ma.masked_array(v, mask) == masked_vec)
-        ]
+        return FactoredHMMLearningAlgorithm(self)
 
     def vector_to_column_vectors(self, hidden_state_vector):
         """ Returns column vectors associated to hidden_state_vector
@@ -272,15 +244,90 @@ class FactoredHMM(ABC):
         Arguments: 
             hidden_state_vector: (array) hidden state vector.
         Returns:
-            List of column vectors with 0 and 1 entries.
+            Array of one-hot column vectors with 0 and 1 entries.
         """
-        return [
+        column_list = [
             np.array([
                 1 if j == hidden_state_vector[i] else 0
                 for j in range(np.max(self.ns_hidden_states))
-            ]).reshape(-1, 1)
+            ])
             for i in range(len(self.ns_hidden_states))
         ]
+
+        return np.array(column_list).transpose()
+
+    def update_model_parameters_with_gibbs(self, data, update_statistics):
+        """ Returns updated model
+
+        Arguments: 
+            data: (df) observed timeseries data
+            update_statistics: (arrays) Gamma and Xi update arrays 
+                typically obtained from running `gibbs_sampling`.
+        """
+        new_model = self.model_config.to_model()
+        ns_hidden_states = self.ns_hidden_states
+        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
+
+        Gamma = update_statistics["Gamma"]
+        Xi = update_statistics["Xi"]
+
+        #inf = new_model.load_inference_interface(data)
+
+        # Update and verify initial state matrix.
+        new_model.initial_state_matrix = np.array([
+            Gamma[0].diagonal()[csum[i]:csum[i + 1]]
+            for i in range(len(ns_hidden_states))
+        ])
+
+        msg = "Initial state update returns invalid array: {}.".format(
+            new_model.initial_state_matrix)
+        assert np.all([
+            np.abs(np.sum(t) - 1) < 1e-08
+            for t in new_model.initial_state_matrix
+        ]), msg
+
+        # Update and verify transition matrices.
+        Xi_sum = np.sum(Xi, axis=1)
+        Gamma_sum = [
+            np.sum((Gamma)[:-1],
+                   axis=0).diagonal()[csum[i]:csum[i + 1]].reshape(-1, 1)
+            for i in range(len(ns_hidden_states))
+        ]
+        for m in range(len(Xi_sum)):
+            new_model.transition_matrix[m][:ns_hidden_states[
+                m], :ns_hidden_states[m]] = Xi_sum[m][:ns_hidden_states[
+                    m], :ns_hidden_states[m]] / Gamma_sum[m]
+
+        msg = "Transition update returns invalid array: {}".format(
+            new_model.transition_matrix)
+        assert np.abs(
+            np.sum(new_model.transition_matrix) -
+            np.sum(new_model.ns_hidden_states)) < 1e-08, msg
+
+        # Update and verify categorical emission parameters.
+        if self.categorical_model:
+            new_model.categorical_model.emission_matrix = self.categorical_model.update_emission_matrix(
+                data, Gamma, Xi)
+
+            msg = "Emission update returns invalid array: {}".format(
+                new_model.categorical_model.emission_matrix)
+            assert np.all(
+                np.abs(
+                    np.sum(new_model.categorical_model.emission_matrix, axis=0)
+                    - 1) < 1e-08), msg
+
+        # Update and verify gaussian emission parameters.
+        if self.gaussian_model:
+
+            # Update means
+            new_model.gaussian_model.means = self.gaussian_model.update_means(
+                data, Gamma)
+
+            # Update covariance.
+            new_model.gaussian_model.covariance = self.gaussian_model.update_covariance(
+                new_model.gaussian_model.means, data, Gamma)
+
+        return new_model
 
 
 class CategoricalModel(FactoredHMM):
@@ -323,21 +370,15 @@ class CategoricalModel(FactoredHMM):
         categorical_model.categorical_vector_to_enum = model_config.categorical_vector_to_enum
         categorical_model.categorical_enum_to_vector = model_config.categorical_enum_to_vector
 
-        # Get log emission matrix, masking to prevent log(0) errors.
-        emission_matrix = model_config.model_parameter_constraints[
+        categorical_model.emission_matrix = model_config.model_parameter_constraints[
             'emission_constraints']
-        zero_mask = emission_matrix == 0
-        log_emission_matrix = np.where(emission_matrix != 0, emission_matrix, 1)
-        log_emission_matrix = np.log(log_emission_matrix)
-        log_emission_matrix[zero_mask] = LOG_ZERO
-        categorical_model.log_emission_matrix = log_emission_matrix
 
         # TODO: (AH) Add option to randomly seed emission matrix.
 
         return categorical_model
 
-    def emission_log_probabilities(self, data):
-        """ Returns emission log_probabilities for categorical data
+    def emission_probabilities(self, data):
+        """ Returns emission probabilities for categorical data
 
         Arguments: 
             data: dataframe of observed categorical data
@@ -352,12 +393,47 @@ class CategoricalModel(FactoredHMM):
             self.categorical_vector_to_enum[str(list(v))]
             for v in np.array(data.loc[:, self.categorical_features])
         ]
-        log_emission = self.log_emission_matrix
+        emission = self.emission_matrix
 
         return pd.DataFrame(
-            [log_emission[v] for v in flattened_observations],
+            [emission[v] for v in flattened_observations],
             columns=[k for k in self.hidden_state_enum_to_vector.keys()],
             index=data.index)
+
+    def update_emission_matrix(self, data, Gamma, Xi):
+        """ Returns updated emission matrix 
+
+        Arguments: 
+            data: (df) dataframe of timeseries observations.
+            Gamma: (array) update array typically obtained 
+                from running `gibbs_sampling`.
+            Xi: (array) update array typically obtained from 
+                running `gibbs_sampling`.
+
+        Returns: 
+            Updated emission matrix.
+        """
+        csum = np.concatenate(([0], np.cumsum(self.ns_hidden_states)))
+        emission_matrix = np.zeros_like(self.emission_matrix)
+        for i, h_vec in self.hidden_state_enum_to_vector.items():
+            Gamma_split = [[
+                g.diagonal()[csum[i]:csum[i + 1]]
+                for i in range(len(self.ns_hidden_states))
+            ]
+                           for g in Gamma]
+            Gamma_at_v = [
+                np.prod([g[i][h_vec[i]]
+                         for i in range(len(h_vec))])
+                for g in Gamma_split
+            ]
+            for d, cat_vec in self.categorical_enum_to_vector.items():
+                data_at_d = np.all(
+                    np.array(data.loc[:, self.categorical_features]) == cat_vec,
+                    axis=1).astype(int)
+                emission_matrix[d][i] = np.sum(
+                    data_at_d * Gamma_at_v) / np.sum(Gamma_at_v)
+
+        return emission_matrix
 
 
 class GaussianModel(FactoredHMM):
@@ -428,14 +504,14 @@ class GaussianModel(FactoredHMM):
         column_vectors = self.vector_to_column_vectors(hidden_state_vector)
 
         return np.sum(
-            np.array([
-                means[m].data @ column_vectors[m]
-                for m in range(len(ns_hidden_states))
-            ]),
+            [
+                means[i].data @ column_vectors[:, i].reshape(-1, 1)
+                for i in range(len(means))
+            ],
             axis=0)
 
-    def emission_log_probabilities(self, data):
-        """ Returns emission log_probabilities for gaussian data
+    def emission_probabilities(self, data):
+        """ Returns emission probabilities for gaussian data
 
         Arguments: 
             data: dataframe of observed categorical data
@@ -453,16 +529,195 @@ class GaussianModel(FactoredHMM):
         }
         cov = self.covariance
 
-        # Initialize dataframe that will hold log probablites for observations
+        # Initialize dataframe that will hold probablites for observations
         # (rows) conditioned on hidden states (columns)
-        log_prob = pd.DataFrame(
+        prob = pd.DataFrame(
             index=data.index, columns=[i for i in range(len(means))])
         for k, m in means.items():
-            log_prob.loc[:, k] = stats.multivariate_normal.logpdf(
+            prob.loc[:, k] = stats.multivariate_normal.pdf(
                 np.array(data.loc[:, self.gaussian_features]),
                 m.reshape(1, -1)[0], cov)
 
-        return log_prob
+        return prob
+
+    def update_means(self, data, Gamma):
+        """ Returns updated means.
+
+        Arguments: 
+            data: (df) dataframe of timeseries observations.
+            Gamma: (array) update array typically obtained 
+                from running `gibbs_sampling`.
+        
+        Returns: 
+            Updated means for gaussian model.
+        """
+        csum = np.concatenate(([0], np.cumsum(self.ns_hidden_states)))
+        means = np.ma.masked_array(
+            np.zeros_like(self.means.data), self.means.mask,
+            self.means.fill_value)
+
+        ns_hidden_states = self.ns_hidden_states
+        gauss_data = np.array(data.loc[:, self.gaussian_features])
+
+        Gamma_sum = np.sum(
+            [
+                gauss_data[i].reshape(-1, 1) @ Gamma[i].diagonal().reshape(
+                    1, -1) for i in range(len(Gamma))
+            ],
+            axis=0)
+        Gamma_inv = np.linalg.pinv(np.sum(Gamma, axis=0))
+
+        means_concat = Gamma_sum @ Gamma_inv
+        for i in range(len(ns_hidden_states)):
+            means[i, :ns_hidden_states[i], :ns_hidden_states[i]] = [
+                w[csum[i]:csum[i + 1]] for w in means_concat
+            ]
+
+        return means
+
+    def update_covariance(self, means, data, Gamma):
+        """ Update covariance matrix.
+
+        Arguments: 
+            means: (masked array) updated means
+            data: (df) dataframe of timeseries observations.
+            Gamma: (array) update array typically obtained 
+                from running `gibbs_sampling`.
+
+        Returns:
+            Covariance matrix relative to input means and data.
+        """
+        ns_hidden_states = self.ns_hidden_states
+        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
+        gauss_data = np.array(data.loc[:, self.gaussian_features])
+
+        Gamma_sum = [
+            np.sum(
+                [
+                    means[i][:ns_hidden_states[i], :ns_hidden_states[i]]
+                    .data @ g.diagonal()[csum[i]:csum[i + 1]].reshape(-1, 1)
+                    for i in range(len(ns_hidden_states))
+                ],
+                axis=0)
+            for g in Gamma
+        ]
+
+        covariance = np.sum(
+            np.array([d.reshape(-1, 1) @ d.reshape(1, -1)
+                      for d in gauss_data]) / len(gauss_data),
+            axis=0) - np.sum(
+                [
+                    Gamma_sum[j] @ gauss_data[j].reshape(1, -1)
+                    for j in range(len(Gamma_sum))
+                ],
+                axis=0) / len(Gamma)
+        return covariance
+
+
+class FactoredHMMLearningAlgorithm(ABC):
+    """ Abstract base class for HMM learning algorithms """
+
+    def __init__(self, model):
+        self.model = model
+        self.model_results = []
+        self.sufficient_statistics = []
+
+    def run(self,
+            data,
+            method="gibbs",
+            training_iterations=2,
+            gibbs_iterations=2,
+            burn_down_period=1,
+            distributed=False,
+            n_workers=8):
+        """ Trains model using Gibbs sampling methods.
+
+        Arguments: 
+            model: FactoredHMM object
+            data: dataframe of timeseries observations
+            method: (str) training method to use(i.e. "gibbs").
+            training_iterations: (int) number of update iterations to carry 
+                out.
+            gibbs_iterations: (int) number of recorded rounds of Gibbs sampling 
+                to carry out for each round of training.
+            burn_down_period: (int) number of iterations of Gibbs sampling to 
+                carry out before gathering statistics.
+            distributed: (bool) if True the training will be distributed via 
+                Dask
+            n_workers: (int) number of works to use for distributed Dask training
+
+        Returns:
+            Trained instance of FactoredHMM object and gathered training statistics.
+        """
+        if method.lower() == "gibbs":
+            return self.train_model_with_gibbs_sampling(
+                data, training_iterations, gibbs_iterations, burn_down_period,
+                distributed, n_workers)
+
+        else:
+            raise NotImplementedError(
+                "Other learning methods haven't been implemented yet.")
+
+    def train_model_with_gibbs_sampling(self,
+                                        data,
+                                        training_iterations,
+                                        gibbs_iterations,
+                                        burn_down_period,
+                                        distributed=False,
+                                        n_workers=8):
+        """ Trains model using Gibbs sampling methods.
+
+        Arguments: 
+            data: dataframe of timeseries observations
+            training_iterations: (int) number of update iterations to carry 
+                out.
+            gibbs_iterations: (int) number of recorded rounds of Gibbs sampling 
+                to carry out for each round of training.
+            burn_down_period: (int) number of iterations of Gibbs sampling to 
+                carry out before gathering statistics.
+            distributed: (bool) if True the training will be distributed via 
+                Dask
+            n_workers: (int) number of works to use for distributed Dask training
+
+        Returns:
+            Trained instance of FactoredHMM object and gathered training statistics.
+        """
+        model = self.model
+
+        new_model = model.model_config.to_model()
+        ns_hidden_states = model.ns_hidden_states
+        hidden_state_vector_df = None
+        for r in range(training_iterations):
+            inf = new_model.load_inference_interface(data)
+            Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
+                data,
+                iterations=gibbs_iterations,
+                burn_down_period=burn_down_period,
+                gather_statistics=True,
+                hidden_state_vector_df=hidden_state_vector_df,
+                distributed=distributed,
+                n_workers=n_workers)
+
+            update_statistics = {
+                "Gamma": Gamma,
+                "Xi": Xi,
+                "hidden_state_vector_df": hidden_state_vector_df
+            }
+
+            new_model = new_model.update_model_parameters_with_gibbs(
+                data, update_statistics)
+
+            self.sufficient_statistics.append(update_statistics)
+
+            self.model_results.append(new_model)
+
+        new_model.training_dict = {
+            "trained": True,
+            "training_method": "gibbs learning",
+            "training_data": data
+        }
+
+        return new_model
 
 
 class FactoredHMMInference(ABC):
@@ -471,7 +726,7 @@ class FactoredHMMInference(ABC):
         self.model = model
         self.data = data
 
-    def emission_log_probabilities(self, data):
+    def emission_probabilities(self, data):
         """ Returns emission log_probabilities for observed data
         Arguments: 
             data: dataframe of observed categorical data
@@ -480,30 +735,29 @@ class FactoredHMMInference(ABC):
             log probability of the observation, x_t, given hidden state h_i at 
             time t).  Here hidden states are enumerated in the "flattened" sense.
         """
-        log_prob = np.zeros((data.shape[0],
-                             np.prod(self.model.ns_hidden_states)))
+        prob = np.full((data.shape[0], np.prod(self.model.ns_hidden_states)),
+                       1).astype(np.float64)
 
         if self.model.categorical_model:
-            log_prob += np.array(
-                self.model.categorical_model.emission_log_probabilities(data))
+            prob *= np.array(
+                self.model.categorical_model.emission_probabilities(data))
 
         if self.model.gaussian_model:
-            log_prob += np.array(
-                self.model.gaussian_model.emission_log_probabilities(data))
+            prob *= np.array(
+                self.model.gaussian_model.emission_probabilities(data))
 
         return pd.DataFrame(
-            log_prob,
+            prob,
             columns=[k for k in self.model.hidden_state_enum_to_vector.keys()],
             index=data.index)
 
-    def probability_distribution_across_hidden_states(
-            self,
-            data,
-            current_hidden_state,
-            idx,
-            system,
-            emission_log_probabilities,
-            next_hidden_state=None):
+    def probability_distribution_across_hidden_states(self,
+                                                      data,
+                                                      current_hidden_state,
+                                                      idx,
+                                                      system,
+                                                      emission_probabilities,
+                                                      next_hidden_state=None):
         """ Returns probability distribution across hidden states.
 
         Arguments:
@@ -511,7 +765,7 @@ class FactoredHMMInference(ABC):
             current_hidden_state: (array) hidden state vector corresponding to idx.
             idx: (int) iloc in index of data
             system: (int) indicates fHMM Markov system under consideration
-            emission_log_probabilities: (df) row t and column j correspond to the log
+            emission_probabilities: (df) row t and column j correspond to the log
                 probability of the emission observed at time t given hidden state j (
                 where hidden state is taken in the "flattened" sense).
             next_hidden_state: (array) hidden state vector corresponding to idx.
@@ -526,35 +780,43 @@ class FactoredHMMInference(ABC):
         """
         model = self.model
         ns_hidden_states = model.ns_hidden_states
-        log_prob = np.zeros(model.ns_hidden_states[system])
+        prob = np.full(model.ns_hidden_states[system], 1).astype(np.float64)
 
         # Get list of eligible flattened hidden states.
-        eligible_states = model.hidden_state_delta_enum[system][
-            model.hidden_state_vector_to_enum[str(current_hidden_state)]]
+        eligible_states = np.array(
+            ns_hidden_states[system] * [current_hidden_state])
+        val = list(range(model.ns_hidden_states[system]))
+        eligible_states[val, system] = val
+        eligible_states = [
+            model.hidden_state_vector_to_enum[str(list(v))]
+            for v in eligible_states
+        ]
 
-        # Add emission log probabilities.
-        log_prob += np.array(
-            emission_log_probabilities.loc[data.index[idx], eligible_states])
+        # Add emission probabilities.
+        prob *= np.array(
+            emission_probabilities.loc[data.index[idx], eligible_states])
 
-        # Add initial state log probabilities if idx  is 0.
+        # Add initial state probabilities if idx  is 0.
         if idx == 0:
-            log_prob += model.log_initial_state[system][:ns_hidden_states[
+            prob *= model.initial_state_matrix[system][:ns_hidden_states[
                 system]]
 
-        # Add transition log probabilities untill idx corresponds to the last observed data.
+        # Add transition probabilities untill idx corresponds to the last observed data.
         if idx < data.shape[0] - 1:
-            log_prob += np.array(
-                model.log_transition[system][:, next_hidden_state[
+            prob *= np.array(
+                model.transition_matrix[system][:, next_hidden_state[
                     system]])[:ns_hidden_states[system]]
 
-        return np.exp(log_prob)
+        return prob
 
     def gibbs_sampling(self,
                        data,
                        iterations,
-                       burn_down_period=100,
+                       burn_down_period=10,
                        gather_statistics=False,
-                       hidden_state_vector_df=None):
+                       hidden_state_vector_df=None,
+                       distributed=False,
+                       n_workers=9):
         """ Samples one timestep and fHMM system
 
         Arguments: 
@@ -567,6 +829,9 @@ class FactoredHMMInference(ABC):
             hidden_state_vector_df: (dataframe) timeseries of hidden state vectors
                 with the same index as "data".  If default "None" is given, then
                 this dataframe will be seeded randomly.
+            distributed: (bool) if True the training will be distributed via 
+                Dask
+            n_workers: (int) number of works to use for distributed Dask training
 
         Returns: The arrays Gamma and Xi containing statistics, and an updated hidden 
             state vector
@@ -585,66 +850,36 @@ class FactoredHMMInference(ABC):
                 index=data.index,
                 columns=[i for i in range(len(model.ns_hidden_states))])
 
-        # Collect Statistics in Gamma and Xi, with Gibbs sampling at each stage.
         Gamma = None
         Xi = None
-        if gather_statistics == True:
-            Gamma = np.zeros((data.shape[0], np.sum(model.ns_hidden_states),
-                              np.sum(model.ns_hidden_states)))
-            Xi = np.zeros((len(model.ns_hidden_states), data.shape[0] - 1,
-                           np.sum(model.ns_hidden_states),
-                           np.sum(model.ns_hidden_states)))
 
         for r in range(iterations + burn_down_period):
+
+            # Gather statistics
+            if r >= burn_down_period:
+                if gather_statistics == True:
+                    Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
+                                                       Gamma, Xi)
+
+            # Carry out sampling
             sample_times = np.random.choice(
                 [i for i in range(data.shape[0])], data.shape[0], replace=False)
             sample_systems = np.random.choice(
-                [i for i in range(len(self.model.ns_hidden_states))],
+                [i for i in range(len(model.ns_hidden_states))],
                 len(self.model.ns_hidden_states),
                 replace=False)
             sample_parameter = np.random.uniform(0, 1, data.shape[0])
 
-            emission = self.emission_log_probabilities(data)
+            emission = self.emission_probabilities(data)
+
+            csum = np.concatenate(([0], np.cumsum(model.ns_hidden_states)))
 
             for t in sample_times:
                 h_current = (hidden_state_vector_df.iloc[t, :]).to_list()
-                n_next = None
-                column_vectors = self.model.vector_to_column_vectors(h_current)
+                h_next = None
 
                 if t < data.shape[0] - 1:
                     h_next = np.array(hidden_state_vector_df.iloc[t + 1, :])
-                    next_column_vectors = self.model.vector_to_column_vectors(
-                        h_next)
-
-                if r >= burn_down_period:
-                    if gather_statistics == True:
-                        for i in range(len(model.ns_hidden_states)):
-
-                            skip_rows = int(np.sum(model.ns_hidden_states[:i]))
-                            N = model.ns_hidden_states[i]
-
-                            count = (column_vectors[i]
-                                     @ column_vectors[i].reshape(1, -1))[:N, :N]
-                            Gamma[t][skip_rows:skip_rows + N, skip_rows:
-                                     skip_rows + N] += (
-                                         column_vectors[i] @ column_vectors[
-                                             i].reshape(1, -1))[:N, :N]
-
-                            if t < data.shape[0] - 1:
-                                count = (column_vectors[i] @ column_vectors[i]
-                                         .reshape(1, -1))[:N, :N]
-                                Xi[i][t][:N, :N] += count
-
-                            for j in range(i):
-
-                                skip_columns = int(
-                                    np.sum(model.ns_hidden_states[:j]))
-                                M = model.ns_hidden_states[j]
-
-                                count = (column_vectors[i] @ column_vectors[j]
-                                         .reshape(1, -1))[:N, :M]
-                                Gamma[t][skip_rows:skip_rows + N, skip_columns:
-                                         skip_columns + M] += count
 
                 for m in sample_systems:
 
@@ -653,21 +888,67 @@ class FactoredHMMInference(ABC):
                         current_hidden_state=h_current,
                         idx=t,
                         system=m,
-                        emission_log_probabilities=emission,
+                        emission_probabilities=emission,
                         next_hidden_state=h_next)
+
                     hidden_state_vector_df.iloc[t, m] = _sample(
                         updated_state_prob, sample_parameter[t])
 
         # Normalize gathered statistics
         if gather_statistics == True:
-            Gamma = Gamma.astype(np.float32) / iterations
-            Xi = Xi.astype(np.float32)
-            Xi = Xi + (np.sum(Xi, axis=2).reshape(
-                Xi.shape[0], Xi.shape[1], Xi.shape[2], -1) == 0).astype(int)
-            Xi = Xi / np.sum(
-                Xi, axis=3).reshape(Xi.shape[0], Xi.shape[1], Xi.shape[2], -1)
+            Gamma = Gamma / iterations
+            Xi = Xi / iterations
 
         return Gamma, Xi, hidden_state_vector_df
+
+    def gather_statistics(self, hidden_state_vector_df, Gamma=None, Xi=None):
+        """ Compiles Gamma and Xi statistics 
+        
+        Arguments: 
+            hidden_state_df: (df) hidden state vectors
+            Gamma: (array) array of dimension hidden_state_vector_df.shape[0]
+                x np.sum(self.model.ns_hidden_states) x np.sum(
+                self.model.ns_hidden_states)
+            Xi: (masked array) array with dimensions len(self.model.ns_hidden_states)
+                x hidden_state_vector_df.shape[0] x np.max(self.model.ns_hidden_states)
+                x np.max(self.model.ns_hidden_states).
+        
+        Returns: 
+            Arrays Gamma and Xi
+        """
+        model = self.model
+        ns_hidden_states = model.ns_hidden_states
+        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
+        V = np.array(hidden_state_vector_df)
+
+        # Initialize Gamma and/or Xi if None is given.
+        if Gamma is None:
+            Gamma = np.zeros((hidden_state_vector_df.shape[0], csum[-1],
+                              csum[-1]))
+        if Xi is None:
+            Xi = np.zeros((len(ns_hidden_states),
+                           hidden_state_vector_df.shape[0] - 1,
+                           np.max(ns_hidden_states), np.max(ns_hidden_states)))
+
+        # Update Gamma
+        Gamma_pos = np.concatenate(
+            [[(i,) + t
+              for t in list(
+                  itertools.combinations_with_replacement(
+                      [csum[i] + v[i]
+                       for i in range(len(v))], 2))]
+             for i, v in enumerate(V)])
+        times, cols, rows = zip(*Gamma_pos)
+        Gamma[times, rows, cols] += 1
+
+        # Update Xi
+        Xi_pos = np.concatenate([[(j, i) + (V[i][j], V[i + 1][j])
+                                  for j in range(len(V[i]))]
+                                 for i in range(len(V[:-1]))])
+        systems, times, rows, cols = zip(*Xi_pos)
+        Xi[systems, times, rows, cols] += 1
+
+        return Gamma, Xi
 
 
 def _sample(probability_distribution, sample_parameter):
@@ -687,3 +968,82 @@ def _sample(probability_distribution, sample_parameter):
     cumulative_prob = np.cumsum(probability_distribution)
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
+
+
+def _factored_hmm_to_discrete_hmm(model):
+    """ Returns discrete hmm training spec for flattened HMM
+        obtained from a factored HMM model object.
+    """
+    n_hidden_states = np.prod(model.ns_hidden_states)
+    training_spec = {
+        'hidden_state': {
+            'type': 'finite',
+            'count': n_hidden_states
+        }
+    }
+
+    model_parameter_constraints = {}
+    observations = []
+
+    # Assemble categorical features.
+    if len(model.categorical_features) > 0:
+        categorical_values = model.categorical_model.categorical_values
+        for c in sorted(categorical_values.columns):
+            observations.append({
+                'name': c,
+                'type': 'finite',
+                'values': sorted(categorical_values[c].unique())
+            })
+        model_parameter_constraints[
+            'emission_constraints'] = model.categorical_model.emission_matrix
+
+    # Assemble gaussian features.
+    if len(model.gaussian_features) > 0:
+        for g in model.gaussian_features:
+            observations.append({
+                'name': g,
+                'type': 'continuous',
+                'dist': 'gaussian',
+                'dims': 1
+            })
+        gmm_parameter_constraints = {'n_gmm_components': 1}
+        gmm_parameter_constraints['means'] = [
+            model.gaussian_model.mean_for_hidden_state_vector(v).reshape(1, -1)
+            for v in model.hidden_state_vectors
+        ]
+        gmm_parameter_constraints['covariances'] = n_hidden_states * [[
+            model.gaussian_model.covariance
+        ]]
+        gmm_parameter_constraints['component_weights'] = np.array(
+            n_hidden_states * [[[1]]])
+
+        model_parameter_constraints[
+            'gmm_parameter_constraints'] = gmm_parameter_constraints
+
+    transition_matrix = np.zeros((n_hidden_states, n_hidden_states))
+
+    enum_pairs = list(
+        itertools.permutations(model.hidden_state_enum_to_vector.keys(), 2)) + [
+            (k, k) for k in model.hidden_state_enum_to_vector.keys()
+        ]
+
+    trans_pairs = [
+        (v, w,
+         np.prod([
+             model.transition_matrix[i][model.hidden_state_enum_to_vector[v][i]]
+             [model.hidden_state_enum_to_vector[w][i]]
+             for i in range(len(model.ns_hidden_states))
+         ]))
+        for v, w in enum_pairs
+    ]
+
+    old, new, transition_prob = zip(*trans_pairs)
+
+    transition_matrix[old, new] = transition_prob
+
+    model_parameter_constraints['transition_constraints'] = transition_matrix
+
+    training_spec['model_parameter_constraints'] = model_parameter_constraints
+    training_spec['observations'] = observations
+
+    return training_spec
