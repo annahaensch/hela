@@ -99,8 +99,6 @@ class DynamicBayesianNetwork(DAG):
         """
         super(DynamicBayesianNetwork, self).add_node(node, latent)
 
-        # super(DynamicBayesianNetwork, self).add_node((node, 1), latent)
-
     def add_nodes_from(self, nodes, latent):
         """
         Add multiple nodes to the Network.
@@ -489,7 +487,13 @@ class DynamicBayesianNetwork(DAG):
             according to the problem.
         """
         for node in super(DynamicBayesianNetwork, self).nodes():
-            cpd = self.get_cpds(node=node)
+            if self.nodes[node]['latent']:
+                try:
+                    cpd = self.get_cpds(node=node).reorder_parents(self.get_parents(node))
+                except:
+                   cpd = self.get_cpds(node=node) 
+            else:
+                cpd = self.get_cpds(node=node)
             if isinstance(cpd, TabularCPD):
                 evidence = cpd.variables[:0:-1]
                 evidence_card = cpd.cardinality[:0:-1]
