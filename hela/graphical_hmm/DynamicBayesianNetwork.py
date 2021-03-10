@@ -425,14 +425,15 @@ class DynamicBayesianNetwork(DAG):
         >>> dbn.add_cpds(grade_cpd)
         >>> dbn.get_cpds()
         """
-        # TODO: fix bugs in this
         if node:
             if node not in super(DynamicBayesianNetwork, self).nodes():
                 raise ValueError("Node not present in the model.")
             else:
+                return_cpds = []
                 for cpd in self.cpds:
                     if cpd.variable == node:
-                        return cpd
+                        return_cpds.append(cpd)
+                return return_cpds
         else:
             return_cpds = []
             for var in self.get_slice_nodes(time_slice=time_slice):
