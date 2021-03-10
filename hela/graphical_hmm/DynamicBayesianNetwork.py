@@ -129,14 +129,14 @@ class DynamicBayesianNetwork(DAG):
         >>> sorted(dbn._nodes())
         ['B', 'A', 'C']
         """
-        return list(
+        return sorted(list(
             set(
                 [
                     node
                     for node, timeslice in super(DynamicBayesianNetwork, self).nodes()
                 ]
             )
-        )
+        ))
 
     def add_edge(self, start, end, **kwargs):
         """
