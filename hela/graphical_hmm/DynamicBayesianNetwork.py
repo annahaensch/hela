@@ -90,6 +90,7 @@ class DynamicBayesianNetwork(DAG):
         ----------
         node: node
             A node can be any hashable Python object.
+        latent: boolean for if the node represents a latent variable
 
         Examples
         --------
@@ -108,6 +109,7 @@ class DynamicBayesianNetwork(DAG):
         ----------
         nodes: iterable container
             A container of nodes (list, dict, set, etc.).
+        latent: list of boolean values for the node represents a latent variable
 
         Examples
         --------
@@ -345,8 +347,8 @@ class DynamicBayesianNetwork(DAG):
 
     def add_factors(self, *factors):
         """
-        This method adds the cpds to the dynamic bayesian network.
-        Note that while adding variables and the evidence in cpd,
+        This method adds the factors to the dynamic bayesian network.
+        Note that while adding variables and the evidence for a factor,
         they have to be of the following form
         (node_name, time_slice)
         Here, node_name is the node that is inserted
@@ -355,9 +357,9 @@ class DynamicBayesianNetwork(DAG):
 
         Parameters
         ----------
-        cpds : list, set, tuple (array-like)
-            List of CPDs which are to be associated with the model. Each CPD
-            should be an instance of `TabularCPD`.
+        factors : list, set, tuple (array-like)
+            List of values which are to be associated with the model.
+            Each should be an instance of TabularCPD or ContinuousFactor
 
         Examples
         --------
@@ -380,8 +382,8 @@ class DynamicBayesianNetwork(DAG):
         ...                                    [0.5, 0.6]],
         ...                      evidence=[('I', 0)],
         ...                      evidence_card=[2])
-        >>> dbn.add_cpds(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.add_factors(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
+        >>> dbn.get_factors()
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x7ff7f27b0cf8>,
          <TabularCPD representing P(('D', 1):2 | ('D', 0):2) at 0x7ff810b9c2e8>,
          <TabularCPD representing P(('D', 0):2) at 0x7ff7f27e6f98>,
@@ -390,18 +392,18 @@ class DynamicBayesianNetwork(DAG):
         """
         for factor in factors:
             if not isinstance(factor, TabularCPD) and not isinstance(factor, ContinuousFactor):
-                raise ValueError("cpd should be an instance of TabularCPD or ContinuousFactor")
+                raise ValueError("Factor should be an instance of TabularCPD or ContinuousFactor")
 
             if set(factor.variables) - set(factor.variables).intersection(
                 set(super(DynamicBayesianNetwork, self).nodes())
             ):
-                raise ValueError("CPD defined on variable not in the model", factor)
+                raise ValueError("Factor defined on variable not in the model", factor)
 
         self.factors.extend(factors)
 
     def get_factors(self, node=None, time_slice=0):
         """
-        Returns the CPDs that have been associated with the network.
+        Returns the Factors that have been associated with the network.
 
         Parameters
         ----------
@@ -423,35 +425,35 @@ class DynamicBayesianNetwork(DAG):
         >>> grade_cpd =  TabularCPD(('G',0), 3, [[0.3,0.05,0.9,0.5],
         ...                                      [0.4,0.25,0.8,0.03],
         ...                                      [0.3,0.7,0.02,0.2]], [('I', 0),('D', 0)],[2,2])
-        >>> dbn.add_cpds(grade_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.add_factors(grade_cpd)
+        >>> dbn.get_factors()
         """
         if node:
             if node not in super(DynamicBayesianNetwork, self).nodes():
                 raise ValueError("Node not present in the model.")
             else:
-                return_cpds = []
-                for cpd in self.factors:
-                    if cpd.variable == node:
-                        return_cpds.append(cpd)
-                return return_cpds
+                return_factors = []
+                for factor in self.factors:
+                    if factor.variable == node:
+                        return_factors.append(factor)
+                return return_factors
         else:
-            return_cpds = []
+            return_factors = []
             for var in self.get_slice_nodes(time_slice=time_slice):
-                cpd = self.get_factors(node=var)
-                if cpd:
-                    return_cpds.append(cpd)
-            return return_cpds
+                factor = self.get_factors(node=var)
+                if factor:
+                    return_factors.append(factor)
+            return return_factors
 
-    def remove_cpds(self, *cpds):
+    def remove_factors(self, *factors):
         """
-        Removes the cpds that are provided in the argument.
+        Removes the factors that are provided in the argument.
 
         Parameters
         ----------
-        *cpds : list, set, tuple (array-like)
-            List of CPDs which are to be associated with the model. Each CPD
-            should be an instance of `TabularCPD`.
+        *factors : list, set, tuple (array-like)
+            List of factos which are to be associated with the model. Each factor
+            should be an instance of `TabularCPD` or `ContinuousFactor`
 
         Examples
         --------
@@ -462,17 +464,17 @@ class DynamicBayesianNetwork(DAG):
         >>> grade_cpd =  TabularCPD(('G',0), 3, [[0.3,0.05,0.9,0.5],
         ...                                      [0.4,0.25,0.8,0.03],
         ...                                      [0.3,0.7,0.02,0.2]], [('I', 0),('D', 0)],[2,2])
-        >>> dbn.add_cpds(grade_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.add_factors(grade_cpd)
+        >>> dbn.get_factors()
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x3348ab0>]
-        >>> dbn.remove_cpds(grade_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.remove_factors(grade_cpd)
+        >>> dbn.get_factors()
         []
         """
-        for cpd in cpds:
-            if isinstance(cpd, (tuple, list)):
-                cpd = self.get_factors(cpd)
-            self.factors.remove(cpd)
+        for factor in factors:
+            if isinstance(factor, (tuple, list)):
+                factor = self.get_factors(factor)
+            self.factors.remove(factor)
 
     def check_model(self):
         """
@@ -516,6 +518,10 @@ class DynamicBayesianNetwork(DAG):
                     )
         return True
 
+    def generate_pdf(self, latent_nodes):
+        #TODO(isalju)
+        pass
+
     def initialize_initial_state(self):
         """
         This method will automatically re-adjust the cpds and the edges added to the bayesian network.
@@ -549,6 +555,8 @@ class DynamicBayesianNetwork(DAG):
         >>> student.add_cpds(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
         >>> student.initialize_initial_state()
         """
+        # TODO(isalju): not sure how useful this is.
+
         for cpd in self.factors:
             temp_var = (cpd.variable[0], 1 - cpd.variable[1])
             parents = self.get_parents(temp_var)
@@ -630,7 +638,7 @@ class DynamicBayesianNetwork(DAG):
         ...                                      [0.4, 0.25, 0.8,  0.03],
         ...                                      [0.3,  0.7, 0.02, 0.2 ]],
         ...                         [('I', 0), ('D', 0)],[2,2])
-        >>> dbn.add_cpds(grade_cpd)
+        >>> dbn.add_factors(grade_cpd)
         >>> dbn_copy = dbn.copy()
         >>> dbn_copy.nodes()
         ['Z', 'G', 'I', 'D']
@@ -641,12 +649,12 @@ class DynamicBayesianNetwork(DAG):
         (('D', 1), ('G', 1)),
         (('D', 0), ('G', 0)),
         (('D', 0), ('D', 1))]
-        >>> dbn_copy.get_cpds()
+        >>> dbn_copy.get_factors()
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x7f13961a3320>]
         """
         dbn = DynamicBayesianNetwork()
-        dbn.add_nodes_from(self._nodes())
+        dbn.add_nodes_from(self.nodes())
         dbn.add_edges_from(self.edges())
-        cpd_copy = [cpd.copy() for cpd in self.get_factors()]
-        dbn.add_cpds(*cpd_copy)
+        factor_copy = [factor.copy() for factor in self.get_factors()]
+        dbn.add_factors(*factor_copy)
         return dbn
