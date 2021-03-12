@@ -389,7 +389,7 @@ class DynamicBayesianNetwork(DAG):
          <TabularCPD representing P(('I', 1):2 | ('I', 0):2) at 0x7ff7f27e6668>]
         """
         for factor in factors:
-            if not isinstance(factor, TabularCPD) or isinstance(factor, ContinuousFactor):
+            if not isinstance(factor, TabularCPD) and not isinstance(factor, ContinuousFactor):
                 raise ValueError("cpd should be an instance of TabularCPD or ContinuousFactor")
 
             if set(factor.variables) - set(factor.variables).intersection(
