@@ -518,6 +518,23 @@ class DynamicBayesianNetwork(DAG):
                     )
         return True
 
+    def get_latent_nodes(self, time_slice = -1):
+        """
+        Gets latent nodes in graph. If time_slice is specified, only latent nodes
+        in that timeslice are returned.
+
+        time_slice: int
+        
+        """
+        nodes = [node for node in self.nodes() if self.nodes()[node]['latent']]
+        if time_slice >= 0:
+            nodes = [node for node in nodes if node[1] == time_slice]
+        return nodes
+
+    def get_observable_nodes(self, time_slice = -1):
+        # TODO
+        pass
+
     def generate_pdf(self, latent_nodes):
         #TODO(isalju)
         pass
