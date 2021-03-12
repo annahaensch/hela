@@ -532,6 +532,13 @@ class DynamicBayesianNetwork(DAG):
         return nodes
 
     def get_observable_nodes(self, time_slice = -1):
+        """
+        Gets observable nodes in graph. If time_slice is specified, only observable nodes
+        in that timeslice are returned.
+
+        time_slice: int
+
+        """
         nodes = [node for node in self.nodes() if not self.nodes()[node]['latent']]
         if time_slice >= 0:
             nodes = [node for node in nodes if node[1] == time_slice]
@@ -672,8 +679,14 @@ class DynamicBayesianNetwork(DAG):
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x7f13961a3320>]
         """
         dbn = DynamicBayesianNetwork()
-        dbn.add_nodes_from(self.nodes())
+        # Get latent and observable nodes
+        latent_nodes = self.get_latent_nodes()
+        observable_nodes = self.get_observable_nodes()
+
+        dbn.add_nodes_from(latent_nodes, latent=[True]*len(latent_nodes))
+        dbn.add_nodes_from(observable_nodes, latent=[False]*len(observable_nodes))
         dbn.add_edges_from(self.edges())
-        factor_copy = [factor.copy() for factor in self.get_factors()]
-        dbn.add_factors(*factor_copy)
+        factors_copy = [factor.copy() for factor in self.get_factors()]
+        for factors in factors_copy:
+            dbn.add_factors(*factors)
         return dbn
