@@ -79,7 +79,7 @@ class ContinuousFactor(BaseFactor):
         self.cardinality = np.array(cardinality, dtype=int)
         self.weights = weights.flatten("C").reshape(self.cardinality)
         self.covariance = covariance
-        
+
         # dictionary of {node:cardinality} for the
         # edge for which the factor is defined
         self.state_names = {
@@ -91,11 +91,24 @@ class ContinuousFactor(BaseFactor):
                 for index, var in enumerate(variables)
             }
 
-    def get_mean_vector(self, hs_vector):
+    def get_mean_value(self, hs):
         #TODO(isalju)
         pass
 
-    def generate_pdf(self, mean, covariance):
-        #TODO(isalju)
-        pass
+    def copy(self):
+        """
+        Returns a copy of the ContinuousFactor object.
+        """
+        evidence = self.variables[1:] if len(self.variables) > 1 else None
+        evidence_card = self.cardinality[1:] if len(self.variables) > 1 else None
+        return ContinuousFactor(
+            self.variable,
+            self.variable_card,
+            self.weights,
+            self.covariance,
+            evidence,
+            evidence_card,
+            state_names=self.state_names.copy(),
+        )
+
 
