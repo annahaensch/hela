@@ -6,6 +6,7 @@ import networkx as nx
 
 from pgmpy.factors.discrete import TabularCPD
 from .DAG import DAG
+from .ContinuousFactor import ContinuousFactor
 
 
 class DynamicBayesianNetwork(DAG):
@@ -78,7 +79,7 @@ class DynamicBayesianNetwork(DAG):
         super(DynamicBayesianNetwork, self).__init__()
         if ebunch:
             self.add_edges_from(ebunch)
-        self.cpds = []
+        self.factors = []
         self.cardinalities = defaultdict(int)
 
     def add_node(self, node, latent):
@@ -342,7 +343,7 @@ class DynamicBayesianNetwork(DAG):
 
         return [(node, time_slice) for node in self._nodes()]
 
-    def add_cpds(self, *cpds):
+    def add_factors(self, *factors):
         """
         This method adds the cpds to the dynamic bayesian network.
         Note that while adding variables and the evidence in cpd,
@@ -387,18 +388,18 @@ class DynamicBayesianNetwork(DAG):
          <TabularCPD representing P(('I', 0):2) at 0x7ff7f27e6ba8>,
          <TabularCPD representing P(('I', 1):2 | ('I', 0):2) at 0x7ff7f27e6668>]
         """
-        for cpd in cpds:
-            if not isinstance(cpd, TabularCPD):
-                raise ValueError("cpd should be an instance of TabularCPD")
+        for factor in factors:
+            if not isinstance(factor, TabularCPD) or isinstance(factor, ContinuousFactor):
+                raise ValueError("cpd should be an instance of TabularCPD or ContinuousFactor")
 
-            if set(cpd.variables) - set(cpd.variables).intersection(
+            if set(factor.variables) - set(factor.variables).intersection(
                 set(super(DynamicBayesianNetwork, self).nodes())
             ):
-                raise ValueError("CPD defined on variable not in the model", cpd)
+                raise ValueError("CPD defined on variable not in the model", factor)
 
-        self.cpds.extend(cpds)
+        self.factors.extend(factors)
 
-    def get_cpds(self, node=None, time_slice=0):
+    def get_factors(self, node=None, time_slice=0):
         """
         Returns the CPDs that have been associated with the network.
 
@@ -430,14 +431,14 @@ class DynamicBayesianNetwork(DAG):
                 raise ValueError("Node not present in the model.")
             else:
                 return_cpds = []
-                for cpd in self.cpds:
+                for cpd in self.factors:
                     if cpd.variable == node:
                         return_cpds.append(cpd)
                 return return_cpds
         else:
             return_cpds = []
             for var in self.get_slice_nodes(time_slice=time_slice):
-                cpd = self.get_cpds(node=var)
+                cpd = self.get_factors(node=var)
                 if cpd:
                     return_cpds.append(cpd)
             return return_cpds
@@ -470,8 +471,8 @@ class DynamicBayesianNetwork(DAG):
         """
         for cpd in cpds:
             if isinstance(cpd, (tuple, list)):
-                cpd = self.get_cpds(cpd)
-            self.cpds.remove(cpd)
+                cpd = self.get_factors(cpd)
+            self.factors.remove(cpd)
 
     def check_model(self):
         """
@@ -490,11 +491,11 @@ class DynamicBayesianNetwork(DAG):
         for node in super(DynamicBayesianNetwork, self).nodes():
             if self.nodes[node]['latent']:
                 try:
-                    cpd = self.get_cpds(node=node).reorder_parents(self.get_parents(node))
+                    cpd = self.get_factors(node=node).reorder_parents(self.get_parents(node))
                 except:
-                   cpd = self.get_cpds(node=node) 
+                   cpd = self.get_factors(node=node) 
             else:
-                cpd = self.get_cpds(node=node)
+                cpd = self.get_factors(node=node)
             if isinstance(cpd, TabularCPD):
                 evidence = cpd.variables[:0:-1]
                 evidence_card = cpd.cardinality[:0:-1]
@@ -548,10 +549,10 @@ class DynamicBayesianNetwork(DAG):
         >>> student.add_cpds(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
         >>> student.initialize_initial_state()
         """
-        for cpd in self.cpds:
+        for cpd in self.factors:
             temp_var = (cpd.variable[0], 1 - cpd.variable[1])
             parents = self.get_parents(temp_var)
-            if not any(x.variable == temp_var for x in self.cpds):
+            if not any(x.variable == temp_var for x in self.factors):
                 if all(x[1] == parents[0][1] for x in parents):
                     if parents:
                         evidence_card = cpd.cardinality[:0:-1]
@@ -646,6 +647,6 @@ class DynamicBayesianNetwork(DAG):
         dbn = DynamicBayesianNetwork()
         dbn.add_nodes_from(self._nodes())
         dbn.add_edges_from(self.edges())
-        cpd_copy = [cpd.copy() for cpd in self.get_cpds()]
+        cpd_copy = [cpd.copy() for cpd in self.get_factors()]
         dbn.add_cpds(*cpd_copy)
         return dbn
