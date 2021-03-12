@@ -7,16 +7,23 @@ import numbers
 
 class ContinuousFactor(BaseFactor):
     """
-    Defines the weight and covariance matrix for an edge in an FHMM graph
+    Defines the weight and covariance matrix for an edge in an FHMM graph.
+
+    This class is very similar to pgmpy.factors.discrete.TabularCPD and is
+    used to define edges in the graphical model as the respective weight or
+    mean matrix and covariance matrix.  
     ----------
     variable: int, string (any hashable python object)
         The variable whose distribution is defined by the weight matrix.
     variable_card: integer
         cardinality of variable
-    values: 2d array, 2d list or 2d tuple
-        weight matrix
+    weights: 2d array, 2d list or 2d tuple
+        weight matrix for evidence
+    covariance: 2d array, 2d list or 2d tuple
+        covariance matrix for the evidence
     evidence: array-like
-        evidences(if any) w.r.t. which distribution is defined
+        evidences(if any) w.r.t. the linear gaussian is defined,
+        typically a latent node.
     evidence_card: integer, array-like
         cardinality of evidences (if any)
     """
@@ -36,7 +43,6 @@ class ContinuousFactor(BaseFactor):
         self.variable_card = None
 
         variables = [variable]
-
         if not isinstance(variable_card, numbers.Integral):
             raise TypeError("Event cardinality must be an integer")
         self.variable_card = variable_card
@@ -73,3 +79,23 @@ class ContinuousFactor(BaseFactor):
         self.cardinality = np.array(cardinality, dtype=int)
         self.weights = weights.flatten("C").reshape(self.cardinality)
         self.covariance = covariance
+        
+        # dictionary of {node:cardinality} for the
+        # edge for which the factor is defined
+        self.state_names = {
+                var: list(range(int(cardinality[index])))
+                for index, var in enumerate(variables)
+            }
+        self.name_to_no = {
+                var: {i: i for i in range(int(cardinality[index]))}
+                for index, var in enumerate(variables)
+            }
+
+    def get_mean_vector(self, hs_vector):
+        #TODO(isalju)
+        pass
+
+    def generate_pdf(self, mean, covariance):
+        #TODO(isalju)
+        pass
+
