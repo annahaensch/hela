@@ -80,8 +80,8 @@ class ContinuousFactor(BaseFactor):
         self.weights = weights.flatten("C").reshape(self.cardinality)
         self.covariance = covariance
 
-        # dictionary of {node:cardinality} for the
-        # edge for which the factor is defined
+        # dictionary of {node:cardinality} corresponding to the
+        # edge the factor is defined for
         self.state_names = {
                 var: list(range(int(cardinality[index])))
                 for index, var in enumerate(variables)
