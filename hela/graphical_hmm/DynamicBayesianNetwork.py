@@ -6,6 +6,7 @@ import networkx as nx
 
 from pgmpy.factors.discrete import TabularCPD
 from .DAG import DAG
+from .ContinuousFactor import ContinuousFactor
 
 
 class DynamicBayesianNetwork(DAG):
@@ -78,7 +79,7 @@ class DynamicBayesianNetwork(DAG):
         super(DynamicBayesianNetwork, self).__init__()
         if ebunch:
             self.add_edges_from(ebunch)
-        self.cpds = []
+        self.factors = []
         self.cardinalities = defaultdict(int)
 
     def add_node(self, node, latent):
@@ -89,6 +90,7 @@ class DynamicBayesianNetwork(DAG):
         ----------
         node: node
             A node can be any hashable Python object.
+        latent: boolean for if the node represents a latent variable
 
         Examples
         --------
@@ -107,6 +109,7 @@ class DynamicBayesianNetwork(DAG):
         ----------
         nodes: iterable container
             A container of nodes (list, dict, set, etc.).
+        latent: list of boolean values for the node represents a latent variable
 
         Examples
         --------
@@ -129,14 +132,14 @@ class DynamicBayesianNetwork(DAG):
         >>> sorted(dbn._nodes())
         ['B', 'A', 'C']
         """
-        return list(
+        return sorted(list(
             set(
                 [
                     node
                     for node, timeslice in super(DynamicBayesianNetwork, self).nodes()
                 ]
             )
-        )
+        ))
 
     def add_edge(self, start, end, **kwargs):
         """
@@ -342,10 +345,10 @@ class DynamicBayesianNetwork(DAG):
 
         return [(node, time_slice) for node in self._nodes()]
 
-    def add_cpds(self, *cpds):
+    def add_factors(self, *factors):
         """
-        This method adds the cpds to the dynamic bayesian network.
-        Note that while adding variables and the evidence in cpd,
+        This method adds the factors to the dynamic bayesian network.
+        Note that while adding variables and the evidence for a factor,
         they have to be of the following form
         (node_name, time_slice)
         Here, node_name is the node that is inserted
@@ -354,9 +357,9 @@ class DynamicBayesianNetwork(DAG):
 
         Parameters
         ----------
-        cpds : list, set, tuple (array-like)
-            List of CPDs which are to be associated with the model. Each CPD
-            should be an instance of `TabularCPD`.
+        factors : list, set, tuple (array-like)
+            List of values which are to be associated with the model.
+            Each should be an instance of TabularCPD or ContinuousFactor
 
         Examples
         --------
@@ -379,28 +382,28 @@ class DynamicBayesianNetwork(DAG):
         ...                                    [0.5, 0.6]],
         ...                      evidence=[('I', 0)],
         ...                      evidence_card=[2])
-        >>> dbn.add_cpds(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.add_factors(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
+        >>> dbn.get_factors()
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x7ff7f27b0cf8>,
          <TabularCPD representing P(('D', 1):2 | ('D', 0):2) at 0x7ff810b9c2e8>,
          <TabularCPD representing P(('D', 0):2) at 0x7ff7f27e6f98>,
          <TabularCPD representing P(('I', 0):2) at 0x7ff7f27e6ba8>,
          <TabularCPD representing P(('I', 1):2 | ('I', 0):2) at 0x7ff7f27e6668>]
         """
-        for cpd in cpds:
-            if not isinstance(cpd, TabularCPD):
-                raise ValueError("cpd should be an instance of TabularCPD")
+        for factor in factors:
+            if not isinstance(factor, TabularCPD) and not isinstance(factor, ContinuousFactor):
+                raise ValueError("Factor should be an instance of TabularCPD or ContinuousFactor")
 
-            if set(cpd.variables) - set(cpd.variables).intersection(
+            if set(factor.variables) - set(factor.variables).intersection(
                 set(super(DynamicBayesianNetwork, self).nodes())
             ):
-                raise ValueError("CPD defined on variable not in the model", cpd)
+                raise ValueError("Factor defined on variable not in the model", factor)
 
-        self.cpds.extend(cpds)
+        self.factors.extend(factors)
 
-    def get_cpds(self, node=None, time_slice=0):
+    def get_factors(self, node=None, time_slice=0):
         """
-        Returns the CPDs that have been associated with the network.
+        Returns the Factors that have been associated with the network.
 
         Parameters
         ----------
@@ -422,34 +425,35 @@ class DynamicBayesianNetwork(DAG):
         >>> grade_cpd =  TabularCPD(('G',0), 3, [[0.3,0.05,0.9,0.5],
         ...                                      [0.4,0.25,0.8,0.03],
         ...                                      [0.3,0.7,0.02,0.2]], [('I', 0),('D', 0)],[2,2])
-        >>> dbn.add_cpds(grade_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.add_factors(grade_cpd)
+        >>> dbn.get_factors()
         """
-        # TODO: fix bugs in this
         if node:
             if node not in super(DynamicBayesianNetwork, self).nodes():
                 raise ValueError("Node not present in the model.")
             else:
-                for cpd in self.cpds:
-                    if cpd.variable == node:
-                        return cpd
+                return_factors = []
+                for factor in self.factors:
+                    if factor.variable == node:
+                        return_factors.append(factor)
+                return return_factors
         else:
-            return_cpds = []
+            return_factors = []
             for var in self.get_slice_nodes(time_slice=time_slice):
-                cpd = self.get_cpds(node=var)
-                if cpd:
-                    return_cpds.append(cpd)
-            return return_cpds
+                factor = self.get_factors(node=var)
+                if factor:
+                    return_factors.append(factor)
+            return return_factors
 
-    def remove_cpds(self, *cpds):
+    def remove_factors(self, *factors):
         """
-        Removes the cpds that are provided in the argument.
+        Removes the factors that are provided in the argument.
 
         Parameters
         ----------
-        *cpds : list, set, tuple (array-like)
-            List of CPDs which are to be associated with the model. Each CPD
-            should be an instance of `TabularCPD`.
+        *factors : list, set, tuple (array-like)
+            List of factos which are to be associated with the model. Each factor
+            should be an instance of `TabularCPD` or `ContinuousFactor`
 
         Examples
         --------
@@ -460,17 +464,17 @@ class DynamicBayesianNetwork(DAG):
         >>> grade_cpd =  TabularCPD(('G',0), 3, [[0.3,0.05,0.9,0.5],
         ...                                      [0.4,0.25,0.8,0.03],
         ...                                      [0.3,0.7,0.02,0.2]], [('I', 0),('D', 0)],[2,2])
-        >>> dbn.add_cpds(grade_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.add_factors(grade_cpd)
+        >>> dbn.get_factors()
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x3348ab0>]
-        >>> dbn.remove_cpds(grade_cpd)
-        >>> dbn.get_cpds()
+        >>> dbn.remove_factors(grade_cpd)
+        >>> dbn.get_factors()
         []
         """
-        for cpd in cpds:
-            if isinstance(cpd, (tuple, list)):
-                cpd = self.get_cpds(cpd)
-            self.cpds.remove(cpd)
+        for factor in factors:
+            if isinstance(factor, (tuple, list)):
+                factor = self.get_factors(factor)
+            self.factors.remove(factor)
 
     def check_model(self):
         """
@@ -489,11 +493,11 @@ class DynamicBayesianNetwork(DAG):
         for node in super(DynamicBayesianNetwork, self).nodes():
             if self.nodes[node]['latent']:
                 try:
-                    cpd = self.get_cpds(node=node).reorder_parents(self.get_parents(node))
+                    cpd = self.get_factors(node=node).reorder_parents(self.get_parents(node))
                 except:
-                   cpd = self.get_cpds(node=node) 
+                   cpd = self.get_factors(node=node) 
             else:
-                cpd = self.get_cpds(node=node)
+                cpd = self.get_factors(node=node)
             if isinstance(cpd, TabularCPD):
                 evidence = cpd.variables[:0:-1]
                 evidence_card = cpd.cardinality[:0:-1]
@@ -513,6 +517,36 @@ class DynamicBayesianNetwork(DAG):
                         f"Sum of probabilities of states for node {node} is not equal to 1"
                     )
         return True
+
+    def get_latent_nodes(self, time_slice = -1):
+        """
+        Gets latent nodes in graph. If time_slice is specified, only latent nodes
+        in that timeslice are returned.
+
+        time_slice: int
+
+        """
+        nodes = [node for node in self.nodes() if self.nodes()[node]['latent']]
+        if time_slice >= 0:
+            nodes = [node for node in nodes if node[1] == time_slice]
+        return nodes
+
+    def get_observable_nodes(self, time_slice = -1):
+        """
+        Gets observable nodes in graph. If time_slice is specified, only observable nodes
+        in that timeslice are returned.
+
+        time_slice: int
+
+        """
+        nodes = [node for node in self.nodes() if not self.nodes()[node]['latent']]
+        if time_slice >= 0:
+            nodes = [node for node in nodes if node[1] == time_slice]
+        return nodes
+
+    def generate_pdf(self, latent_nodes):
+        #TODO(isalju)
+        pass
 
     def initialize_initial_state(self):
         """
@@ -547,10 +581,12 @@ class DynamicBayesianNetwork(DAG):
         >>> student.add_cpds(grade_cpd, d_i_cpd, diff_cpd, intel_cpd, i_i_cpd)
         >>> student.initialize_initial_state()
         """
-        for cpd in self.cpds:
+        # TODO(isalju): not sure how useful this is.
+
+        for cpd in self.factors:
             temp_var = (cpd.variable[0], 1 - cpd.variable[1])
             parents = self.get_parents(temp_var)
-            if not any(x.variable == temp_var for x in self.cpds):
+            if not any(x.variable == temp_var for x in self.factors):
                 if all(x[1] == parents[0][1] for x in parents):
                     if parents:
                         evidence_card = cpd.cardinality[:0:-1]
@@ -628,7 +664,7 @@ class DynamicBayesianNetwork(DAG):
         ...                                      [0.4, 0.25, 0.8,  0.03],
         ...                                      [0.3,  0.7, 0.02, 0.2 ]],
         ...                         [('I', 0), ('D', 0)],[2,2])
-        >>> dbn.add_cpds(grade_cpd)
+        >>> dbn.add_factors(grade_cpd)
         >>> dbn_copy = dbn.copy()
         >>> dbn_copy.nodes()
         ['Z', 'G', 'I', 'D']
@@ -639,12 +675,164 @@ class DynamicBayesianNetwork(DAG):
         (('D', 1), ('G', 1)),
         (('D', 0), ('G', 0)),
         (('D', 0), ('D', 1))]
-        >>> dbn_copy.get_cpds()
+        >>> dbn_copy.get_factors()
         [<TabularCPD representing P(('G', 0):3 | ('I', 0):2, ('D', 0):2) at 0x7f13961a3320>]
         """
         dbn = DynamicBayesianNetwork()
-        dbn.add_nodes_from(self._nodes())
+        # Get latent and observable nodes
+        latent_nodes = self.get_latent_nodes()
+        observable_nodes = self.get_observable_nodes()
+
+        dbn.add_nodes_from(latent_nodes, latent=[True]*len(latent_nodes))
+        dbn.add_nodes_from(observable_nodes, latent=[False]*len(observable_nodes))
         dbn.add_edges_from(self.edges())
-        cpd_copy = [cpd.copy() for cpd in self.get_cpds()]
-        dbn.add_cpds(*cpd_copy)
+        factors_copy = [factor.copy() for factor in self.get_factors()]
+        for factors in factors_copy:
+            dbn.add_factors(*factors)
         return dbn
+
+def hmm_model_to_graph(model):
+    """
+    Returns an HMM graph generated from DiscreteHMM
+
+    """
+    # Empty Dynamic Bayes Network
+    graph = DynamicBayesianNetwork()
+    
+    # Add latent nodes for for t = 0, t = 1
+    graph.add_nodes_from([('hs', 0), ('hs', 1)], 
+                             latent=[True, True])
+
+    # Transition edge for hs[t=0] -> hs[t=1]
+    graph.add_edges_from([(('hs', 0), ('hs', 1))])  
+    
+    transition_matrix = np.exp(model.log_transition)
+    transition_cpd = TabularCPD(('hs', 1), model.n_hidden_states, transition_matrix, 
+                            evidence=[('hs', 0)], evidence_card=[model.n_hidden_states])
+
+    initial_state = np.exp(model.log_initial_state).reshape((len(model.log_initial_state),1))
+    initial_cpd = TabularCPD(('hs', 0), model.n_hidden_states, initial_state)
+    graph.add_factors(transition_cpd, initial_cpd)
+    
+    if model.gaussian_mixture_model is not None:
+        # Add gaussian observation nodes for t = 0, t = 1
+        graph.add_nodes_from([('cont_obs', 0), ('cont_obs', 1)], latent=[False, False])
+        mean = model.gaussian_mixture_model.means.reshape((1, model.n_hidden_states))
+        covariance = model.gaussian_mixture_model.covariances.reshape((1, model.n_hidden_states))
+
+        # hs[t=0] -> cont_obs[t=0], hs[t=1] -> cont_obs[t=1]
+        graph.add_edges_from([(('hs', 0), ('cont_obs', 0)), (('hs', 1), ('cont_obs', 1))])
+        continuous_factor0 = ContinuousFactor(('cont_obs', 0), len(model.gaussian_mixture_model.gaussian_features),
+                          mean, covariance, evidence = [('hs', 0)], evidence_card = [model.n_hidden_states])
+        continuous_factor1 = ContinuousFactor(('cont_obs', 1), len(model.gaussian_mixture_model.gaussian_features),
+                          mean, covariance, evidence = [('hs', 1)], evidence_card = [model.n_hidden_states])
+        graph.add_factors(continuous_factor0, continuous_factor1)
+        
+    if model.categorical_model is not None:
+        # Add categorical observation nodes for t = 0, t = 1
+        graph.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent=[False, False])
+        emission = np.exp(np.array(model.categorical_model.log_emission_matrix))
+        emission_card = len(model.categorical_model.finite_values)
+
+        # hs[t=0] -> cat_obs[t=0], hs[t=1] -> cat_obs[t=1]
+        graph.add_edges_from([(('hs', 0), ('cat_obs', 0)), (('hs', 1), ('cat_obs', 1))])
+        categorical_factor0 = TabularCPD(('cat_obs', 0), emission_card, emission, 
+                                  evidence=[('hs', 0)], evidence_card=[model.n_hidden_states])
+        categorical_factor1 = TabularCPD(('cat_obs', 1), emission_card, emission, 
+                                  evidence=[('hs', 1)], evidence_card=[model.n_hidden_states])
+        graph.add_factors(categorical_factor0, categorical_factor1)
+
+    return graph
+
+def fhmm_model_to_graph(model):
+    """
+    Returns an FHMM graph generated from FactoredHMM
+
+    """
+    graph = DynamicBayesianNetwork()
+
+    # Add latent nodes for all systems for t = 0, t = 1
+    latent_nodes = [('system_{system}'.format(system = i), j) 
+                    for i in range(len(model.ns_hidden_states))
+               for j in range(2)]
+    
+    graph.add_nodes_from(latent_nodes, latent=[True]*len(latent_nodes))
+
+    # Add gaussian observation nodes for t = 0, t = 1
+    if model.gaussian_features is not None:
+        graph.add_nodes_from([('cont_obs', 0), ('cont_obs', 1)], latent = [False, False])
+        
+    # Add categorical observation nodes for t = 0, t = 1
+    if model.categorical_features is not None:
+        graph.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent = [False, False])
+
+        emission_matrix = np.exp(model.categorical_model.log_emission_matrix)
+        emission_card = len(model.categorical_model.categorical_values)
+        emission0_evidence = graph.get_latent_nodes(time_slice=0)
+        emission1_evidence = graph.get_latent_nodes(time_slice=1) 
+
+        emission0_cpd = TabularCPD(('cat_obs', 0), emission_card, emission_matrix, evidence=emission0_evidence, 
+                                      evidence_card = model.ns_hidden_states)
+
+        emission1_cpd = TabularCPD(('cat_obs', 1), emission_card, emission_matrix, evidence=emission1_evidence, 
+                                      evidence_card = model.ns_hidden_states)
+          
+    # Creates a recursive FHMM structure
+    for i, hidden_state in enumerate(model.ns_hidden_states):
+        
+        current_system = 'system_{system}'.format(system = i)
+        
+        
+        # Adds latent nodes for t=0, t=1
+        graph.add_nodes_from([(current_system, 0), (current_system, 1)], 
+                                   latent=[True, True])
+        # latent state[t=0] -> latent state[t=1]
+        graph.add_edge((current_system, 0), (current_system, 1))
+        
+        transition_matrix = np.exp(model.log_transition)[i][:hidden_state,:hidden_state]
+        transition_cpd = TabularCPD((current_system, 1), hidden_state, transition_matrix,
+                                    evidence=[(current_system, 0)], evidence_card = [hidden_state])
+        
+        initial_state_vector = np.exp(model.log_initial_state)[i:i+1,:hidden_state].reshape(-1,1)
+        initial_state_cpd = TabularCPD((current_system, 0), hidden_state, initial_state_vector)
+        
+        graph.add_factors(transition_cpd, initial_state_cpd)
+
+        if model.gaussian_features is not None:
+            # latent state[t=0] -> continuous obs[t=0]
+            # latent state[t=1] -> continuous obs[t=1]
+            graph.add_edges_from([((current_system, 0), 
+                                         ('cont_obs', 0)),
+                                         ((current_system, 1), 
+                                         ('cont_obs', 1))])
+            
+            weights = model.gaussian_model.means[i][:hidden_state, :hidden_state]
+            covariance = model.gaussian_model.covariance
+
+            continuous_card = len(model.gaussian_model.gaussian_features)
+
+            continuous_factor0 = ContinuousFactor(('cont_obs', 0), continuous_card, weights, covariance,
+                                           evidence = [(current_system, 0)], evidence_card = [model.ns_hidden_states[i]])
+
+            continuous_factor1 = ContinuousFactor(('cont_obs', 1), continuous_card, weights, covariance,
+                                           evidence = [(current_system, 1)], evidence_card = [model.ns_hidden_states[i]])
+            
+            graph.add_factors(continuous_factor0, continuous_factor1)
+        
+        if model.categorical_features is not None:
+            # latent state[t=0] -> categorical obs[t=0]
+            # latent state[t=1] -> categorical obs[t=1]
+            graph.add_edges_from([((current_system, 0), 
+                                         ('cat_obs', 0)),
+                                         ((current_system, 1), 
+                                         ('cat_obs', 1))])  
+
+            categorical_factor0 = emission0_cpd.marginalize([node for node in emission0_evidence 
+                                                           if node != (current_system, 0)], inplace=False)
+
+            categorical_factor1 = emission1_cpd.marginalize([node for node in emission1_evidence 
+                                                           if node != (current_system, 1)], inplace=False)
+        
+            graph.add_factors(categorical_factor0, categorical_factor1)
+     
+    return graph
