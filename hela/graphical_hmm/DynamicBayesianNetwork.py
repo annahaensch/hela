@@ -691,7 +691,60 @@ class DynamicBayesianNetwork(DAG):
             dbn.add_factors(*factors)
         return dbn
 
-def model_to_fhmm_graph(model):
+def hmm_model_to_graph(model):
+    """
+    Returns an HMM graph generated from DiscreteHMM
+
+    """
+    # Empty Dynamic Bayes Network
+    graph = DynamicBayesianNetwork()
+    
+    # Add latent nodes for for t = 0, t = 1
+    graph.add_nodes_from([('hs', 0), ('hs', 1)], 
+                             latent=[True, True])
+
+    # Transition edge for hs[t=0] -> hs[t=1]
+    graph.add_edges_from([(('hs', 0), ('hs', 1))])  
+    
+    transition_matrix = np.exp(model.log_transition)
+    transition_cpd = TabularCPD(('hs', 1), model.n_hidden_states, transition_matrix, 
+                            evidence=[('hs', 0)], evidence_card=[model.n_hidden_states])
+
+    initial_state = np.exp(model.log_initial_state).reshape((len(model.log_initial_state),1))
+    initial_cpd = TabularCPD(('hs', 0), model.n_hidden_states, initial_state)
+    graph.add_factors(transition_cpd, initial_cpd)
+    
+    if model.gaussian_mixture_model is not None:
+        # Add gaussian observation nodes for t = 0, t = 1
+        graph.add_nodes_from([('cont_obs', 0), ('cont_obs', 1)], latent=[False, False])
+        mean = model.gaussian_mixture_model.means.reshape((1, model.n_hidden_states))
+        covariance = model.gaussian_mixture_model.covariances.reshape((1, model.n_hidden_states))
+
+        # hs[t=0] -> cont_obs[t=0], hs[t=1] -> cont_obs[t=1]
+        graph.add_edges_from([(('hs', 0), ('cont_obs', 0)), (('hs', 1), ('cont_obs', 1))])
+        continuous_factor0 = ContinuousFactor(('cont_obs', 0), len(model.gaussian_mixture_model.gaussian_features),
+                          mean, covariance, evidence = [('hs', 0)], evidence_card = [model.n_hidden_states])
+        continuous_factor1 = ContinuousFactor(('cont_obs', 1), len(model.gaussian_mixture_model.gaussian_features),
+                          mean, covariance, evidence = [('hs', 1)], evidence_card = [model.n_hidden_states])
+        graph.add_factors(continuous_factor0, continuous_factor1)
+        
+    if model.categorical_model is not None:
+        # Add categorical observation nodes for t = 0, t = 1
+        graph.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent=[False, False])
+        emission = np.exp(np.array(model.categorical_model.log_emission_matrix))
+        emission_card = len(model.categorical_model.finite_values)
+
+        # hs[t=0] -> cat_obs[t=0], hs[t=1] -> cat_obs[t=1]
+        graph.add_edges_from([(('hs', 0), ('cat_obs', 0)), (('hs', 1), ('cat_obs', 1))])
+        categorical_factor0 = TabularCPD(('cat_obs', 0), emission_card, emission, 
+                                  evidence=[('hs', 0)], evidence_card=[model.n_hidden_states])
+        categorical_factor1 = TabularCPD(('cat_obs', 1), emission_card, emission, 
+                                  evidence=[('hs', 1)], evidence_card=[model.n_hidden_states])
+        graph.add_factors(categorical_factor0, categorical_factor1)
+
+    return graph
+
+def fhmm_model_to_graph(model):
     """
     Returns an FHMM graph generated from FactoredHMM
 
