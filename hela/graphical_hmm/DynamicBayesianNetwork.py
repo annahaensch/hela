@@ -690,3 +690,95 @@ class DynamicBayesianNetwork(DAG):
         for factors in factors_copy:
             dbn.add_factors(*factors)
         return dbn
+
+    def model_to_fhmm_graph(self, model):
+        """
+        Returns an FHMM graph generated from FactoredHMM
+
+        """
+        
+        # Add latent nodes for all systems for t = 0, t = 1
+        latent_nodes = [('system_{system}'.format(system = i), j) 
+                        for i in range(len(model.ns_hidden_states))
+                   for j in range(2)]
+        
+        self.add_nodes_from(latent_nodes, latent=[True]*len(latent_nodes))
+
+        # Add gaussian observation nodes for t = 0, t = 1
+        if model.gaussian_features is not None:
+            self.add_nodes_from([('cont_obs', 0), ('cont_obs', 1)], latent = [False, False])
+            
+        # Add categorical observation nodes for t = 0, t = 1
+        if model.categorical_features is not None:
+            self.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent = [False, False])
+
+            emission_matrix = np.exp(model.categorical_model.log_emission_matrix)
+            emission_card = len(model.categorical_model.categorical_values)
+            emission0_evidence = self.get_latent_nodes(time_slice=0)
+            emission1_evidence = self.get_latent_nodes(time_slice=1) 
+
+            emission0_cpd = TabularCPD(('cat_obs', 0), emission_card, emission_matrix, evidence=emission0_evidence, 
+                                          evidence_card = model.ns_hidden_states)
+
+            emission1_cpd = TabularCPD(('cat_obs', 1), emission_card, emission_matrix, evidence=emission1_evidence, 
+                                          evidence_card = model.ns_hidden_states)
+              
+        # Creates a recursive FHMM structure
+        for i, hidden_state in enumerate(model.ns_hidden_states):
+            
+            current_system = 'system_{system}'.format(system = i)
+            
+            
+            # Adds latent nodes for t=0, t=1
+            self.add_nodes_from([(current_system, 0), (current_system, 1)], 
+                                       latent=[True, True])
+            # latent state[t=0] -> latent state[t=1]
+            self.add_edge((current_system, 0), (current_system, 1))
+            
+            transition_matrix = np.exp(model.log_transition)[i][:hidden_state,:hidden_state]
+            transition_cpd = TabularCPD((current_system, 1), hidden_state, transition_matrix,
+                                        evidence=[(current_system, 0)], evidence_card = [hidden_state])
+            
+            initial_state_vector = np.exp(model.log_initial_state)[i:i+1,:hidden_state].reshape(-1,1)
+            initial_state_cpd = TabularCPD((current_system, 0), hidden_state, initial_state_vector)
+            
+            self.add_factors(transition_cpd, initial_state_cpd)
+
+            if model.gaussian_features is not None:
+                # latent state[t=0] -> continuous obs[t=0]
+                # latent state[t=1] -> continuous obs[t=1]
+                self.add_edges_from([((current_system, 0), 
+                                             ('cont_obs', 0)),
+                                             ((current_system, 1), 
+                                             ('cont_obs', 1))])
+                
+                weights = model.gaussian_model.means[i][:hidden_state, :hidden_state]
+                covariance = model.gaussian_model.covariance
+
+                continuous_card = len(model.gaussian_model.gaussian_features)
+
+                continuous_factor0 = ContinuousFactor(('cont_obs', 0), continuous_card, weights, covariance,
+                                               evidence = [(current_system, 0)], evidence_card = [model.ns_hidden_states[i]])
+
+                continuous_factor1 = ContinuousFactor(('cont_obs', 1), continuous_card, weights, covariance,
+                                               evidence = [(current_system, 1)], evidence_card = [model.ns_hidden_states[i]])
+                
+                self.add_factors(continuous_factor0, continuous_factor1)
+            
+            if model.categorical_features is not None:
+                # latent state[t=0] -> categorical obs[t=0]
+                # latent state[t=1] -> categorical obs[t=1]
+                self.add_edges_from([((current_system, 0), 
+                                             ('cat_obs', 0)),
+                                             ((current_system, 1), 
+                                             ('cat_obs', 1))])  
+
+                categorical_factor0 = emission0_cpd.marginalize([node for node in emission0_evidence 
+                                                               if node != (current_system, 0)], inplace=False)
+
+                categorical_factor1 = emission1_cpd.marginalize([node for node in emission1_evidence 
+                                                               if node != (current_system, 1)], inplace=False)
+            
+                self.add_factors(categorical_factor0, categorical_factor1)
+         
+        return self
