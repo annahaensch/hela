@@ -54,6 +54,14 @@ def test_continuous_factors(generative_model):
 	assert continuous_factors0[1].weights.all() == model.gaussian_model.means[1].all()
 	assert continuous_factors0[0].covariance.all() == model.gaussian_model.covariance.all()
 
+	# cardinality of latent nodes associated with continuous_factors is equal to hidden states
+	evidence_cards = [factor.cardinality[1] for factor in continuous_factors0]
+	variable_cards = [factor.cardinality[0] for factor in continuous_factors0]
+	assert evidence_cards == model.ns_hidden_states
+
+	# cardinality of continuous observation nodes is equal to gaussian features
+	assert variable_cards[0] == variable_cards[1] == len(model.gaussian_features)
+
 def test_discrete_factors(generative_model):
 	graph = generative_model['graph']
 	# Built in method for testing TabularCPD factors
