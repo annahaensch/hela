@@ -32,9 +32,11 @@ RUN pip install \
   matplotlib==3.1.2 \
   memory_profiler==0.58.0 \
   msgpack==1.0.0 \
+  networkx==2.5 \
   numpy==1.18.1 \
   openpyxl==3.0.1 \
   pandas==1.1.4 \
+  pgmpy==0.1.13 \
   prospector==1.3.1 \
   pysurvival==0.1.2 \
   pytest==5.3.2 \
