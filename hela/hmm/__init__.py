@@ -12,3 +12,4 @@ from .factored_models import (FactoredHMMConfiguration, FactoredHMMInference,
 from .distributed import DistributedLearningAlgorithm
 from .utils import *
 from .validation import find_risk_at_horizons
+from .graphical_models.DynamicBayesianNetwork import hmm_model_to_graph, fhmm_model_to_graph
