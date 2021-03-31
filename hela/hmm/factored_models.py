@@ -342,7 +342,7 @@ class CategoricalModel(FactoredHMM):
                  categorical_values=None,
                  categorical_vector_to_enum=None,
                  categorical_enum_to_vector=None,
-                 log_emission_matrix=None):
+                 emission_matrix=None):
         super().__init__(
             model_config=model_config,
             ns_hidden_states=ns_hidden_states,
@@ -352,7 +352,7 @@ class CategoricalModel(FactoredHMM):
         self.categorical_values = categorical_values
         self.categorical_vector_to_enum = categorical_vector_to_enum
         self.categorical_enum_to_vector = categorical_enum_to_vector
-        self.log_emission_matrix = log_emission_matrix
+        self.emission_matrix = emission_matrix
 
     @classmethod
     def from_config(cls, model_config):

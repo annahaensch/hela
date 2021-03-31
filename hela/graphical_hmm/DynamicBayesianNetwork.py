@@ -766,7 +766,7 @@ def fhmm_model_to_graph(model):
     if model.categorical_features is not None:
         graph.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent = [False, False])
 
-        emission_matrix = np.exp(model.categorical_model.log_emission_matrix)
+        emission_matrix = model.categorical_model.emission_matrix
         emission_card = len(model.categorical_model.categorical_values)
         emission0_evidence = graph.get_latent_nodes(time_slice=0)
         emission1_evidence = graph.get_latent_nodes(time_slice=1) 
@@ -789,11 +789,11 @@ def fhmm_model_to_graph(model):
         # latent state[t=0] -> latent state[t=1]
         graph.add_edge((current_system, 0), (current_system, 1))
         
-        transition_matrix = np.exp(model.log_transition)[i][:hidden_state,:hidden_state]
+        transition_matrix = model.transition_matrix[i][:hidden_state,:hidden_state]
         transition_cpd = TabularCPD((current_system, 1), hidden_state, transition_matrix,
                                     evidence=[(current_system, 0)], evidence_card = [hidden_state])
         
-        initial_state_vector = np.exp(model.log_initial_state)[i:i+1,:hidden_state].reshape(-1,1)
+        initial_state_vector = model.initial_state_matrix[i:i+1,:hidden_state].reshape(-1,1)
         initial_state_cpd = TabularCPD((current_system, 0), hidden_state, initial_state_vector)
         
         graph.add_factors(transition_cpd, initial_state_cpd)
