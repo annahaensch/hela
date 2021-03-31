@@ -766,7 +766,7 @@ def fhmm_model_to_graph(model):
     if model.categorical_features is not None:
         graph.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent = [False, False])
 
-        emission_matrix = np.exp(model.categorical_model.log_emission_matrix)
+        emission_matrix = model.categorical_model.emission_matrix
         emission_card = len(model.categorical_model.categorical_values)
         emission0_evidence = graph.get_latent_nodes(time_slice=0)
         emission1_evidence = graph.get_latent_nodes(time_slice=1) 
