@@ -11,6 +11,7 @@ from scipy.special import logsumexp
 
 from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
                           HMMForecasting, HMMValidationMetrics)
+from .graphical_models.DynamicBayesianNetwork import fhmm_model_to_graph
 from .utils import *
 
 
@@ -152,7 +153,8 @@ class FactoredHMM(ABC):
             categorical_model=None,
             # TODO (isalju): incorporate gaussian mixture models
             gaussian_model=None,
-            training_dict={}):
+            training_dict={},
+            graph=None):
 
         self.model_config = model_config
         self.random_state = random_state
@@ -173,6 +175,7 @@ class FactoredHMM(ABC):
         self.gaussian_model = gaussian_model
 
         self.training_dict = training_dict
+        self.graph = graph
 
     @classmethod
     def from_config(cls, model_config, random_state):
@@ -213,6 +216,8 @@ class FactoredHMM(ABC):
 
         model.initial_state_matrix = model_config.model_parameter_constraints[
             'initial_state_constraints'].copy()
+
+        model.graph = fhmm_model_to_graph(model)
 
         return model
 
@@ -727,12 +732,12 @@ class FactoredHMMInference(ABC):
         self.data = data
 
     def emission_probabilities(self, data):
-        """ Returns emission log_probabilities for observed data
+        """ Returns emission probabilities for observed data
         Arguments: 
             data: dataframe of observed categorical data
         Returns: 
             Dataframe where entry [t,i] is log P(x_t | h_i) (i.e. the conditional 
-            log probability of the observation, x_t, given hidden state h_i at 
+            probability of the observation, x_t, given hidden state h_i at 
             time t).  Here hidden states are enumerated in the "flattened" sense.
         """
         prob = np.full((data.shape[0], np.prod(self.model.ns_hidden_states)),
@@ -817,7 +822,7 @@ class FactoredHMMInference(ABC):
                        hidden_state_vector_df=None,
                        distributed=False,
                        n_workers=9):
-        """ Samples one timestep and fHMM system
+        """ Samples hidden state sequence for given data
 
         Arguments: 
             data: (dataframe) observed timeseries data.
