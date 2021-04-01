@@ -1,12 +1,12 @@
-from itertools import combinations
 from collections import defaultdict
+from itertools import combinations
 
-import numpy as np
 import networkx as nx
-
+import numpy as np
 from pgmpy.factors.discrete import TabularCPD
-from .DAG import DAG
+
 from .ContinuousFactor import ContinuousFactor
+from .DAG import DAG
 
 
 class DynamicBayesianNetwork(DAG):

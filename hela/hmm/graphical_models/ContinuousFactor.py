@@ -1,9 +1,9 @@
+import numbers
+
 import numpy as np
 import pandas as pd
-from scipy.stats import multivariate_normal
-
 from pgmpy.factors.base import BaseFactor
-import numbers
+from scipy.stats import multivariate_normal
 
 
 class ContinuousFactor(BaseFactor):

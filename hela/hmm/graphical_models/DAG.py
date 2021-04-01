@@ -4,7 +4,6 @@ import itertools
 from warnings import warn
 
 import networkx as nx
-
 from pgmpy.base import UndirectedGraph
 from pgmpy.independencies import Independencies
 

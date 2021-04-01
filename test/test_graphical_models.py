@@ -3,10 +3,10 @@ from datetime import datetime, timedelta
 import numpy as np
 import pytest
 
-from hela.hmm.graphical_models import DynamicBayesianNetwork as dbn
-from hela.hmm.graphical_models.ContinuousFactor import ContinuousFactor
 import hela.generation.hmm as gen
 import hela.hmm as hmm
+from hela.hmm.graphical_models import DynamicBayesianNetwork as dbn
+from hela.hmm.graphical_models.ContinuousFactor import ContinuousFactor
 
 
 @pytest.fixture(scope="module")
