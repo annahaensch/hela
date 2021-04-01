@@ -113,7 +113,8 @@ class DAG(nx.DiGraph):
         """
 
         # Check for networkx 2.0 syntax
-        if isinstance(node, tuple) and len(node) == 2 and isinstance(node[1], dict):
+        if isinstance(node, tuple) and len(node) == 2 and isinstance(
+                node[1], dict):
             node, attrs = node
             if attrs.get("latent", None) is not None:
                 attrs["latent"] = latent
@@ -163,11 +164,13 @@ class DAG(nx.DiGraph):
 
         if weights:
             if len(nodes) != len(weights):
-                raise ValueError(
-                    "The number of elements in nodes and weights" "should be equal."
-                )
+                raise ValueError("The number of elements in nodes and weights"
+                                 "should be equal.")
             for index in range(len(nodes)):
-                self.add_node(node=nodes[index], weight=weights[index], latent=latent[index])
+                self.add_node(
+                    node=nodes[index],
+                    weight=weights[index],
+                    latent=latent[index])
         else:
             for index in range(len(nodes)):
                 self.add_node(node=nodes[index], latent=latent[index])
@@ -262,14 +265,18 @@ class DAG(nx.DiGraph):
 
         if weights:
             if len(ebunch) != len(weights):
-                raise ValueError(
-                    "The number of elements in ebunch and weights" "should be equal"
-                )
+                raise ValueError("The number of elements in ebunch and weights"
+                                 "should be equal")
             for index in range(len(ebunch)):
-                self.add_edge(ebunch[index][0], ebunch[index][1], weight=weights[index], latent=latent[index])
+                self.add_edge(
+                    ebunch[index][0],
+                    ebunch[index][1],
+                    weight=weights[index],
+                    latent=latent[index])
         else:
             for index in range(len(ebunch)):
-                self.add_edge(ebunch[index][0], ebunch[index][1], latent=latent[index])
+                self.add_edge(
+                    ebunch[index][0], ebunch[index][1], latent=latent[index])
 
     def get_parents(self, node):
         """
@@ -313,8 +320,7 @@ class DAG(nx.DiGraph):
 
         for node in self.nodes():
             moral_graph.add_edges_from(
-                itertools.combinations(self.get_parents(node), 2)
-            )
+                itertools.combinations(self.get_parents(node), 2))
 
         return moral_graph
 
@@ -329,7 +335,10 @@ class DAG(nx.DiGraph):
         >>> graph.get_leaves()
         ['C', 'D']
         """
-        return [node for node, out_degree in self.out_degree_iter() if out_degree == 0]
+        return [
+            node for node, out_degree in self.out_degree_iter()
+            if out_degree == 0
+        ]
 
     def out_degree_iter(self, nbunch=None, weight=None):
         if nx.__version__.startswith("1"):
@@ -355,7 +364,8 @@ class DAG(nx.DiGraph):
         ['A', 'E']
         """
         return [
-            node for node, in_degree in dict(self.in_degree()).items() if in_degree == 0
+            node for node, in_degree in dict(self.in_degree()).items()
+            if in_degree == 0
         ]
 
     def get_children(self, node):
@@ -401,15 +411,12 @@ class DAG(nx.DiGraph):
             rest = set(self.nodes()) - {start}
             for r in range(len(rest)):
                 for observed in itertools.combinations(rest, r):
-                    d_seperated_variables = (
-                        rest
-                        - set(observed)
-                        - set(self.active_trail_nodes(start, observed=observed)[start])
-                    )
+                    d_seperated_variables = (rest - set(observed) - set(
+                        self.active_trail_nodes(start,
+                                                observed=observed)[start]))
                     if d_seperated_variables:
                         independencies.add_assertions(
-                            [start, d_seperated_variables, observed]
-                        )
+                            [start, d_seperated_variables, observed])
         independencies.reduce()
 
         if not latex:
@@ -439,19 +446,14 @@ class DAG(nx.DiGraph):
         """
 
         independencies = Independencies()
-        for variable in (
-            variables if isinstance(variables, (list, tuple)) else [variables]
-        ):
-            non_descendents = (
-                set(self.nodes())
-                - {variable}
-                - set(nx.dfs_preorder_nodes(self, variable))
-            )
+        for variable in (variables if isinstance(variables, (list, tuple)) else
+                         [variables]):
+            non_descendents = (set(self.nodes()) - {variable} -
+                               set(nx.dfs_preorder_nodes(self, variable)))
             parents = set(self.get_parents(variable))
             if non_descendents - parents:
                 independencies.add_assertions(
-                    [variable, non_descendents - parents, parents]
-                )
+                    [variable, non_descendents - parents, parents])
         return independencies
 
     def is_iequivalent(self, model):
@@ -488,12 +490,9 @@ class DAG(nx.DiGraph):
         if not isinstance(model, DAG):
             raise TypeError("model must be an instance of DAG")
         skeleton = nx.algorithms.isomorphism.GraphMatcher(
-            self.to_undirected(), model.to_undirected()
-        )
-        if (
-            skeleton.is_isomorphic()
-            and self.get_immoralities() == model.get_immoralities()
-        ):
+            self.to_undirected(), model.to_undirected())
+        if (skeleton.is_isomorphic() and
+                self.get_immoralities() == model.get_immoralities()):
             return True
         return False
 
@@ -518,9 +517,9 @@ class DAG(nx.DiGraph):
         immoralities = set()
         for node in self.nodes():
             for parents in itertools.combinations(self.predecessors(node), 2):
-                if not self.has_edge(parents[0], parents[1]) and not self.has_edge(
-                    parents[1], parents[0]
-                ):
+                if not self.has_edge(parents[0],
+                                     parents[1]) and not self.has_edge(
+                                         parents[1], parents[0]):
                     immoralities.add(tuple(sorted(parents)))
         return immoralities
 
@@ -614,9 +613,8 @@ class DAG(nx.DiGraph):
         Page 75 Algorithm 3.1
         """
         if observed:
-            observed_list = (
-                observed if isinstance(observed, (list, tuple)) else [observed]
-            )
+            observed_list = (observed if isinstance(observed, (list, tuple))
+                             else [observed])
         else:
             observed_list = []
         ancestors_list = self._get_ancestors_of(observed_list)
@@ -626,7 +624,8 @@ class DAG(nx.DiGraph):
         # down -> from child to parent
 
         active_trails = {}
-        for start in variables if isinstance(variables, (list, tuple)) else [variables]:
+        for start in variables if isinstance(variables,
+                                             (list, tuple)) else [variables]:
             visit_list = set()
             visit_list.add((start, "up"))
             traversed_list = set()
@@ -796,11 +795,8 @@ class PDAG(nx.DiGraph):
         Examples
         --------
         """
-        super(PDAG, self).__init__(
-            directed_ebunch
-            + undirected_ebunch
-            + [(Y, X) for (X, Y) in undirected_ebunch]
-        )
+        super(PDAG, self).__init__(directed_ebunch + undirected_ebunch +
+                                   [(Y, X) for (X, Y) in undirected_ebunch])
         self.directed_edges = set(directed_ebunch)
         self.undirected_edges = set(undirected_ebunch)
         # TODO: Fix the cycle issue
@@ -862,23 +858,16 @@ class PDAG(nx.DiGraph):
             found = False
             for X in pdag.nodes():
                 directed_outgoing_edges = set(pdag.successors(X)) - set(
-                    pdag.predecessors(X)
-                )
+                    pdag.predecessors(X))
                 undirected_neighbors = set(pdag.successors(X)) & set(
-                    pdag.predecessors(X)
-                )
-                neighbors_are_clique = all(
-                    (
-                        pdag.has_edge(Y, Z)
-                        for Z in pdag.predecessors(X)
-                        for Y in undirected_neighbors
-                        if not Y == Z
-                    )
-                )
+                    pdag.predecessors(X))
+                neighbors_are_clique = all((pdag.has_edge(Y, Z)
+                                            for Z in pdag.predecessors(X)
+                                            for Y in undirected_neighbors
+                                            if not Y == Z))
 
-                if not directed_outgoing_edges and (
-                    not undirected_neighbors or neighbors_are_clique
-                ):
+                if not directed_outgoing_edges and (not undirected_neighbors or
+                                                    neighbors_are_clique):
                     found = True
                     # add all edges of X as outgoing edges to dag
                     for Y in pdag.predecessors(X):
@@ -889,9 +878,9 @@ class PDAG(nx.DiGraph):
             if not found:
                 warn(
                     "PDAG has no faithful extension (= no oriented DAG with the "
-                    + "same v-structures as PDAG). Remaining undirected PDAG edges "
-                    + "oriented arbitrarily."
-                )
+                    +
+                    "same v-structures as PDAG). Remaining undirected PDAG edges "
+                    + "oriented arbitrarily.")
                 for X, Y in pdag.edges():
                     if not dag.has_edge(Y, X):
                         try:
