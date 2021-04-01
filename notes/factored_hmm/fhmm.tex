@@ -137,7 +137,7 @@ $\theta$.
 \caption{The graphical model of a classical HMM}\label{fig:HMM}
 \end{figure}
 
-\subsection{Factored hidden Markov models}
+\subsection{Factored hidden Markov models}\label{sect:fhmm}
 In an fHMM with $M$ underlying Markov systems, the hidden state, $Z_t$, at time $t$, is an $M$-dimensional vector,
 \[
 Z_t = (Z_{t}^{(1)},...,Z_{t}^{(M)}),
@@ -417,10 +417,10 @@ exact $E$-step, we will compute an approximate $E$-step using the probabilities
 gathered during each iteration of Gibbs sampling.  
 
 To understand how we might approximate the $E$-step, let's consider the components of the expected value, $Q$, in the fHMM case.  Recall that for a fixed $\Theta$,  
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:1}
 p(X_{1:T},Z_{1:T}\mid \Theta) & = & p(Z_1)\cdot p(X_1\mid Z_1)\cdot 
 \prod_{t=2}^Tp(X_t\mid Z_t)\cdot p(Z_t\mid Z_{t-1}).  
-\end{eqnarray*}
+\end{eqnarray}
 Therefore, 
 \begin{eqnarray*}
 Q(\Theta,\Theta') = \int_{Z_{1:T}}\log p(X_{1:T},Z_{1:T}\mid \Theta) 
@@ -1036,6 +1036,94 @@ significantly more efficient through simple vectorization.
     \EndFunction
   \end{algorithmic}
 \end{algorithm}
+
+\subsection{Structured Variational Inference}
+
+Since computing the true log likelihood, $\mathcal L (\Theta; X_{1:T})$, 
+in the case of fHMMs is typically intractible, another reasonable approach is to approximate 
+the true posterior distribution, $p(X_{1:T}\mid \Theta)$, by a 
+simpler distribution, $q$, a method called variational inference. For 
+any distribution, $q$, it is necessarily the case that 
+\begin{eqnarray*}
+p(X_{1:T}) & =& 
+\log\sum_{Z_{1:T}}q(Z_{1:T})\left[\frac{p(Z_{1:T},X_{1:T})}{q(Z_{1:T})}\right]\\
+&\geq& 
+\sum_{Z_{1:T}}q(Z_{1:T})\log \left[\frac{p(Z_{1:T},X_{1:T})}{q(Z_{1:T})}\right]
+\end{eqnarray*} 
+where the inequality follows from Jensen's inequality and in this way, we 
+obtain a lower bound on the posterior distribution. There are many ways 
+that we could define $q$, but we employ a method of structured 
+variational inference that retains some of the strucure of the full 
+fHMM.  In particular, we will choose $q$ as 
+\begin{eqnarray*}
+q(Z_{1:T}\mid \Phi) &=& \frac{1}{\kappa_q}\prod_{m=1}^M q(Z_1^{(m)}\mid 
+\Phi)\prod_{t=2}^T q(Z_t^{(m)}\mid Z_{t-1}^{(m)}, \Phi),
+\end{eqnarray*}
+where $\kappa_q$ is just a normalization constant. Furthermore, we will 
+define 
+\begin{eqnarray}\label{eqn:11b}
+q(Z_1^{(m)}\mid \Phi) &=& 
+\prod_{n=1}^N\left(\lambda_{1,n}^{(m)}\pi_n^{(m)}\right)^{Z_{1,n}^{(m)}}
+\end{eqnarray}
+and 
+\begin{eqnarray}\label{eqn:11c}
+q(Z_t^{(m)}\mid Z_{t-1}^{(m)}\Phi) = 
+\prod_{n=1}^N\left(\lambda_{1,n}^{(m)}\prod_{\ell=1}^N 
+\left(a_{n,\ell}^{(m)}\right)^{Z_{t-1,\ell}^{(m)}}\right)^{Z_{1,n}^{(m)}}.
+\end{eqnarray}
+In this case the variational paramters are given by 
+\[
+\Phi = \{\pi^{(m)}, P^{(m)}, \lambda_t^{(m)}\},
+\]
+where $\pi$ and $a$ are the initial and transition probabilities as, 
+respectively, as defined in section \ref{sect:fhmm}.  To better 
+understand the role of $\lambda_t^{(m)}$ we will first recall that 
+$Z_t^{(m)}$ is an $N\times 1$ vector, which is 0 in all but one entry, 
+so in particular, for any choice of $Z_t^{(m)}$ the inner term of the 
+product in equations (\ref{eqn:11b}) and (\ref{eqn:11c}) 
+are equal to 1 for all but one choice of $n$.   
+Therefore, the probability of the random 
+variable $Z_{t,n}^{(m)}$ being equal to 1, under the variational
+distribution $q$, would be given by,
+\begin{eqnarray*}
+q(Z_{1,n}^{(m)} = 1\mid \Phi) &=& \lambda_{1,n}^{(m)}\cdot \pi_n^{(m)} \\
+& = &  
+\lambda_{1,n}^{(m)}\cdot p(Z_{1,n}^{(m)} = 1\mid \Theta),
+\end{eqnarray*}
+and 
+\begin{eqnarray*}
+q(Z_{t,n}^{(m)}=1\mid Z_{t-1,\ell}^{(m)} =1, \Phi) &=&  
+\lambda_{1,n}^{(m)}\cdot a_{n,\ell}^{(m)}\\
+& = & \lambda_{1,n}^{(m)}\cdot p(Z_{t,n}^{(m)}=1\mid 
+Z_{t-1,\ell}^{(m)}=1,\Theta).
+\end{eqnarray*}
+Recall, the goal of variational inference is to approximate 
+the posterior distribution, $p$, by the variational distribution, $q$, 
+comparing the equations above to equation 
+(\ref{eqn:1}) (which we will reproduce here for clarity),
+\begin{eqnarray*}
+p(X_{1:T},Z_{1:T}\mid \Theta) & = & p(Z_1)\cdot p(X_1\mid Z_1)\cdot 
+\prod_{t=2}^Tp(X_t\mid Z_t)\cdot p(Z_t\mid Z_{t-1}),
+\end{eqnarray*} 
+we see that the $\lambda_t^{(m)}$ are playing the role of the 
+emission probabilties, $p(X_t\mid Z_t, \Theta)$, that is, 
+$\lambda_t^{(m)}$ is meant to approximate the probability of a given 
+emission at time $t$, given the setting of the $n^\text{th}$ component 
+of the $m^\text{th}$ Markov system.  This variational parameter, 
+$\lambda_t^{(m)}$ is what will eventualky be modified to bring the two 
+distributions closer together, in other words, the paramter $h_t^{(m)}$ 
+will be optimized to minimize the KL divergence, 
+\begin{eqnarray*}
+KL(q||p) = \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})}{p(Z_{1:T}\mid 
+X_{1:T})}\right].
+\end{eqnarray*} 
+In what follows we will discribe this optimization 
+process.\footnote{\textcolor{red}{I will describe it, I just haven't 
+yet :)  But from this analysis above, I think we should be able to 
+bundle the continuous and categorical emission probabilties into 
+$\lambda_t$ in some kind of clever way.  I'll think on that more 
+tomorrow.}}
+  
 
 \bibliographystyle{siam}
 \bibliography{references}

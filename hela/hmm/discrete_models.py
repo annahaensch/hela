@@ -6,7 +6,7 @@ from abc import ABC
 
 import numpy as np
 import pandas as pd
-from scipy import stats, linalg
+from scipy import linalg, stats
 from scipy.special import logsumexp
 
 from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
