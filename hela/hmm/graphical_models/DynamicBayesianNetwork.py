@@ -759,11 +759,11 @@ def fhmm_model_to_graph(model):
     graph.add_nodes_from(latent_nodes, latent=[True]*len(latent_nodes))
 
     # Add gaussian observation nodes for t = 0, t = 1
-    if model.gaussian_features is not None:
+    if len(model.gaussian_features) > 0:
         graph.add_nodes_from([('cont_obs', 0), ('cont_obs', 1)], latent = [False, False])
         
     # Add categorical observation nodes for t = 0, t = 1
-    if model.categorical_features is not None:
+    if len(model.categorical_features) > 0:
         graph.add_nodes_from([('cat_obs', 0), ('cat_obs', 1)], latent = [False, False])
 
         emission_matrix = model.categorical_model.emission_matrix
@@ -798,7 +798,7 @@ def fhmm_model_to_graph(model):
         
         graph.add_factors(transition_cpd, initial_state_cpd)
 
-        if model.gaussian_features is not None:
+        if len(model.gaussian_features) > 0:
             # latent state[t=0] -> continuous obs[t=0]
             # latent state[t=1] -> continuous obs[t=1]
             graph.add_edges_from([((current_system, 0), 
@@ -819,7 +819,7 @@ def fhmm_model_to_graph(model):
             
             graph.add_factors(continuous_factor0, continuous_factor1)
         
-        if model.categorical_features is not None:
+        if len(model.categorical_features) > 0:
             # latent state[t=0] -> categorical obs[t=0]
             # latent state[t=1] -> categorical obs[t=1]
             graph.add_edges_from([((current_system, 0), 
