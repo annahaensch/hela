@@ -438,10 +438,22 @@ class DynamicBayesianNetwork(DAG):
                 return return_factors
         else:
             return_factors = []
+
             for var in self.get_slice_nodes(time_slice=time_slice):
                 factor = self.get_factors(node=var)
                 if factor:
                     return_factors.append(factor)
+            return return_factors
+
+    def get_evidence_factors(self, node):
+        # TODO (isalju) add description
+        if node not in super(DynamicBayesianNetwork, self).nodes():
+                raise ValueError("Node not present in the model.")
+
+        for factor in self.factors:
+            return_factors = []
+            if node in set(factor.get_evidence()):
+                return_factors.append(factor)
             return return_factors
 
     def remove_factors(self, *factors):
@@ -771,7 +783,7 @@ def hmm_model_to_graph(model):
             evidence=[('hs', 1)],
             evidence_card=[model.n_hidden_states])
         factors.extend([categorical_factor0, categorical_factor1])
-        
+
     graph.add_factors(*factors)
 
     return graph
