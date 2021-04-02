@@ -699,6 +699,7 @@ def hmm_model_to_graph(model):
     """
     # Empty Dynamic Bayes Network
     graph = DynamicBayesianNetwork()
+    factors = []
 
     # Add latent nodes for for t = 0, t = 1
     graph.add_nodes_from([('hs', 0), ('hs', 1)], latent=[True, True])
@@ -717,7 +718,7 @@ def hmm_model_to_graph(model):
     initial_state = np.exp(model.log_initial_state).reshape((len(
         model.log_initial_state), 1))
     initial_cpd = TabularCPD(('hs', 0), model.n_hidden_states, initial_state)
-    graph.add_factors(transition_cpd, initial_cpd)
+    factors.extend([initial_cpd, transition_cpd])
 
     if model.gaussian_mixture_model is not None:
         # Add gaussian observation nodes for t = 0, t = 1
@@ -745,7 +746,7 @@ def hmm_model_to_graph(model):
             covariance,
             evidence=[('hs', 1)],
             evidence_card=[model.n_hidden_states])
-        graph.add_factors(continuous_factor0, continuous_factor1)
+        factors.extend([continuous_factor0, continuous_factor1])
 
     if model.categorical_model is not None:
         # Add categorical observation nodes for t = 0, t = 1
@@ -769,7 +770,9 @@ def hmm_model_to_graph(model):
             emission,
             evidence=[('hs', 1)],
             evidence_card=[model.n_hidden_states])
-        graph.add_factors(categorical_factor0, categorical_factor1)
+        factors.extend([categorical_factor0, categorical_factor1])
+        
+    graph.add_factors(*factors)
 
     return graph
 
@@ -780,7 +783,7 @@ def fhmm_model_to_graph(model):
 
     """
     graph = DynamicBayesianNetwork()
-
+    factors = []
     # Add latent nodes for all systems for t = 0, t = 1
     latent_nodes = [('system_{system}'.format(system=i), j)
                     for i in range(len(model.ns_hidden_states))
@@ -842,7 +845,7 @@ def fhmm_model_to_graph(model):
         initial_state_cpd = TabularCPD((current_system, 0), hidden_state,
                                        initial_state_vector)
 
-        graph.add_factors(transition_cpd, initial_state_cpd)
+        factors.extend([transition_cpd, initial_state_cpd])
 
         if len(model.gaussian_features) > 0:
             # latent state[t=0] -> continuous obs[t=0]
@@ -872,7 +875,7 @@ def fhmm_model_to_graph(model):
                 evidence=[(current_system, 1)],
                 evidence_card=[model.ns_hidden_states[i]])
 
-            graph.add_factors(continuous_factor0, continuous_factor1)
+            factors.extend([continuous_factor0, continuous_factor1])
 
         if len(model.categorical_features) > 0:
             # latent state[t=0] -> categorical obs[t=0]
@@ -894,6 +897,7 @@ def fhmm_model_to_graph(model):
                 ],
                 inplace=False)
 
-            graph.add_factors(categorical_factor0, categorical_factor1)
+            factors.extend([categorical_factor0, categorical_factor1])
 
+    graph.add_factors(*factors)
     return graph
