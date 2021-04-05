@@ -483,9 +483,10 @@ class DynamicBayesianNetwork(DAG):
         []
         """
         for factor in factors:
-            if isinstance(factor, (tuple, list)):
-                factor = self.get_factors(factor)
-            self.factors.remove(factor)
+            if factor in self.factors:
+            # if isinstance(factor, (tuple, list)):
+            #     factor = self.get_factors(factor)
+                self.factors.remove([factor])
 
     def check_model(self):
         """
@@ -698,9 +699,8 @@ class DynamicBayesianNetwork(DAG):
         dbn.add_nodes_from(
             observable_nodes, latent=[False] * len(observable_nodes))
         dbn.add_edges_from(self.edges())
-        factors_copy = [factor.copy() for factor in self.get_factors()]
-        for factors in factors_copy:
-            dbn.add_factors(*factors)
+        factors_copy = [factor.copy() for factor in self.factors]
+        dbn.add_factors(*factors_copy)
         return dbn
 
 
