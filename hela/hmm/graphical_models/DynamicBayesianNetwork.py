@@ -445,17 +445,6 @@ class DynamicBayesianNetwork(DAG):
                     return_factors.append(factor)
             return return_factors
 
-    def get_evidence_factors(self, node):
-        # TODO (isalju) add description
-        if node not in super(DynamicBayesianNetwork, self).nodes():
-                raise ValueError("Node not present in the model.")
-
-        for factor in self.factors:
-            return_factors = []
-            if node in set(factor.get_evidence()):
-                return_factors.append(factor)
-            return return_factors
-
     def remove_factors(self, factors):
         """
         Removes the factors that are provided in the argument.
@@ -484,8 +473,6 @@ class DynamicBayesianNetwork(DAG):
         """
         for factor in factors:
             if factor in self.factors:
-            # if isinstance(factor, (tuple, list)):
-            #     factor = self.get_factors(factor)
                 self.factors.remove(factor)
 
     def check_model(self):
@@ -704,7 +691,11 @@ class DynamicBayesianNetwork(DAG):
         return dbn
 
     def generate_system_graphs(self):
+        """
+        Breaks up each of the systems present in an fHMM graphical model
+        and returns a list of HMM-like models.
 
+        """
         systems = set([node[0] for node in self.get_latent_nodes()])
         system_graphs = [self.copy() for system in systems]
         latent_nodes = self.get_latent_nodes()
