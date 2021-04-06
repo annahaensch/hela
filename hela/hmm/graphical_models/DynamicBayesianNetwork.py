@@ -456,14 +456,14 @@ class DynamicBayesianNetwork(DAG):
                 return_factors.append(factor)
             return return_factors
 
-    def remove_factors(self, *factors):
+    def remove_factors(self, factors):
         """
         Removes the factors that are provided in the argument.
 
         Parameters
         ----------
         *factors : list, set, tuple (array-like)
-            List of factos which are to be associated with the model. Each factor
+            List of factors which are to be associated with the model. Each factor
             should be an instance of `TabularCPD` or `ContinuousFactor`
 
         Examples
@@ -486,7 +486,7 @@ class DynamicBayesianNetwork(DAG):
             if factor in self.factors:
             # if isinstance(factor, (tuple, list)):
             #     factor = self.get_factors(factor)
-                self.factors.remove([factor])
+                self.factors.remove(factor)
 
     def check_model(self):
         """
@@ -703,6 +703,21 @@ class DynamicBayesianNetwork(DAG):
         dbn.add_factors(*factors_copy)
         return dbn
 
+    def generate_system_graphs(self):
+
+        systems = set([node[0] for node in self.get_latent_nodes()])
+        system_graphs = [self.copy() for system in systems]
+        latent_nodes = self.get_latent_nodes()
+
+        for i, system in enumerate(systems):
+            removable_nodes = set([node for node in latent_nodes if node[0] not in system])
+            removable_factors = [factor for factor in self.factors 
+                                 if removable_nodes.intersection(set(factor.variables)) != set()]
+            system_graphs[i].remove_factors(removable_factors)
+            system_graphs[i].remove_nodes_from(removable_nodes)
+            
+        return system_graphs
+
 
 def hmm_model_to_graph(model):
     """
@@ -913,3 +928,6 @@ def fhmm_model_to_graph(model):
 
     graph.add_factors(*factors)
     return graph
+
+
+
