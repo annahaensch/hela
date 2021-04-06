@@ -33,7 +33,7 @@ $X$, the probability distributions from which they are drawn with calligraphy
 letters like $\mathcal X$ and specific values with lower case Latin letters like $x$.  Suppose we have a sequence of observations, 
 \[
 X_{1:T} := X_1,...,X_T
-\]
+	\]I'm 
 where at each time $t$, the observation $X_t$ can be decomposed into its 
 categorical and continuous components, that is 
 \begin{eqnarray}\label{eqn:decomposition}
@@ -382,7 +382,7 @@ The sampling This process is described in its totality in Algorithm \ref{alg:gib
   \end{algorithmic}
 \end{algorithm}
 
-\subsubsection{Learning with Gibbs Sampling}
+\subsubsection{Learning with Gibbs Sampling}\label{sec:learningGibbs}
 The problem of learning with fHMMs involves finding the set of model parameters, $\Theta$, that optimize the observed data log likelihood, 
 \begin{eqnarray*}
 \mathcal L(\Theta;X_{1:T}) = \log p(X_{1:T}\mid \Theta).
@@ -938,16 +938,12 @@ W & \sim & \left[{\tt sum_t\,\, V_t *diag\,\Gamma[t]}\right] *
 \end{eqnarray}
 where ${\tt @}$ denotes matrix multiplication and  
 ${\tt \Lambda[t]}$ and $\dagger$ denotes the Moore-Penrose 
-pseudoinverse.\footnote{\textcolor{red}{I'm not sure of the best way to 
-compute this Moore-Penrose pseudoinverse, I think there might be the need to pull in some external 
-library capabilities here}}
+pseudoinverse.
 
 
 To approximate $\langle Z_{t-1}^{(m)}Z_{t}^{(m)^\intercal}\rangle$ we 
 will begin with an ${\tt M\times (T-1) \times N\times N}$ array of zeros which we 
-will call ${\tt \Xi}$\footnote{\textcolor{red}{This is just a capital 
-``Xi."  It's a bit silly for pseudocode, but my goal was to stick as 
-closely as possible to the ``typical" hmm notation}}.  Again, as we traverse 
+will call ${\tt \Xi}$.  Again, as we traverse 
 the full range of observations Markov systems we will gather transition statistics.  
 Specifically, at any time, ${\tt t>0}$, and Markov system, ${\tt m}$, 
 the entry in row ${\tt z_{t-1}^{(m)}}$ and column ${\tt z_t^{(m)}}$ 
@@ -1055,10 +1051,10 @@ obtain a lower bound on the posterior distribution. There are many ways
 that we could define $q$, but we employ a method of structured 
 variational inference that retains some of the strucure of the full 
 fHMM.  In particular, we will choose $q$ as 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:11a}
 q(Z_{1:T}\mid \Phi) &=& \frac{1}{\kappa_q}\prod_{m=1}^M q(Z_1^{(m)}\mid 
 \Phi)\prod_{t=2}^T q(Z_t^{(m)}\mid Z_{t-1}^{(m)}, \Phi),
-\end{eqnarray*}
+\end{eqnarray}
 where $\kappa_q$ is just a normalization constant. Furthermore, we will 
 define 
 \begin{eqnarray}\label{eqn:11b}
@@ -1067,9 +1063,9 @@ q(Z_1^{(m)}\mid \Phi) &=&
 \end{eqnarray}
 and 
 \begin{eqnarray}\label{eqn:11c}
-q(Z_t^{(m)}\mid Z_{t-1}^{(m)}\Phi) = 
+q(Z_t^{(m)}\mid Z_{t-1}^{(m)},\Phi) = 
 \prod_{n=1}^N\left(\lambda_{1,n}^{(m)}\prod_{\ell=1}^N 
-\left(a_{n,\ell}^{(m)}\right)^{Z_{t-1,\ell}^{(m)}}\right)^{Z_{1,n}^{(m)}}.
+\left(a_{n,\ell}^{(m)}\right)^{Z_{t-1,\ell}^{(m)}}\right)^{Z_{t,n}^{(m)}}.
 \end{eqnarray}
 In this case the variational paramters are given by 
 \[
@@ -1110,11 +1106,11 @@ emission probabilties, $p(X_t\mid Z_t, \Theta)$, that is,
 $\lambda_t^{(m)}$ is meant to approximate the probability of a given 
 emission at time $t$, given the setting of the $n^\text{th}$ component 
 of the $m^\text{th}$ Markov system.  This variational parameter, 
-$\lambda_t^{(m)}$ is what will eventualky be modified to bring the two 
+$\lambda_t^{(m)}$ is what will eventualy be modified to bring the two 
 distributions closer together, in other words, the paramter $h_t^{(m)}$ 
 will be optimized to minimize the KL divergence, 
 \begin{eqnarray*}
-KL(q||p) = \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})}{p(Z_{1:T}\mid 
+KL:=KL(q||p) = \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})}{p(Z_{1:T}\mid 
 X_{1:T})}\right].
 \end{eqnarray*} 
 In what follows we will discribe this optimization 
@@ -1122,8 +1118,68 @@ process.\footnote{\textcolor{red}{I will describe it, I just haven't
 yet :)  But from this analysis above, I think we should be able to 
 bundle the continuous and categorical emission probabilties into 
 $\lambda_t$ in some kind of clever way.  I'll think on that more 
-tomorrow.}}
-  
+tomorrow.}}  
+
+The KL divergence can be rewritten as 
+\begin{eqnarray*}
+KL& = & \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})\cdot p( 
+X_{1:T})}{p(Z_{1:T},X_{1:T})}\right]\\
+& = & \sum_{Z_{1:T}}q(Z_{1:T})\left[\log q(Z_{1:T}) + \log p( 
+X_{1:T}) - \log p(Z_{1:T},X_{1:T})\right].
+\end{eqnarray*}
+The eventual goal will be to maximize the KL divergence with respect to 
+the $\lambda_t^{(m)}$, and this will be accomplished by taking the 
+derivative of the KL divergence with respect to the $\lambda_t^{(m)}$ 
+and setting the result equal to 0.  Therefore, in what follows, any 
+summands not containing a $\lambda_t^{(m)}$ term can be treated as part 
+of a constant term, which we will denote $\kappa$. Hence,  
+\begin{eqnarray*}
+KL 
+& = & \sum_{Z_{1:T}}q(Z_{1:T})\cdot\log q(Z_{1:T}) - 
+\sum_{Z_{1:T}}q(Z_{1:T})\cdot \log 
+p(Z_{1:T},X_{1:T}) + \kappa.
+\end{eqnarray*}
+Rewriting equation (\ref{eqn:11a}) and combining it with equations 
+(\ref{eqn:11b}) 
+and (\ref{eqn:11c}), we obtain
+\begin{eqnarray*}\label{eqn:11a}
+\log q(Z_{1:T}) &=& \sum_{m=1}^M \log q(Z_1^{(m)}) + \sum_{t=2}^T \log q(Z_t^{(m)}\mid Z_{t-1}^{(m)}) - 
+\log(\kappa_q)\\
+& = & \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \lambda_{1}^{(m)} 
++ \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \pi^{(m)} +...\\ 
+& &... + \sum_{t=2}^T \sum_{m=1}^M\sum_{n=1}^N Z_{t,n}^{(m)}\left(\log 
+\lambda_{1,n}^{(m)} + \sum_{\ell=1}^N {Z_{t-1,\ell}^{(m)}} \log
+a_{n,\ell}^{(m)}\right)- 
+\log(\kappa_q)\\
+& = & \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \lambda_{1}^{(m)} 
++ \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \pi^{(m)} +...\\ 
+& &... + \sum_{t=2}^T \sum_{m=1}^MZ_{t}^{(m)^\intercal}\log 
+\lambda_{1}^{(m)} + \sum_{t=2}^T \sum_{m=1}^M Z_{t-1,\ell}^{(m)^\intercal} \log
+a_{n,\ell}^{(m)}Z_{t}^{(m)}- 
+\log(\kappa_q)\\
+& = & \sum_{t=1}^T\sum_{m=1}^M Z_{t}^{(m)^\intercal}\log \lambda_{1}^{(m)} 
++ \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \pi^{(m)} +...\\ 
+& &... + \sum_{t=2}^T \sum_{m=1}^M Z_{t-1,\ell}^{(m)^\intercal} \log
+a_{n,\ell}^{(m)}Z_{t}^{(m)}- 
+\log(\kappa_q).
+\end{eqnarray*}
+In what follows we will define the bracket notation, $\langle \cdot 
+\rangle^q$ analogously to the bracket notation in section 
+\ref{sec:learningGibbs}, 
+except using the variational distribution for the underlying 
+probability.  Multiplying by $q(Z_{1:T})$ and marginalizing over $Z_{1:T}$ we obtain
+\begin{eqnarray*}
+\sum_{Z_{1:T}}q(Z_{1:T})\log q(Z_{1:T})& = & \sum_{t=1}^T\sum_{m=1}^M 
+\langle Z_t^{(m)}\rangle^q\cdot \log \lambda_{1}^{(m)} 
++ \sum_{m=1}^M \langle Z_1^{(m)}\rangle^q\cdot\log \pi^{(m)} +...\\ 
+& &... + \sum_{t=2}^T \sum_{m=1}^M \langle 
+Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle^q\log
+a_{n,\ell}^{(m)}- 
+\log(\kappa_q).
+\end{eqnarray*} 
+On the other hand, from equation (\ref{eqn:1}) we obtain 
+\begin{eqnarray*}
+\end{eqnarray*}
 
 \bibliographystyle{siam}
 \bibliography{references}
