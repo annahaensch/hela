@@ -1,5 +1,7 @@
 from collections import defaultdict
 from itertools import tee, chain, combinations
+import numpy as np
+import pandas as pd
 
 from pgmpy.factors.discrete import DiscreteFactor
 from pgmpy.models import BayesianModel
@@ -63,7 +65,6 @@ class DBNInference(Inference):
 
         self.cardinality = {}
         self.factors = defaultdict(list)
-        # TODO Here
 
         self.start_bayesian_model = BayesianModel(model.get_intra_edges(0))
         flattened_factors_0 = [cpd[0] for cpd in model.get_factors(time_slice=0)]
@@ -78,7 +79,6 @@ class DBNInference(Inference):
             *(flattened_factors_1 + cpd_inter)
         )
 
-        # TODO _____________________
         start_markov_model = self.start_bayesian_model.to_markov_model()
         one_and_half_markov_model = self.one_and_half_model.to_markov_model()
 
@@ -96,10 +96,13 @@ class DBNInference(Inference):
         self.start_interface_clique = self._get_clique(
             self.start_junction_tree, self.interface_nodes_0
         )
+
+        # The clique where nodes in clique are in different timeslices
         self.in_clique = self._get_clique(
             self.one_and_half_junction_tree, self.interface_nodes_0
         )
 
+        # The clique where the nodes in the clique are in the same timeslice
         self.out_clique = [clique for clique in self.one_and_half_junction_tree.nodes()
                            if set(self.interface_nodes_1).issubset(clique) 
                            and clique[0][1] == clique[1][1]][0]
@@ -468,3 +471,37 @@ class DBNInference(Inference):
         """
         if args == "exact":
             return self.backward_inference(variables, evidence)
+
+    def forward_backward(self, data):
+        """
+        Return probability resulting from forward-backward
+        pass using belief propogation in the graphical model.
+        ----------
+        data: Dataframe of categorical observations.
+        --------
+        """
+        categorical_dict = {
+            str(list(np.unique(data.values, axis=0)[i])): i
+            for i in range(len(np.unique(data.values, axis=0)))
+        }
+        # Flattens categorical data to correspond 
+        # to singular categorical observation node
+        flattened_data = pd.Series(
+                [categorical_dict[str(list(v))] for v in np.array(data)],
+                index=data.index)
+
+        system = self.model.get_latent_nodes()[0][0]
+        observation_node = self.model.get_observable_nodes()[0][0]
+        ev_keys = [(observation_node, i) for i in range(len(data))]
+        ev_dict = dict(zip(ev_keys, flattened_data.values[:len(data)]))
+        variables = [(system, i) for i in range(1,len(data))]
+        self.model.initialize_initial_state()
+
+        forward = self.forward_inference(variables, ev_dict)
+        backward = self.backward_inference(variables, ev_dict)
+        
+        probability = [(forward[key]*backward[key]).values for key in forward]
+        normalized_probability = np.divide(np.array(probability), 
+                                           np.sum(np.array(probability), axis=1).reshape(-1, 1))
+        
+        return normalized_probability
