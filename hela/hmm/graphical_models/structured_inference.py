@@ -505,3 +505,4 @@ class DBNInference(Inference):
                                            np.sum(np.array(probability), axis=1).reshape(-1, 1))
         
         return normalized_probability
+        
