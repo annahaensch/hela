@@ -63,6 +63,7 @@ class DBNInference(Inference):
 
         self.cardinality = {}
         self.factors = defaultdict(list)
+        # TODO Here
 
         self.start_bayesian_model = BayesianModel(model.get_intra_edges(0))
         flattened_factors_0 = [cpd[0] for cpd in model.get_factors(time_slice=0)]
@@ -76,6 +77,8 @@ class DBNInference(Inference):
         self.one_and_half_model.add_cpds(
             *(flattened_factors_1 + cpd_inter)
         )
+
+        # TODO _____________________
         start_markov_model = self.start_bayesian_model.to_markov_model()
         one_and_half_markov_model = self.one_and_half_model.to_markov_model()
 
@@ -96,9 +99,13 @@ class DBNInference(Inference):
         self.in_clique = self._get_clique(
             self.one_and_half_junction_tree, self.interface_nodes_0
         )
-        self.out_clique = self._get_clique(
-            self.one_and_half_junction_tree, self.interface_nodes_1
-        )
+
+        self.out_clique = [clique for clique in self.one_and_half_junction_tree.nodes()
+                           if set(self.interface_nodes_1).issubset(clique) 
+                           and clique[0][1] == clique[1][1]][0]
+        # self.out_clique = self._get_clique(
+        #     self.one_and_half_junction_tree, self.interface_nodes_1
+        # )
 
     def _shift_nodes(self, nodes, time_slice):
         """
