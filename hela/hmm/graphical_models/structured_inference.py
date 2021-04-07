@@ -103,9 +103,7 @@ class DBNInference(Inference):
         self.out_clique = [clique for clique in self.one_and_half_junction_tree.nodes()
                            if set(self.interface_nodes_1).issubset(clique) 
                            and clique[0][1] == clique[1][1]][0]
-        # self.out_clique = self._get_clique(
-        #     self.one_and_half_junction_tree, self.interface_nodes_1
-        # )
+
 
     def _shift_nodes(self, nodes, time_slice):
         """
