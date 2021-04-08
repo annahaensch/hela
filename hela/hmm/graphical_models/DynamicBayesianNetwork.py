@@ -702,9 +702,9 @@ class DynamicBayesianNetwork(DAG):
 
         for i, system in enumerate(systems):
             removable_nodes = set([node for node in latent_nodes if node[0] not in system])
-            removable_factors = [factor for factor in self.factors 
-                                 if removable_nodes.intersection(set(factor.variables)) != set()]
-            system_graphs[i].remove_factors(removable_factors)
+            removable_factors = set([factor for factor in self.factors 
+                                 if removable_nodes.intersection(set(factor.variables)) != set()])
+            system_graphs[i].factors = [factor for factor in self.factors if factor not in removable_factors]
             system_graphs[i].remove_nodes_from(removable_nodes)
             
         return system_graphs
