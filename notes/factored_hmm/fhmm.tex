@@ -900,15 +900,15 @@ number of iterations, at which point we have
 where each block above has dimenion $N\times N$, and the blocks along 
 the diagonal are themselves diagonal matrices, with
 \[
-{\tt diag}\langle Z_{t}^{(m)}Z_{t}^{(m)^\intercal}\rangle = \langle Z_{t}^{(m)}\rangle 
+\Delta\langle Z_{t}^{(m)}Z_{t}^{(m)^\intercal}\rangle = \langle Z_{t}^{(m)}\rangle 
 \]
-for each $m$, where ${\tt diag}$ denotes the diagonal of a matrix.  
+for each $m$, where $\Delta$ denotes the diagonal of a matrix.  
 
 With this, the update equation for $\pi_n^{(m)}$ given by 
 equation (\ref{eqn:updateinitial}) can be closely approximated as 
 \begin{eqnarray}\label{eqn:updateinitialapprox}
 \pi_n^{(m)} \sim\frac{{\tt \Gamma[1][m][m][n][n]}}{{\tt sum 
-\,\,diag\,\Gamma[1][m][m]}}.
+\,\,\Delta\,\Gamma[1][m][m]}}.
 \end{eqnarray} 
 Similarly, update equation 
 (\ref{eqn:updatecovariance}) from Lemma \ref{lemma:emission} can be approximated by 
@@ -922,7 +922,7 @@ Similarly, update equation
 {\tt\frac{1}{T}}
 {\tt sum_{t,m} }
 \left[
-{\tt W[m] *diag\,\Gamma[t][m][m]*trans V_T}
+{\tt W[m] *\Delta\,\Gamma[t][m][m]*trans V_T}
 \right],
 \end{eqnarray}
 where ${\tt trans}$ denotes the transpose of an array.  For the next 
@@ -933,13 +933,48 @@ The update equation (\ref{eqn:updatemeans}) from Lemma
 \ref{lemma:emission} can then be 
 approximated by 
 \begin{eqnarray}\label{eqn:updatemeansapprox}
-W & \sim & \left[{\tt sum_t\,\, V_t *diag\,\Gamma[t]}\right] * 
+W & \sim & \left[{\tt sum_t\,\, V_t *\Delta\,\Gamma[t]}\right] * 
 \left[{\tt sum_t\,\,\Gamma\Gamma[t]@trans\,\Gamma\Gamma[t]}\right]^\dagger
 \end{eqnarray}
 where ${\tt @}$ denotes matrix multiplication and  
 ${\tt \Lambda[t]}$ and $\dagger$ denotes the Moore-Penrose 
 pseudoinverse.
 
+\begin{algorithm}
+  \caption{Gibbs Approximate EM Algorithm\label{alg:gibbs_learning}}
+  \begin{algorithmic}[1]
+    \Function{GibbsEM}{model $\Theta$; data $x_{1:T}$; hidden 
+    state space $\mathcal Z$; iterations ${\tt R}$}
+    \State ${\tt \Gamma}\leftarrow$ {\tt np.zeros((T,M,N,N))}
+    \State ${\tt \Xi}\leftarrow$ {\tt np.zeros((M,T-1,N,N))}
+    \State ${\tt \Lambda}\leftarrow$ {\tt np.zeros((T,M**N))}
+    \State $\tt{z} \leftarrow$ {\sc Gibbs}($\Theta$;$x_{1:T}$;$\mathcal 
+		Z$;100) \Comment{initial burn down period}
+    \State ${\tt r}\leftarrow 0$
+	\While{${\tt r}<R$}
+      \For{all ${\tt t}$ in {\tt range(T)} chosen uniformly at random} 
+		\State increment ${\tt\Lambda[t][z_t]}$ by 1
+        \For{all {\tt m} in {\tt range(M)} chosen uniformly at random}
+			\If{${\tt t < T-1}$}
+				\State increment ${\tt \Xi[m][t][z_t^{(m)}][z_{t+1}^{(m)}]}$ by 1
+			\EndIf
+			\For{all ${\tt m'}$ in ${\tt range(m+1)}$}
+				\State increment ${\tt 
+				\Gamma[t][m][m'][z_t^{(m)}][z_{t}^{(m')}]}$ by 1
+			\EndFor
+			\State Carry out steps 6-9 of Algorithm \ref{alg:gibbs}
+		\EndFor
+      \EndFor
+      \State ${\tt r}\leftarrow {\tt r+1}$
+      \EndWhile
+      \State $({\tt \Gamma,\Xi,\Lambda})\leftarrow \frac{1}{R}({\tt 
+      \Gamma,\Xi,\Lambda})$
+      \State Update $\Theta$ according to equations 
+      (\ref{eqn:updateinitialapprox})-(\ref{eqn:updatecatapprox})
+      \State\Return ${\tt z},\Theta$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
 
 To approximate $\langle Z_{t-1}^{(m)}Z_{t}^{(m)^\intercal}\rangle$ we 
 will begin with an ${\tt M\times (T-1) \times N\times N}$ array of zeros which we 
@@ -997,48 +1032,12 @@ sum_d\,sum_{Y_t = d}\,\Lambda[t][i]}}.
 Of course all of the computations mentioned above can be made 
 significantly more efficient through simple vectorization. 
 
-\begin{algorithm}
-  \caption{Gibbs Approximate EM Algorithm\label{alg:gibbs_learning}}
-  \begin{algorithmic}[1]
-    \Function{GibbsEM}{model $\Theta$; data $x_{1:T}$; hidden 
-    state space $\mathcal Z$; iterations ${\tt R}$}
-    \State ${\tt \Gamma}\leftarrow$ {\tt np.zeros((T,M,N,N))}
-    \State ${\tt \Xi}\leftarrow$ {\tt np.zeros((M,T-1,N,N))}
-    \State ${\tt \Lambda}\leftarrow$ {\tt np.zeros((T,M**N))}
-    \State $\tt{z} \leftarrow$ {\sc Gibbs}($\Theta$;$x_{1:T}$;$\mathcal 
-		Z$;100) \Comment{initial burn down period}
-    \State ${\tt r}\leftarrow 0$
-	\While{${\tt r}<R$}
-      \For{all ${\tt t}$ in {\tt range(T)} chosen uniformly at random} 
-		\State increment ${\tt\Lambda[t][z_t]}$ by 1
-        \For{all {\tt m} in {\tt range(M)} chosen uniformly at random}
-			\If{${\tt t < T-1}$}
-				\State increment ${\tt \Xi[m][t][z_t^{(m)}][z_{t+1}^{(m)}]}$ by 1
-			\EndIf
-			\For{all ${\tt m'}$ in ${\tt range(m+1)}$}
-				\State increment ${\tt 
-				\Gamma[t][m][m'][z_t^{(m)}][z_{t}^{(m')}]}$ by 1
-			\EndFor
-			\State Carry out steps 6-9 of Algorithm \ref{alg:gibbs}
-		\EndFor
-      \EndFor
-      \State ${\tt r}\leftarrow {\tt r+1}$
-      \EndWhile
-      \State $({\tt \Gamma,\Xi,\Lambda})\leftarrow \frac{1}{R}({\tt 
-      \Gamma,\Xi,\Lambda})$
-      \State Update $\Theta$ according to equations 
-      (\ref{eqn:updateinitialapprox})-(\ref{eqn:updatecatapprox})
-      \State\Return ${\tt z},\Theta$
-    \EndFunction
-  \end{algorithmic}
-\end{algorithm}
-
 \subsection{Structured Variational Inference}
 
 Since computing the true log likelihood, $\mathcal L (\Theta; X_{1:T})$, 
 in the case of fHMMs is typically intractible, another reasonable approach is to approximate 
 the true posterior distribution, $p(X_{1:T}\mid \Theta)$, by a 
-simpler distribution, $q$, a method called variational inference. For 
+simpler distribution, a method called {\em variational inference}. For 
 any distribution, $q$, it is necessarily the case that 
 \begin{eqnarray*}
 p(X_{1:T}) & =& 
@@ -1046,7 +1045,7 @@ p(X_{1:T}) & =&
 &\geq& 
 \sum_{Z_{1:T}}q(Z_{1:T})\log \left[\frac{p(Z_{1:T},X_{1:T})}{q(Z_{1:T})}\right]
 \end{eqnarray*} 
-where the inequality follows from Jensen's inequality and in this way, we 
+where the inequality follows from Jensen's inequality.  In this way, we 
 obtain a lower bound on the posterior distribution. There are many ways 
 that we could define $q$, but we employ a method of structured 
 variational inference that retains some of the strucure of the full 
@@ -1055,7 +1054,11 @@ fHMM.  In particular, we will choose $q$ as
 q(Z_{1:T}\mid \Phi) &=& \frac{1}{\kappa_q}\prod_{m=1}^M q(Z_1^{(m)}\mid 
 \Phi)\prod_{t=2}^T q(Z_t^{(m)}\mid Z_{t-1}^{(m)}, \Phi),
 \end{eqnarray}
-where $\kappa_q$ is just a normalization constant. Furthermore, we will 
+where $\kappa_q$ is just a normalization constant and $\Phi$ is a set 
+of {\em variational parameters}. Recall from previous discussion, that 
+for any time $t$, the hidden state vector $Z_t^{(m)}$ is given by a 
+$N\times 1$ vector which is equal to 0 in all but one component, and 
+$\pi^{(m)}$ is a $1\times N$ vector. Therefore, we  
 define 
 \begin{eqnarray}\label{eqn:11b}
 q(Z_1^{(m)}\mid \Phi) &=& 
@@ -1064,21 +1067,16 @@ q(Z_1^{(m)}\mid \Phi) &=&
 and 
 \begin{eqnarray}\label{eqn:11c}
 q(Z_t^{(m)}\mid Z_{t-1}^{(m)},\Phi) = 
-\prod_{n=1}^N\left(\lambda_{1,n}^{(m)}\prod_{\ell=1}^N 
+\prod_{n=1}^N\left(\lambda_{t,n}^{(m)}\prod_{\ell=1}^N 
 \left(a_{n,\ell}^{(m)}\right)^{Z_{t-1,\ell}^{(m)}}\right)^{Z_{t,n}^{(m)}}.
 \end{eqnarray}
 In this case the variational paramters are given by 
 \[
-\Phi = \{\pi^{(m)}, P^{(m)}, \lambda_t^{(m)}\},
+\Phi = \{\pi^{(m)}, a^{(m)}, \lambda_t^{(m)}\},
 \]
 where $\pi$ and $a$ are the initial and transition probabilities as, 
 respectively, as defined in section \ref{sect:fhmm}.  To better 
-understand the role of $\lambda_t^{(m)}$ we will first recall that 
-$Z_t^{(m)}$ is an $N\times 1$ vector, which is 0 in all but one entry, 
-so in particular, for any choice of $Z_t^{(m)}$ the inner term of the 
-product in equations (\ref{eqn:11b}) and (\ref{eqn:11c}) 
-are equal to 1 for all but one choice of $n$.   
-Therefore, the probability of the random 
+understand the role of the $1\times N$ vector $\lambda_t^{(m)}$, we observe that the probability of the random 
 variable $Z_{t,n}^{(m)}$ being equal to 1, under the variational
 distribution $q$, would be given by,
 \begin{eqnarray*}
@@ -1106,80 +1104,220 @@ emission probabilties, $p(X_t\mid Z_t, \Theta)$, that is,
 $\lambda_t^{(m)}$ is meant to approximate the probability of a given 
 emission at time $t$, given the setting of the $n^\text{th}$ component 
 of the $m^\text{th}$ Markov system.  This variational parameter, 
-$\lambda_t^{(m)}$ is what will eventualy be modified to bring the two 
-distributions closer together, in other words, the paramter $h_t^{(m)}$ 
+$\lambda_t^{(m)}$ is what will eventually be modified to bring the two 
+distributions closer together.  In other words, the parameter $\lambda_t^{(m)}$ 
 will be optimized to minimize the KL divergence, 
 \begin{eqnarray*}
-KL:=KL(q||p) = \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})}{p(Z_{1:T}\mid 
-X_{1:T})}\right].
-\end{eqnarray*} 
-In what follows we will discribe this optimization 
-process.\footnote{\textcolor{red}{I will describe it, I just haven't 
-yet :)  But from this analysis above, I think we should be able to 
-bundle the continuous and categorical emission probabilties into 
-$\lambda_t$ in some kind of clever way.  I'll think on that more 
-tomorrow.}}  
-
-The KL divergence can be rewritten as 
-\begin{eqnarray*}
-KL& = & \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})\cdot p( 
-X_{1:T})}{p(Z_{1:T},X_{1:T})}\right]\\
+KL&:=&KL(q||p)\\
+ &=& \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{q(Z_{1:T})}{p(Z_{1:T}\mid 
+X_{1:T})}\right]\\
 & = & \sum_{Z_{1:T}}q(Z_{1:T})\left[\log q(Z_{1:T}) + \log p( 
-X_{1:T}) - \log p(Z_{1:T},X_{1:T})\right].
-\end{eqnarray*}
-The eventual goal will be to maximize the KL divergence with respect to 
-the $\lambda_t^{(m)}$, and this will be accomplished by taking the 
-derivative of the KL divergence with respect to the $\lambda_t^{(m)}$ 
-and setting the result equal to 0.  Therefore, in what follows, any 
-summands not containing a $\lambda_t^{(m)}$ term can be treated as part 
-of a constant term, which we will denote $\kappa$. Hence,  
-\begin{eqnarray*}
-KL 
-& = & \sum_{Z_{1:T}}q(Z_{1:T})\cdot\log q(Z_{1:T}) - 
-\sum_{Z_{1:T}}q(Z_{1:T})\cdot \log 
-p(Z_{1:T},X_{1:T}) + \kappa.
-\end{eqnarray*}
-Rewriting equation (\ref{eqn:11a}) and combining it with equations 
-(\ref{eqn:11b}) 
-and (\ref{eqn:11c}), we obtain
-\begin{eqnarray*}\label{eqn:11a}
-\log q(Z_{1:T}) &=& \sum_{m=1}^M \log q(Z_1^{(m)}) + \sum_{t=2}^T \log q(Z_t^{(m)}\mid Z_{t-1}^{(m)}) - 
-\log(\kappa_q)\\
-& = & \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \lambda_{1}^{(m)} 
-+ \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \pi^{(m)} +...\\ 
-& &... + \sum_{t=2}^T \sum_{m=1}^M\sum_{n=1}^N Z_{t,n}^{(m)}\left(\log 
-\lambda_{1,n}^{(m)} + \sum_{\ell=1}^N {Z_{t-1,\ell}^{(m)}} \log
-a_{n,\ell}^{(m)}\right)- 
-\log(\kappa_q)\\
-& = & \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \lambda_{1}^{(m)} 
-+ \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \pi^{(m)} +...\\ 
-& &... + \sum_{t=2}^T \sum_{m=1}^MZ_{t}^{(m)^\intercal}\log 
-\lambda_{1}^{(m)} + \sum_{t=2}^T \sum_{m=1}^M Z_{t-1,\ell}^{(m)^\intercal} \log
-a_{n,\ell}^{(m)}Z_{t}^{(m)}- 
-\log(\kappa_q)\\
-& = & \sum_{t=1}^T\sum_{m=1}^M Z_{t}^{(m)^\intercal}\log \lambda_{1}^{(m)} 
-+ \sum_{m=1}^M Z_{1}^{(m)^\intercal}\log \pi^{(m)} +...\\ 
-& &... + \sum_{t=2}^T \sum_{m=1}^M Z_{t-1,\ell}^{(m)^\intercal} \log
-a_{n,\ell}^{(m)}Z_{t}^{(m)}- 
-\log(\kappa_q).
-\end{eqnarray*}
-In what follows we will define the bracket notation, $\langle \cdot 
-\rangle^q$ analogously to the bracket notation in section 
-\ref{sec:learningGibbs}, 
-except using the variational distribution for the underlying 
-probability.  Multiplying by $q(Z_{1:T})$ and marginalizing over $Z_{1:T}$ we obtain
-\begin{eqnarray*}
-\sum_{Z_{1:T}}q(Z_{1:T})\log q(Z_{1:T})& = & \sum_{t=1}^T\sum_{m=1}^M 
-\langle Z_t^{(m)}\rangle^q\cdot \log \lambda_{1}^{(m)} 
-+ \sum_{m=1}^M \langle Z_1^{(m)}\rangle^q\cdot\log \pi^{(m)} +...\\ 
-& &... + \sum_{t=2}^T \sum_{m=1}^M \langle 
-Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle^q\log
-a_{n,\ell}^{(m)}- 
-\log(\kappa_q).
+X_{1:T}) - \log p(Z_{1:T},X_{1:T})\right]\\
+& = & \sum_{Z_{1:T}}q(Z_{1:T})\log q(Z_{1:T}) - 
+\sum_{Z_{1:T}}q(Z_{1:T})\log p(Z_{1:T},X_{1:T}) + \log p( 
+X_{1:T}) 
 \end{eqnarray*} 
-On the other hand, from equation (\ref{eqn:1}) we obtain 
+Let's simplify this expression term by term. For simplicity, we will define the $N\times 1$ vector $\langle 
+Z_t^{(m)}\rangle$ where the $n^\text{th}$ component is given by 
 \begin{eqnarray*}
+\langle Z_t^{(m)}\rangle_n := q(Z_{t,n}^{(m)} = 1),
 \end{eqnarray*}
+the $N\times N$ array, $\langle 
+Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle$,
+defined as  
+\begin{eqnarray*}
+\langle Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle :=\langle Z_{t-1}^{(m)}\rangle\cdot\langle Z_t^{(m)^\intercal}\rangle 
+\end{eqnarray*}
+and the $N\times N$ array, $\langle 
+Z_{t}^{(m)}Z_t^{(m')^\intercal}\rangle$,
+defined as
+\begin{eqnarray*}
+\langle Z_{t}^{(m)}Z_t^{(m')^\intercal}\rangle := \begin{cases}
+\langle Z_t^{(m)}\rangle\cdot\langle Z_t^{(m')^\intercal}\rangle & \text{ 
+if }m\neq m'\\
+diag\{\langle Z_t^{(m)}\rangle\} & \text{ if }m=m',
+\end{cases}
+\end{eqnarray*}
+where $diag\{\langle Z_t^{(m)}\rangle\}$ dentoes the square matrix with 
+the entries of $\langle Z_t^{(m)}\rangle$ on the diagonal.
+Beginning with the first term on the right hand side of $KL$ above, substituting equations 
+(\ref{eqn:11a})-(\ref{eqn:11c}) into this 
+expression (and dropping $\Theta$ and $\Phi$ where it is clear from 
+context), we obtain 
+\begin{eqnarray*}
+\sum_{Z_{1:T}}q(Z_{1:T})\log q(Z_{1:T}) 
+& = & \sum_{Z_{1:T}}q(Z_{1:T})\log\left[\frac{1}{\kappa_q}\prod_{m=1}^M 
+q(Z_1^{(m)}) \prod_{t=2}^T q(Z_t^{(m)}\mid Z_{t-1}^{(m)})\right]\\
+& = & - \log(\kappa_q)+\sum_{Z_{1:T}}\sum_{m=1}^M\log q(Z_1^{(m)})q(Z_{1:T}) + ...\\
+&& \hspace{1cm}...+\sum_{Z_{1:T}}\sum_{t=2}^T\sum_{m=1}^M \log q(Z_t^{(m)}\mid Z_{t-1}^{(m)})q(Z_{1:T})
+\\
+& = & - \log(\kappa_q)+
+\sum_{m=1}^M\log 
+\pi^{(m)}\cdot \langle Z_1^{(m)}\rangle + \sum_{t=2}^T\log A^{(m)}\cdot \langle 
+Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle+...\\
+&& \hspace{1cm}...+\sum_{t=1}^T\sum_{m=1}^M\log 
+\lambda_{t}^{(m)}\cdot \langle Z_{t}^{(m)}\rangle 
+\end{eqnarray*}
+Expanding the second term on the right hand side of the expression 
+for KL above, we obtain 
+\begin{eqnarray*}
+&&\sum_{Z_{1:T}}q(Z_{1:T})\log p(Z_{1:T},X_{1:T}) 
+\\
+& = & \sum_{Z_{1:T}}q(Z_{1:T})\left[\log p(Z_1) + \log p(X_1\mid Z_1) + 
+\sum_{t=2}^T\log p(X_t\mid Z_t)+ \log p(Z_t\mid Z_{t-1})\right]
+\\
+& = & \sum_{m=1}^M \log 
+\pi^{(m)}\cdot \langle Z_1^{(m)}\rangle 
++\sum_{t=2}^T\log A^{(m)}\cdot \langle 
+Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle +
+\sum_{Z_{1:T}}\sum_{t=1}^T\log p(X_t\mid Z_t)\cdot q(Z_t)\\
+& = & \sum_{m=1}^M \log 
+\pi^{(m)}\cdot \langle Z_1^{(m)}\rangle 
++\sum_{t=2}^T\log A^{(m)}\cdot \langle 
+Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle +\sum_{Z_{1:T}}\sum_{t=1}^T\log p(X_t\mid Z_t)\cdot q(Z_t).
+\end{eqnarray*}
+To further simplify the last term, recall that we can split our 
+observation into its $K$-dimensional continuous part, $V_t$, which is 
+drawn from a Gaussian distribution, and its 
+1-dimensional categorical part, $Y_t$, which can take on 1 of $D$ 
+possible values. In this way, we can write $X_t$ as the direct sum, 
+\[
+X_t = V_t\oplus Y_t
+\]
+and we can split the log emission probability into its continuous and 
+categorical parts as 
+\[
+\log p(X_T\mid Z_T) = \log p(V_t\mid Z_t) + \log p(Y_t\mid Z_t).
+\]
+Recalling that the continuous emission probability is given by 
+\begin{eqnarray*}
+p(V_t\mid Z_t) = \frac{\exp\left\{-\frac{1}{2}\left(V_t - 
+\sum_{m=1}^MW^{(m)}Z_t^{(m)}\right)^\intercal\cdot \Sigma^{-1}\cdot \left(V_t - 
+\sum_{m=1}^MW^{(m)}Z_t^{(m)}\right)\right\}}{\sqrt{(2\pi)^{K}\cdot 
+\mid \Sigma\mid}}
+\end{eqnarray*}
+where $\Sigma$ is the $K\times K$ convariance matrix and $W^{(m)}$ is 
+the $K\times N$ matrix indicating the contribution of each Markov 
+system and state to the Gaussian mean. 
+With this, the continuous log emission probability can be written as 
+\begin{eqnarray*}
+&&\sum_{Z_{1:T}}\sum_{t=1}^T\log p(V_t\mid Z_t)\cdot q(Z_t) \\
+& = & 
+-\frac{1}{2}\sum_{Z_{1:T}}\sum_{t=1}^T\left[V_t^\intercal\cdot \Sigma^{-1}\cdot 
+V_t - 2\sum_{m=1}^M V_t^\intercal \cdot \Sigma^{-1}\cdot 
+W^{(m)}Z_t^{(m)} \right.+...\\
+&&\hspace{1cm}...+\left.\left(\sum_{m=1}^MW^{(m)}Z_t^{(m)}\right)^\intercal\cdot 
+\Sigma^{-1}\cdot 
+\left(\sum_{m=1}^MW^{(m)}Z_t^{(m)}\right)
+\right]q(Z_t)+...\\
+&&\hspace{1cm}...+ \log \left((2\pi)^K\cdot\mid 
+\Sigma\mid\right)^{(-1/2)}\\
+& = & 
+-\frac{1}{2}\sum_{t=1}^T\left[V_t^\intercal\cdot \Sigma^{-1}\cdot 
+V_t - 2\sum_{m=1}^M V_t^\intercal \cdot \Sigma^{-1}\cdot 
+W^{(m)}\langle Z_t^{(m)} \rangle\right.+...\\
+&&\hspace{1cm}...+\left.\sum_{m=1}^M tr\left\{W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
+W^{(m)}\cdot diag\langle Z_t^{(m)}\rangle\right\}\right.+...\\
+&&\hspace{1cm}...+\left.\sum_{m=1}^M\sum_{n\neq m} 
+tr\left\{W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot W^{(n)}\cdot \langle 
+Z_t^{(n)}\rangle\cdot \langle 
+Z_t^{(m)^\intercal}\rangle\right\}\right]+...\\
+&&\hspace{1cm}...+ \log \left((2\pi)^K\cdot\mid 
+\Sigma\mid\right)^{(-1/2)},
+\end{eqnarray*}
+where $diag\{\langle Z_t^{(m)}\rangle\}$ is the $N\times N$ matrix with diagonal entries 
+given by $\langle Z_t^{(m)}\rangle$.
+
+
+For the categorical part, recall that $\log B$ is defined as the $D\times 
+N^M$ matrix where the entry in row $d$ and column $j$ is given by 
+\[
+\log b_{d}(j) = \log p(Y_t = d\mid Z_t = S_j),
+\]
+therefore, 
+\begin{eqnarray*}
+&&\sum_{Z_{1:T}}\sum_{t=1}^T\log p(Y_t\mid Z_t)\cdot q(Z_t) \\
+& = & 
+\sum_{t=1}^T\underbrace{\sum_{Z_t}\log p(Y_t\mid Z_t^1,...,Z_t^M)\cdot 
+q(Z_t)}_{\text{sums one full row of $\log B$}} \\
+& = & 
+\sum_{t=1}^T\sum_{m=1}^M\frac{1}{M}\underbrace{\sum_{n=1}^N
+\sum_{\stackrel{Z^* \text{ s.t. } }{Z_{t,n}^{(m)} =1}}\log p(Y_t\mid Z_{t,n}^{(m)} = 
+1,Z^*)}_{\text{sums one full row of $\log B$}}\cdot q(Z_{t,n}^{(m)} = 1,Z^*)\\
+& = & 
+\sum_{t=1}^T\sum_{m=1}^M\sum_{n=1}^N \frac{1}{M}\cdot q(Z_{t,n}^{(m)} = 1)\cdot
+\sum_{\stackrel{j \text{ s.t. } }{S_{j,n}^{(m)} =1}}\log b_{Y_t}(j)\\
+& = & 
+\frac{1}{M}\sum_{t=1}^T\sum_{m=1}^M\overrightarrow{b^{(m)}}\cdot \langle Z_t^{(m)}\rangle.
+\end{eqnarray*}
+where we define $\overrightarrow{b^{(m)}}$ as the $1\times N$ vector
+with the $n^\text{th}$ entry is given by
+\[
+\overrightarrow{b^{(m)}}_n := \sum_{\stackrel{j \text{ s.t. } }{S_{j,n}^{(m)} =1}}\log 
+b_{Y_t}(j)
+\]
+Combining all of the above, we arrive at an expression for KL in terms 
+of our $\Theta$ and $\Phi$ parameters, 
+\begin{eqnarray*}
+KL  & = & \sum_{t=1}^T\sum_{m=1}^M\log 
+\lambda_{t}^{(m)}\cdot \langle Z_{t}^{(m)}\rangle +...\\
+&  & \hspace{1cm}...-\frac{1}{2}\sum_{t=1}^T\left[V_t^\intercal\cdot \Sigma^{-1}\cdot 
+V_t - 2\sum_{m=1}^M V_t^\intercal \cdot \Sigma^{-1}\cdot 
+W^{(m)}\langle Z_t^{(m)} \rangle\right.+...\\
+&&\hspace{2cm}...+\left.\sum_{m=1}^M tr\left\{W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
+W^{(m)}\cdot diag\langle Z_t^{(m)}\rangle\right\}\right.+...\\
+&&\hspace{2cm}...+\left.\sum_{m=1}^M\sum_{n\neq m} 
+tr\left\{W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot W^{(n)}\cdot \langle 
+Z_t^{(n)}\rangle\cdot \langle 
+Z_t^{(m)^\intercal}\rangle\right\}\right]+...\\
+&  & 
+\hspace{1cm}...-\frac{1}{M}\sum_{t=1}^T\sum_{m=1}^M\overrightarrow{b^{(m)}}\cdot \langle Z_t^{(m)}\rangle +...\\
+&  & 
+\hspace{1cm}...+\sum_{t=1}^T\log p(X_t) + \log \left((2\pi)^K\cdot\mid 
+\Sigma\mid\right)^{(-1/2)}- \log(\kappa_q)
+\end{eqnarray*}
+Now taking the derivative of the expression with respect to $\log 
+\lambda_\tau^{(\ell)}$ we obtain
+\begin{eqnarray*}
+\frac{\partial KL}{\partial \log \lambda_\tau^{(\ell)}} &= & \langle Z_\tau^{(\ell)}\rangle +
+\sum_{t=1}^T\sum_{m=1}^M\left(\log\lambda_{t}^{(m)} -V_t^\intercal \cdot \Sigma^{-1}\cdot 
+W^{(m)}+\frac{1}{2}\triangle\right.+...\\
+&&\hspace{1cm}...+\sum_{n\neq m} 
+\left[W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot W^{(n)}\cdot \langle 
+Z_t^{(n)}\rangle\right]^\intercal-\frac{1}{M}\left.\overrightarrow{b^{(m)}}\right)\frac{\partial \langle 
+Z_t^{(m)}\rangle}{\partial \log \lambda_\tau^{(\ell)}} -...\\
+&&\hspace{1cm}... - \langle Z_\tau^{(\ell)}\rangle,
+\end{eqnarray*}
+where $\triangle$ denotes the diagonal entries of $W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
+W^{(m)}$ and we will use the fact that 
+\[
+\frac{\partial \kappa_q}{\partial \log \lambda_\tau^{(\ell)}} = 
+\langle Z_\tau^{(\ell)}\rangle,
+\]
+which is given as equation D.4 in \cite[Appendix D]{GJ95}.  Now setting 
+the coefficient in parentheses equal to 0, we can solve for 
+$\lambda_t^{(m)}$, giving 
+\begin{eqnarray*}
+\lambda_t^{(m)^\text{ new}} & = & 
+\exp\left\{\frac{1}{M}\overrightarrow{b^{(m)}}-\triangle\left\{W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
+W^{(m)}\rangle\right\} + \widetilde{V_t}^{(m)}\cdot \Sigma^{-1}\cdot 
+W^{(m)}\right\} 
+\end{eqnarray*}
+where the residual error is given by 
+\begin{eqnarray*}
+\widetilde{V_t}^{(m)} &=&V_t^\intercal - \sum_{n\neq m}\langle 
+Z_t^{(n)^\intercal}\rangle \cdot W^{(n)^\intercal}.
+\end{eqnarray*}
+In this manner we can preform repeated iterations of variational 
+inference until the variational distribution, $q$, converges to the 
+target distribution, $p$. 
+
+
+
+
+
+
+
 
 \bibliographystyle{siam}
 \bibliography{references}
