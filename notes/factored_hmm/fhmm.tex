@@ -1277,14 +1277,14 @@ Now taking the derivative of the expression with respect to $\log
 \begin{eqnarray*}
 \frac{\partial KL}{\partial \log \lambda_\tau^{(\ell)}} &= & \langle Z_\tau^{(\ell)}\rangle +
 \sum_{t=1}^T\sum_{m=1}^M\left(\log\lambda_{t}^{(m)} -V_t^\intercal \cdot \Sigma^{-1}\cdot 
-W^{(m)}+\frac{1}{2}\triangle\right.+...\\
+W^{(m)}+\frac{1}{2}\triangle^{(m)}\right.+...\\
 &&\hspace{1cm}...+\sum_{n\neq m} 
 \left[W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot W^{(n)}\cdot \langle 
 Z_t^{(n)}\rangle\right]^\intercal-\frac{1}{M}\left.\overrightarrow{b^{(m)}}\right)\frac{\partial \langle 
 Z_t^{(m)}\rangle}{\partial \log \lambda_\tau^{(\ell)}} -...\\
 &&\hspace{1cm}... - \langle Z_\tau^{(\ell)}\rangle,
 \end{eqnarray*}
-where $\triangle$ denotes the diagonal entries of $W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
+where $\triangle^{(m)}$ denotes the diagonal entries of $W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
 W^{(m)}$ and we will use the fact that 
 \[
 \frac{\partial \kappa_q}{\partial \log \lambda_\tau^{(\ell)}} = 
@@ -1295,8 +1295,7 @@ the coefficient in parentheses equal to 0, we can solve for
 $\lambda_t^{(m)}$, giving 
 \begin{eqnarray*}
 \lambda_t^{(m)^\text{ new}} & = & 
-\exp\left\{\frac{1}{M}\overrightarrow{b^{(m)}}-\triangle\left\{W^{(m)^\intercal}\cdot \Sigma^{-1}\cdot 
-W^{(m)}\rangle\right\} + \widetilde{V_t}^{(m)}\cdot \Sigma^{-1}\cdot 
+\exp\left\{\frac{1}{M}\overrightarrow{b^{(m)}}-\frac{1}{2}\triangle^{(m)} + \widetilde{V_t}^{(m)}\cdot \Sigma^{-1}\cdot 
 W^{(m)}\right\} 
 \end{eqnarray*}
 where the residual error is given by 
