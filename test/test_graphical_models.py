@@ -32,10 +32,8 @@ def generative_model():
     model = model_config.to_model()
     graph = dbn.fhmm_model_to_graph(model)
 
-    return {
-        "model": model,
-        "graph": graph
-    }
+    return {"model": model, "graph": graph}
+
 
 @pytest.fixture(scope="module")
 def generative_categorical_model():
@@ -59,11 +57,7 @@ def generative_categorical_model():
     model = model_config.to_model()
     graph = dbn.fhmm_model_to_graph(model)
 
-    return {
-        "model": model,
-        "graph": graph,
-        "dataset": dataset
-    }
+    return {"model": model, "graph": graph, "dataset": dataset}
 
 
 def test_continuous_factors(generative_model):
@@ -120,8 +114,4 @@ def test_forward_backward(generative_categorical_model):
     inference = dbn_inf.DBNInference(system_graphs[0])
     probability = inference.forward_backward(dataset)
 
-    assert probability.shape[0] == dataset.shape[0]-1
-
-
-
-
+    assert probability.shape[0] == dataset.shape[0] - 1

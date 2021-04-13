@@ -701,12 +701,18 @@ class DynamicBayesianNetwork(DAG):
         latent_nodes = self.get_latent_nodes()
 
         for i, system in enumerate(systems):
-            removable_nodes = set([node for node in latent_nodes if node[0] not in system])
-            removable_factors = set([factor for factor in self.factors 
-                                 if removable_nodes.intersection(set(factor.variables)) != set()])
-            system_graphs[i].factors = [factor for factor in self.factors if factor not in removable_factors]
+            removable_nodes = set(
+                [node for node in latent_nodes if node[0] not in system])
+            removable_factors = set([
+                factor for factor in self.factors
+                if removable_nodes.intersection(set(factor.variables)) != set()
+            ])
+            system_graphs[i].factors = [
+                factor for factor in self.factors
+                if factor not in removable_factors
+            ]
             system_graphs[i].remove_nodes_from(removable_nodes)
-            
+
         return system_graphs
 
 
@@ -919,6 +925,3 @@ def fhmm_model_to_graph(model):
 
     graph.add_factors(*factors)
     return graph
-
-
-

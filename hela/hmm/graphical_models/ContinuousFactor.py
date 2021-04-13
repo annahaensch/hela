@@ -115,4 +115,4 @@ class ContinuousFactor(BaseFactor):
         )
 
     def get_evidence(self):
-            return self.variables[:0:-1]
+        return self.variables[:0:-1]
