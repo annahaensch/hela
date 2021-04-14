@@ -113,3 +113,6 @@ class ContinuousFactor(BaseFactor):
             evidence_card,
             state_names=self.state_names.copy(),
         )
+
+    def get_evidence(self):
+        return self.variables[:0:-1]
