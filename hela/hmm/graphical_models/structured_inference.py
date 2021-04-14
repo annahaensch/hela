@@ -149,8 +149,8 @@ class DBNInference(Inference):
         evidence: dict
             a dict key, value pair as {var: state_of_var_observed}
             None if no evidence
-        time: int
-            the evidence corresponding to the time slice
+        time_slice: int
+            the time_slice corresponding to the evidence.
         shift: int
             shifting the evidence corresponding to the given time slice.
         """
@@ -183,9 +183,9 @@ class DBNInference(Inference):
         ----------
         belief_prop: Belief Propagation
             Belief Propagation which needs to be updated.
-        in_clique: clique
-            The factor which needs to be updated corresponding to the input clique.
-        out_clique_potential: factor
+        clique: clique
+            clique that has factor that needs to be updated.
+        clique_potential: factor
             Multiplying factor which will be multiplied to the factor corresponding to the clique.
         """
         old_factor = belief_prop.junction_tree.get_factors(clique)
