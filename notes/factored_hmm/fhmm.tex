@@ -14,6 +14,7 @@
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
 
+\DeclareMathOperator*{\argmax}{argmax}
 
 \newcommand{\bigzero}{\mbox{\normalfont\Large\bfseries 0}}
 
@@ -1103,8 +1104,14 @@ we see that the $\lambda_t^{(m)}$ are playing the role of the
 emission probabilties, $p(X_t\mid Z_t, \Theta)$, that is, 
 $\lambda_t^{(m)}$ is meant to approximate the probability of a given 
 emission at time $t$, given the setting of the $n^\text{th}$ component 
-of the $m^\text{th}$ Markov system.  This variational parameter, 
-$\lambda_t^{(m)}$ is what will eventually be modified to bring the two 
+of the $m^\text{th}$ Markov system.  In fact, the $\lambda_t^{(m)}$ can 
+be thought of as emission probabilities for a fictitious set of 
+observations. 
+
+\subsubsection{Optimizaing the variational parameters}
+
+By performing a method of gradient descient, the variational paramters,
+$\lambda_t^{(m)}$, can be optimized to bring the two 
 distributions closer together.  In other words, the parameter $\lambda_t^{(m)}$ 
 will be optimized to minimize the KL divergence, 
 \begin{eqnarray*}
@@ -1307,8 +1314,161 @@ In this manner we can preform repeated iterations of variational
 inference until the variational distribution, $q$, converges to the 
 target distribution, $p$. 
 
+Now it only remains to compute the $\langle Z_t^{(m)}\rangle$, will be 
+done using a forward-backward algorithm.  Recall that $\lambda_t^{(m)}$ 
+is an observation probability assocaited to Markov system $m$ at time 
+$t$, and we can think of these as emission probabilities associated to 
+some fictituous set of observations, which we will denote 
+$X_{1:T}^*$.  In this way,
+\begin{eqnarray*}
+\langle Z_{t}^{(m)}\rangle_n = q(Z_{t_n}^{(m)}\mid 
+X_1^{*},...,X_T^{*})
+& = & \frac{q(Z_{t,n}^{(m)},
+X_1^{*},...,X_T^{*})}{\sum_{n'=1}^Nq(Z_{t,n'}^{(m)}, 
+X_1^{*},...,X_T^{*})}
+\end{eqnarray*}
+where $q(Z_{t,n}^{(m)},X_1^{*},...,X_T^{*})$ can be decomposed as 
+\begin{eqnarray*}
+q(Z_{t,n}^{(m)},X_1^{*},...,X_T^{*}) &=& \alpha_t^{(m)}(n)\cdot \beta_t^{(m)}(n)
+\end{eqnarray*}
+with 
+\begin{eqnarray*}
+\alpha_t^{(m)}(n) &:=& q(Z_{t,n}^{(m)},
+X_1^{*},...,X_t^{*})
+\end{eqnarray*}
+and 
+\begin{eqnarray*}
+\beta_t^{(m)}(n) &:=& q(X_{t+1}^{*},...,X_T^{*}\mid Z_{t,n}^{(m)})
+\end{eqnarray*}
 
 
+We will define $\alpha$ and $\beta$ recusively using the 
+forward-backward algorithm (Algorithm \ref{alg:fb}).  In particular, 
+for each $m$ and $n$, the forward probability, $\alpha$, will be initialized as 
+\[
+\alpha_0^{(m)}(n) = \lambda_{1,n}^{(m)}\cdot \pi_n^{(m)}
+\]
+and recursively for each $t\leq T$ as 
+\[
+\alpha_t^{(m)}(n) = \lambda_{t,n}^{(m)} \cdot 
+    \sum_{n'=1}^Na_{n'n}^{(m)}\cdot \alpha_{t-1}^{(m)}(n)
+\]
+where $a_{n'n}^{(m)}$ denotes the entry in row $n$ and column $n'$ of 
+the transition matrix $A^{(m)}$.  Similarly, the backward probability, 
+$\beta$, will be initialized as 
+\[
+\beta_T^{(m)}(n) = 1
+\]
+and descending recursively for each value of $t\geq 0$ as 
+\[
+\beta_{t}^{(m)}(n) = \sum_{n'=1}^N \lambda_{t+1,n'}^{(m)}\cdot 
+a_{nn'}^{(m)}\cdot \beta_{t+1}^{(m)}(n'). 
+\]
+In this way, we obtain 
+\begin{eqnarray*}
+\langle Z_{t}^{(m)}\rangle_n = \frac{\alpha_t^{(m)}(n)\cdot 
+\beta_t^{(m)}(n)}{\sum_{n'=1}^N\alpha_t^{(m)}(n'
+)\cdot 
+\beta_t^{(m)}(n')}
+\end{eqnarray*}
+\begin{algorithm}
+  \caption{Forward-Backward Algorithm\label{alg:fb}}
+  \begin{algorithmic}[1]
+    \Function{ForwardBackward}{model parameters $\pi, A$ and $ 
+    \lambda_t^{(m)}$ for all $t, m$}
+    \State $\tt{\alpha}\leftarrow$ empty array of 
+    dimension $\tt{T\times M\times N}$.
+    \State $\tt{\beta}\leftarrow$ empty array of 
+    dimension $\tt{T\times M\times N}$.
+    
+    \For{${\tt m}$ in $\{0,...,M-1\}$}
+    \For{${\tt n}$ in $\{0,...,N-1\}$}
+    \State $\tt{\alpha[0,m,n]} \leftarrow \lambda_{1,n}^{(m)} \cdot
+    \pi_n^{(m)}$
+    
+    \For{${\tt t}$ in $\{1,...,T-1\}$}
+    \State{$\tt{\alpha[t,m,n]} \leftarrow \lambda_{t,n}^{(m)} \cdot 
+    \sum_{n'=1}^Na_{n'n}^{(m)} \cdot \alpha[t-1,m,n']$}
+	\EndFor
+	\State $\tt{\beta[T,m,n]} \leftarrow 1$
+	\For{${\tt t}$ in $\{T-1,...,0\}$}
+	\State{$\tt{\beta[t,m,n]} \leftarrow \sum_{n'=1}^N\lambda_{t+1,n'}^{(m)} \cdot
+    a_{nn'}^{(m)} \cdot \beta[t+1,m,n']$}
+	\EndFor
+    \EndFor
+    \EndFor
+    \State $\tt{\beta}\leftarrow$ empty array of 
+    dimension $\tt{T\times M\times N}$.
+    \For{${\tt m}$ in $\{0,...,M-1\}$}
+    \For{${\tt n}$ in $\{0,...,N-1\}$}
+    \For{${\tt t}$ in $\{0,...,T-1\}$}
+	\State{${\tt \gamma[t,m,n]}\leftarrow \frac{\alpha[t,m,n]\cdot 
+	\beta[t,m,n]}{\sum_{n'=1}^N\alpha[t,m,n']\cdot \beta[t,m,n']}$}
+    \EndFor
+    \EndFor
+    \EndFor
+    \State\Return ${\tt \gamma}$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
+In this way, we can iteratively update the $\lambda_t^{(m)}$.  It 
+should be noted that this is only a submethod in the overall goal of 
+learning model parameters. 
+
+For the given set of model parameters we can use a modified Viterbi 
+algorithm to compute the most likely sequence of hidden states.  
+An fHMM comprised of $M$ Markov systems with $N$ can be treated naively 
+as a classical HMM by flattening the factored states into an HMM with 
+$N^M$ hidden states.  In this case, the typical Viterbi algorithm would 
+have time complexity of $O(TN^{2M})$ which quickly becomes 
+intractible.  On the other hand, if we were to carry out exact 
+inference using the factored HMM, a Viterbi type algorithm would 
+require us to consider $N^M$ possible hidde state vector configuations 
+at each node giving a time complexity of $O(TMN^{M+1})$ which is even 
+worse. Therefore we propose a Parallel Viterbi algorithm (Algorithm 
+\ref{alg:viterbi}) which uses 
+structured variational inference.  Since the factored states are 
+completely decoupled, inference in this case behaves more like $M$ 
+classical HMMs running in parallel, therefore this inference can be 
+easily carried out with time complexity $O(TMN^2)$.
+
+\begin{algorithm}
+  \caption{Parallel Viterbi Algorithm\label{alg:viterbi}}
+  \begin{algorithmic}[1]
+    \Function{ParallelViterbi}{model parameters $\pi, A$ and $ 
+    \lambda_t^{(m)}$ for all $t, m$}
+    \State $\tt{v}\leftarrow$ empty {\tt viterbi} array of 
+    dimension $\tt{T\times M\times N}$.
+    \State $\tt{b}\leftarrow$ empty {\tt backpointer} array of 
+    dimension $\tt{T\times M\times N}$.
+    
+    \For{${\tt m}$ in $\{0,...,M-1\}$}
+    \For{${\tt n}$ in $\{0,...,N-1\}$}
+    \State $\tt{v[0,m,n]} \leftarrow \lambda_{1,n}^{(m)} \cdot
+    \pi_n^{(m)}$
+    \State $\tt{b[0,m,n]} \leftarrow 0$
+    
+    \For{${\tt t}$ in $\{1,...,T-1\}$}
+    \State{$\tt{v[t,m,n]} \leftarrow \max_{n'=1}^N\lambda_{t,n}^{(m)} \cdot 
+    \sum_{n'=1}^Na_{n'n}^{(m)} \cdot v[t-1,m,n']$}
+    \State{$\tt{b[t,m,n]} \leftarrow \argmax_{n'=1}^N\lambda_{t,n}^{(m)} \cdot 
+    \sum_{n'=1}^Na_{n'n}^{(m)} \cdot v[t-1,m,n']$}
+	\EndFor
+    \EndFor
+    \EndFor
+    \State ${\tt bestpath} \leftarrow$ empty array of dimension 
+    $M\times T$.
+    \For{${\tt m}$ in $\{0,...,M-1\}$}
+    \State ${\tt bestpath[m,T]\leftarrow \argmax_{n'=1}^N 
+    v[T,m,n']} $
+    \For{${\tt t}$ in $\{T-2,...,1=0\}$}
+    \State ${\tt bestpath[m,t]} \leftarrow {\tt b[t+1,m,bestpath[m,t+1]]}$ 
+    \EndFor
+    \EndFor
+    \State\Return ${\tt bestpath}$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
 
 
 
