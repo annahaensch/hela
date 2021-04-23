@@ -1450,9 +1450,9 @@ easily carried out with time complexity $O(TMN^2)$.
     
     \For{${\tt t}$ in $\{1,...,T-1\}$}
     \State{$\tt{v[t,m,n]} \leftarrow \max_{n'=1}^N\lambda_{t,n}^{(m)} \cdot 
-    \sum_{n'=1}^Na_{n'n}^{(m)} \cdot v[t-1,m,n']$}
+    a_{n'n}^{(m)} \cdot v[t-1,m,n']$}
     \State{$\tt{b[t,m,n]} \leftarrow \argmax_{n'=1}^N\lambda_{t,n}^{(m)} \cdot 
-    \sum_{n'=1}^Na_{n'n}^{(m)} \cdot v[t-1,m,n']$}
+    a_{n'n}^{(m)} \cdot v[t-1,m,n']$}
 	\EndFor
     \EndFor
     \EndFor
