@@ -955,18 +955,19 @@ class FactoredHMMInference(ABC):
 
         return Gamma, Xi
 
-    def log_forward_backward(data, h_t):
-        time = len(data)
-        beta = np.empty((time, len(self.ns_hidden_states), np.max(self.ns_hidden_states)))
-        alpha = np.empty((time, len(self.ns_hidden_states), np.max(self.ns_hidden_states)))
+    def log_forward_backward(h_t):
+        time = len(self.data)
+        model = self.model
+        beta = np.empty((time, len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
+        alpha = np.empty((time, len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
 
-        initial_state = self.initial_state_matrix
+        initial_state = model.initial_state_matrix
         log_initial_state = np.log(
             initial_state,
             out=np.zeros_like(initial_state) + LOG_ZERO,
             where=(initial_state != 0))
 
-        transition = self.transition_matrix
+        transition = model.transition_matrix
         log_transition = np.log(
                     transition,
                     out=np.zeros_like(transition) + LOG_ZERO,
@@ -977,7 +978,7 @@ class FactoredHMMInference(ABC):
                     out=np.zeros_like(h_t) + LOG_ZERO,
                     where=(h_t != 0))
         alpha[0][:][:] = h_t[0][:][:] + log_initial_state
-        beta[time-1][:][:] = np.ones((len(self.ns_hidden_states), n))
+        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), n))
         for m in range(systems):
             # Forward probabilities
             for t in range(1, time):
