@@ -1054,6 +1054,29 @@ class FactoredHMMInference(ABC):
             
         return h_t_new
 
+    def predict_hidden_states_viterbi(self, h_t):
+        time = len(self.data)
+        model = self.model
+        systems = len(model.ns_hidden_states)
+        n = np.max(model.ns_hidden_states)
+        viterbi_matrix = np.zeros((time,systems,n))
+        backpoint_matrix = np.zeros((time,systems,n))
+        best_path = np.zeros((systems, time))
+        viterbi_matrix[0][:][:] = h_t[0][:][:] * model.initial_state_matrix
+        for m in range(systems):
+            for t in range(1, time):
+                step = h_t[t][m][:, np.newaxis] * model.transition_matrix[m] * viterbi_matrix[t-1][m][:]
+                viterbi_matrix[t][m][:] = np.max(step, axis=1)
+                backpoint_matrix[t][m][:] = np.argmax(step, axis=1)
+        
+        for m in range(systems):
+            best_path[m][time-1] = np.argmax(viterbi_matrix[time-1][m][:])
+            for t in range(time-2, -1, -1):
+                prev_state = int(best_path[m][t+1])
+                best_path[m][t] = backpoint_matrix[t+1][m][prev_state]
+                
+        return pd.DataFrame(best_path.T, index=self.data.index)
+
 
 def _sample(probability_distribution, sample_parameter):
     """ Returns a sample using discrete inverse transform.
