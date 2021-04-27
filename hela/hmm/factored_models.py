@@ -1037,19 +1037,23 @@ class FactoredHMMInference(ABC):
         systems = len(model.ns_hidden_states)
         
         for m in range(systems):
-            mean = model.gaussian_model.means[m]
-            delta = (mean.T @ inv_cov @ mean).diagonal()
-            other_systems = [i for i in range(systems) if i != m]
-            error = np.zeros(gauss_data.T.shape)
-            for system in other_systems:
-                error += np.tensordot(model.gaussian_model.means[system],
-                                               gamma[:,system,:], axes=((1,1)))
+            if len(model.gaussian_features) > 0:
+                mean = model.gaussian_model.means[m]
+                delta = (mean.T @ inv_cov @ mean).diagonal()
+                other_systems = [i for i in range(systems) if i != m]
+                error = np.zeros(gauss_data.T.shape)
+                for system in other_systems:
+                    error += np.tensordot(model.gaussian_model.means[system],
+                                                   gamma[:,system,:], axes=((1,1)))
 
-            residual_error = gauss_data.T - error
+                residual_error = gauss_data.T - error
 
-            temp = np.tensordot(np.tensordot(residual_error, inv_cov, axes=((0,1))), 
-                                mean, axes=((1,1)))
-            
+                temp = np.tensordot(np.tensordot(residual_error, inv_cov, axes=((0,1))), 
+                                    mean, axes=((1,1)))
+            if len(model.categorical_features) > 0:
+                raise NotImplementedError(
+                    "Structured VI with categorical features is not yet implemented")
+
             h_t_new[:,m,:] = np.exp(-delta/2 + temp)
             
         return h_t_new
@@ -1072,8 +1076,8 @@ class FactoredHMMInference(ABC):
         for m in range(systems):
             best_path[m][time-1] = np.argmax(viterbi_matrix[time-1][m][:])
             for t in range(time-2, -1, -1):
-                prev_state = int(best_path[m][t+1])
-                best_path[m][t] = backpoint_matrix[t+1][m][prev_state]
+                forward_state = int(best_path[m][t+1])
+                best_path[m][t] = backpoint_matrix[t+1][m][forward_state]
                 
         return pd.DataFrame(best_path.T, index=self.data.index)
 
