@@ -112,11 +112,11 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 gmm_parameter_constraints[
                     'component_weights'] = self.component_weights
 
-                gmm_parameter_constraints = {'means': self.means}
-                gmm_parameter_constraints['covariances'] = self.covariances
+                gaussian_parameter_constraints = {'means': self.means}
+                gaussian_parameter_constraints['covariance'] = self.covariances
 
             model_parameter_constraints[
-                'gmm_parameter_constraints'] = gmm_parameter_constraints
+                'gaussian_parameter_constraints'] = gaussian_parameter_constraints
 
         training_spec[
             'model_parameter_constraints'] = model_parameter_constraints
