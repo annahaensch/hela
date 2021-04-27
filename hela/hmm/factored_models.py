@@ -955,12 +955,13 @@ class FactoredHMMInference(ABC):
 
         return Gamma, Xi
 
-    def log_forward_backward(h_t):
+    def log_forward_backward(self, h_t):
         time = len(self.data)
         model = self.model
-        beta = np.empty((time, len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
-        alpha = np.empty((time, len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
-
+        systems = len(model.ns_hidden_states)
+        beta = np.empty((time, systems, np.max(model.ns_hidden_states)))
+        alpha = np.empty((time, systems, np.max(model.ns_hidden_states)))
+        gamma = np.empty((time,systems,np.max(model.ns_hidden_states)))
         initial_state = model.initial_state_matrix
         log_initial_state = np.log(
             initial_state,
@@ -977,8 +978,10 @@ class FactoredHMMInference(ABC):
                     h_t,
                     out=np.zeros_like(h_t) + LOG_ZERO,
                     where=(h_t != 0))
+
         alpha[0][:][:] = h_t[0][:][:] + log_initial_state
-        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), n))
+        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
+
         for m in range(systems):
             # Forward probabilities
             for t in range(1, time):
@@ -993,6 +996,63 @@ class FactoredHMMInference(ABC):
             gamma[:,m,:] = gamma_t - logsumexp(gamma_t, axis=1).reshape(-1,1)
 
         return gamma, alpha, beta
+
+    def forward_backward(self, h_t):
+        time = len(self.data)
+        model = self.model
+        systems = len(model.ns_hidden_states)
+        n = np.max(model.ns_hidden_states)
+        alpha = np.zeros((time,systems,n))
+        beta = np.zeros((time,systems,n))
+        gamma = np.zeros((time,systems,n))
+
+        alpha[0][:][:] = h_t[0][:][:] * model.initial_state_matrix
+        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), n))
+
+        for m in range(systems):
+            # Forward probabilities
+            for t in range(1, time):
+    #             alpha[t][m][:] = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
+                a = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
+                alpha[t][m][:] = a/np.sum(a)
+            # Backward probabilities
+            for t in range(time-2, -1, -1):
+    #             beta[t][m][:] = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
+                b = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
+                beta[t][m][:] = b/np.sum(b)
+
+            #new prob for system
+            gamma[:,m,:] = np.divide(alpha[:,m,:]*beta[:,m,:], 
+                                          np.sum(alpha[:,m,:]*beta[:,m,:], axis=1).reshape(-1,1))
+        return gamma, alpha, beta
+
+    def h_t_update(self, gamma, data):
+        model = self.model
+        inv_cov = np.linalg.inv(model.gaussian_model.covariance)
+        gauss_data = np.array(data.loc[:, model.gaussian_features])
+
+        h_t_new = np.zeros((len(data), 
+                            len(model.ns_hidden_states), 
+                            np.max(model.ns_hidden_states)))
+        systems = len(model.ns_hidden_states)
+        
+        for m in range(systems):
+            mean = model.gaussian_model.means[m]
+            delta = (mean.T @ inv_cov @ mean).diagonal()
+            other_systems = [i for i in range(systems) if i != m]
+            error = np.zeros(gauss_data.T.shape)
+            for system in other_systems:
+                error += np.tensordot(model.gaussian_model.means[system],
+                                               gamma[:,system,:], axes=((1,1)))
+
+            residual_error = gauss_data.T - error
+
+            temp = np.tensordot(np.tensordot(residual_error, inv_cov, axes=((0,1))), 
+                                mean, axes=((1,1)))
+            
+            h_t_new[:,m,:] = np.exp(-delta/2 + temp)
+            
+        return h_t_new
 
 
 def _sample(probability_distribution, sample_parameter):
