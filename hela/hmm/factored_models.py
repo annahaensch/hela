@@ -955,6 +955,80 @@ class FactoredHMMInference(ABC):
 
         return Gamma, Xi
 
+    def log_forward_backward(data, h_t):
+        time = len(data)
+        beta = np.empty((time, len(self.ns_hidden_states), np.max(self.ns_hidden_states)))
+        alpha = np.empty((time, len(self.ns_hidden_states), np.max(self.ns_hidden_states)))
+
+        initial_state = self.initial_state_matrix
+        log_initial_state = np.log(
+            initial_state,
+            out=np.zeros_like(initial_state) + LOG_ZERO,
+            where=(initial_state != 0))
+
+        transition = self.transition_matrix
+        log_transition = np.log(
+                    transition,
+                    out=np.zeros_like(transition) + LOG_ZERO,
+                    where=(transition != 0))
+
+        log_h_t = np.log(
+                    h_t,
+                    out=np.zeros_like(h_t) + LOG_ZERO,
+                    where=(h_t != 0))
+        alpha[0][:][:] = h_t[0][:][:] + log_initial_state
+        beta[time-1][:][:] = np.ones((len(self.ns_hidden_states), n))
+        for m in range(systems):
+            # Forward probabilities
+            for t in range(1, time):
+                alpha_t = logsumexp(alpha[t-1][m][:] + log_transition[m], axis=0)
+                alpha[t][m][:] = log_h_t[t][m] + alpha_t
+            # Backward probabilities
+            for t in range(time-2, -1, -1):
+                beta_t = log_h_t[t+1][m] + log_transition[m] + beta[t+1][m][:]
+                beta[t][m][:] = logsumexp(beta_t, axis = 1)
+
+            gamma_t = alpha[:,m,:] + beta[:,m,:]
+            gamma[:,m,:] = gamma_t - logsumexp(gamma_t, axis=1).reshape(-1,1)
+
+        return gamma, alpha, beta
+
+    def _compute_log_backward_probabilities(data, h_t):
+        time = len(data)
+        beta = np.empty((time, len(self.ns_hidden_states), np.max(self.ns_hidden_states)))
+
+        initial_state = self.initial_state_matrix
+        log_initial_state = np.log(
+            initial_state,
+            out=np.zeros_like(initial_state) + LOG_ZERO,
+            where=(initial_state != 0))
+
+        transition = self.transition_matrix
+        log_transition = np.log(
+                    transition,
+                    out=np.zeros_like(transition) + LOG_ZERO,
+                    where=(transition != 0))
+
+        log_h_t = np.log(
+                    h_t,
+                    out=np.zeros_like(h_t) + LOG_ZERO,
+                    where=(h_t != 0))
+        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), n))
+
+        for m in range(systems):
+            for t in range(time-2, -1, -1):
+                beta_t = log_h_t[t+1][m] + log_transition[m] + beta[t+1][m][:]
+                beta[t][m][:] = logsumexp(beta_t, axis = 1)
+
+        return beta
+
+
+    def _gamma(self, data, h_t):
+        alpha = self._compute_log_forward_probabilities(data, h_t)
+        beta = self._compute_log_backward_probabilities(data, h_t)
+
+
+
 
 def _sample(probability_distribution, sample_parameter):
     """ Returns a sample using discrete inverse transform.
