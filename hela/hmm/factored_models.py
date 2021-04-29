@@ -261,6 +261,40 @@ class FactoredHMM(ABC):
 
         return np.array(column_list).transpose()
 
+    def get_update_statistics(self, gamma):
+        ns_hidden_states = self.ns_hidden_states
+        systems = len(ns_hidden_states)
+        csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
+
+        Gamma = np.zeros((gamma.shape[0], csum[-1],
+                              csum[-1]))
+        Xi = np.zeros((len(ns_hidden_states),
+                           gamma.shape[0] - 1,
+                           np.max(ns_hidden_states), np.max(ns_hidden_states)))
+
+        for m, hidden_state in enumerate(ns_hidden_states):
+            for t in range(gamma.shape[0]):
+                blocks = []
+                other_systems = [system for system in range(systems) if system != m and system > m]
+                padding = np.zeros((hidden_state*m, hidden_state))
+                blocks.append(padding)
+                if t > 0:
+                    Xi[m,t-1,:,:] = np.tensordot(gamma[t-1,m,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1)))
+
+                blocks.append(np.tensordot(gamma[t,m,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1))))
+
+                for m_prime in other_systems:
+                    blocks.append(np.tensordot(gamma[t,m_prime,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1))))
+
+                Gamma[t,:,m*hidden_state:m*hidden_state+hidden_state] = np.vstack(blocks)
+
+        update_statistics = {
+                "Gamma": Gamma,
+                "Xi": Xi,
+            }
+
+        return update_statistics
+
     def update_model_parameters_with_gibbs(self, data, update_statistics):
         """ Returns updated model
 
@@ -273,7 +307,7 @@ class FactoredHMM(ABC):
         ns_hidden_states = self.ns_hidden_states
         csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
 
-        Gamma = update_statistics["Gamma"]
+        Gamma = update_statistics["Gamma"]  
         Xi = update_statistics["Xi"]
 
         #inf = new_model.load_inference_interface(data)
@@ -659,6 +693,10 @@ class FactoredHMMLearningAlgorithm(ABC):
                 data, training_iterations, gibbs_iterations, burn_down_period,
                 distributed, n_workers)
 
+        if method.lower() == "structured_vi":
+            return self.train_model_with_structured_vi(
+                data, training_iterations)
+
         else:
             raise NotImplementedError(
                 "Other learning methods haven't been implemented yet.")
@@ -723,6 +761,38 @@ class FactoredHMMLearningAlgorithm(ABC):
         }
 
         return new_model
+
+    def train_model_with_structured_vi(self, data, training_iterations):
+
+        model = self.model
+
+        new_model = model.model_config.to_model()
+        ns_hidden_states = model.ns_hidden_states
+
+        h_t = np.random.rand(len(data), 
+                        len(ns_hidden_states), 
+                        np.max(ns_hidden_states))
+
+        for r in range(training_iterations):
+            inf = new_model.load_inference_interface(data)
+
+            for i in range(5):
+                gamma, alpha, beta = inf.forward_backward(h_t)
+                h_t = inf.h_t_update(gamma, data)
+
+            update_statistics = new_model.get_update_statistics(gamma)
+            new_model = new_model.update_model_parameters_with_gibbs(data, update_statistics)
+            self.sufficient_statistics.append(update_statistics)
+            self.model_results.append(new_model)
+
+        new_model.training_dict = {
+            "trained": True,
+            "training_method": "structured_vi learning",
+            "training_data": data
+        }
+
+        return new_model
+
 
 
 class FactoredHMMInference(ABC):
@@ -963,10 +1033,11 @@ class FactoredHMMInference(ABC):
         alpha = np.empty((time, systems, np.max(model.ns_hidden_states)))
         gamma = np.empty((time,systems,np.max(model.ns_hidden_states)))
         initial_state = model.initial_state_matrix
+        # TODO (isalju): fix mask for all params
         log_initial_state = np.log(
-            initial_state,
-            out=np.zeros_like(initial_state) + LOG_ZERO,
-            where=(initial_state != 0))
+            np.array(initial_state),
+            out=np.zeros_like(np.array(initial_state)) + LOG_ZERO,
+            where=(np.array(initial_state) != 0))
 
         transition = model.transition_matrix
         log_transition = np.log(
@@ -979,8 +1050,8 @@ class FactoredHMMInference(ABC):
                     out=np.zeros_like(h_t) + LOG_ZERO,
                     where=(h_t != 0))
 
-        alpha[0][:][:] = h_t[0][:][:] + log_initial_state
-        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
+        alpha[0][:][:] = log_h_t[0][:][:] + log_initial_state
+        beta[time-1][:][:] = np.zeros((len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
 
         for m in range(systems):
             # Forward probabilities
@@ -992,7 +1063,7 @@ class FactoredHMMInference(ABC):
                 beta_t = log_h_t[t+1][m] + log_transition[m] + beta[t+1][m][:]
                 beta[t][m][:] = logsumexp(beta_t, axis = 1)
 
-            gamma_t = alpha[:,m,:] + beta[:,m,:]
+            gamma_t = np.asarray(alpha[:,m,:]) + np.asarray(beta[:,m,:])
             gamma[:,m,:] = gamma_t - logsumexp(gamma_t, axis=1).reshape(-1,1)
 
         return gamma, alpha, beta
@@ -1050,6 +1121,7 @@ class FactoredHMMInference(ABC):
 
                 temp = np.tensordot(np.tensordot(residual_error, inv_cov, axes=((0,1))), 
                                     mean, axes=((1,1)))
+
             if len(model.categorical_features) > 0:
                 raise NotImplementedError(
                     "Structured VI with categorical features is not yet implemented")
@@ -1079,6 +1151,48 @@ class FactoredHMMInference(ABC):
                 forward_state = int(best_path[m][t+1])
                 best_path[m][t] = backpoint_matrix[t+1][m][forward_state]
                 
+        return pd.DataFrame(best_path.T, index=self.data.index)
+
+    def predict_hidden_states_log_viterbi(self, h_t):
+        time = len(self.data)
+        model = self.model
+        systems = len(model.ns_hidden_states)
+        n = np.max(model.ns_hidden_states)
+        viterbi_matrix = np.zeros((time,systems,n))
+        backpoint_matrix = np.zeros((time,systems,n))
+        best_path = np.zeros((systems, time))
+        initial_state = model.initial_state_matrix
+        # TODO (isalju): fix masks for all params
+        log_initial_state = np.log(
+            np.array(initial_state),
+            out=np.zeros_like(np.array(initial_state)) + LOG_ZERO,
+            where=(np.array(initial_state) != 0))
+
+        transition = model.transition_matrix
+        log_transition = np.log(
+                    transition,
+                    out=np.zeros_like(transition) + LOG_ZERO,
+                    where=(transition != 0))
+
+        log_h_t = np.log(
+                    h_t,
+                    out=np.zeros_like(h_t) + LOG_ZERO,
+                    where=(h_t != 0))
+
+        viterbi_matrix[0][:][:] = log_h_t[0][:][:] + log_initial_state
+        
+        for m in range(systems):
+            for t in range(1, time):
+                step = log_h_t[t][m][:, np.newaxis] + model.transition_matrix[m] + viterbi_matrix[t-1][m][:]
+                viterbi_matrix[t][m][:] = np.max(step, axis=1)
+                backpoint_matrix[t][m][:] = np.argmax(step, axis=1)
+
+        for m in range(systems):
+            best_path[m][time-1] = np.argmax(viterbi_matrix[time-1][m][:])
+            for t in range(time-2, -1, -1):
+                forward_state = int(best_path[m][t+1])
+                best_path[m][t] = backpoint_matrix[t+1][m][forward_state]
+
         return pd.DataFrame(best_path.T, index=self.data.index)
 
 
