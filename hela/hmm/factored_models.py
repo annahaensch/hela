@@ -1072,11 +1072,10 @@ class FactoredHMMInference(ABC):
                 beta_t = log_h_t[t+1][m] + log_transition[m] + beta[t+1][m][:]
                 beta[t][m][:] = logsumexp(beta_t, axis = 1)
 
-            gamma_t = np.asarray(alpha[:,m,:]) + np.asarray(beta[:,m,:])
-            gamma[:,m,:] = gamma_t
+            gamma[:,m,:] = np.asarray(alpha[:,m,:]) + np.asarray(beta[:,m,:])
 
         gamma = np.exp(gamma - logsumexp(gamma[...,np.newaxis], axis=2))
-        
+
         return gamma, alpha, beta
 
     def forward_backward(self, h_t):
