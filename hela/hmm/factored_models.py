@@ -1026,6 +1026,15 @@ class FactoredHMMInference(ABC):
         return Gamma, Xi
 
     def log_forward_backward(self, h_t):
+        """  
+        Gets log probabilities under current model parameters
+
+        Arguments: 
+            h_t: (array) array of dimension T x M X N for current variational parameters
+        
+        Returns: 
+            Arrays for alpha, beta, gamma
+        """
         time = len(self.data)
         model = self.model
         systems = len(model.ns_hidden_states)
@@ -1069,6 +1078,15 @@ class FactoredHMMInference(ABC):
         return gamma, alpha, beta
 
     def forward_backward(self, h_t):
+        """  
+        Gets probabilities under current model parameters
+        
+        Arguments: 
+            h_t: (array) array of dimension T x M X N for current variational parameters
+        
+        Returns: 
+            Arrays for alpha, beta, gamma
+        """
         time = len(self.data)
         model = self.model
         systems = len(model.ns_hidden_states)
@@ -1098,6 +1116,15 @@ class FactoredHMMInference(ABC):
         return gamma, alpha, beta
 
     def h_t_update(self, gamma, data):
+        """  
+        Updates variational parameters under the current expectations
+
+        Arguments: 
+            gamma: (array) array of dimension T x M X N
+        
+        Returns: 
+            Array of updated variational parameters
+        """
         model = self.model
         inv_cov = np.linalg.inv(model.gaussian_model.covariance)
         gauss_data = np.array(data.loc[:, model.gaussian_features])
@@ -1131,6 +1158,15 @@ class FactoredHMMInference(ABC):
         return h_t_new
 
     def predict_hidden_states_viterbi(self, h_t):
+        """  
+        Predicts the most likely series of hidden states using viterbi algorithm
+
+        Arguments: 
+            h_t: (array) array of dimension T x M X N for current variational parameters
+        
+        Returns: 
+            DataFrame of most likely series of hidden states
+        """
         time = len(self.data)
         model = self.model
         systems = len(model.ns_hidden_states)
@@ -1154,6 +1190,15 @@ class FactoredHMMInference(ABC):
         return pd.DataFrame(best_path.T, index=self.data.index)
 
     def predict_hidden_states_log_viterbi(self, h_t):
+        """  
+        Predicts the most likely series of hidden states using viterbi algorithm
+
+        Arguments: 
+            h_t: (array) array of dimension T x M X N for current variational parameters
+        
+        Returns: 
+            DataFrame of most likely series of hidden states
+        """
         time = len(self.data)
         model = self.model
         systems = len(model.ns_hidden_states)
