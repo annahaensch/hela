@@ -307,7 +307,7 @@ class FactoredHMM(ABC):
         ns_hidden_states = self.ns_hidden_states
         csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
 
-        Gamma = update_statistics["Gamma"]  
+        Gamma = update_statistics["Gamma"]
         Xi = update_statistics["Xi"]
 
         #inf = new_model.load_inference_interface(data)
@@ -1073,8 +1073,10 @@ class FactoredHMMInference(ABC):
                 beta[t][m][:] = logsumexp(beta_t, axis = 1)
 
             gamma_t = np.asarray(alpha[:,m,:]) + np.asarray(beta[:,m,:])
-            gamma[:,m,:] = gamma_t - logsumexp(gamma_t, axis=1).reshape(-1,1)
+            gamma[:,m,:] = gamma_t
 
+        gamma = np.exp(gamma - logsumexp(gamma[...,np.newaxis], axis=2))
+        
         return gamma, alpha, beta
 
     def forward_backward(self, h_t):
@@ -1101,14 +1103,14 @@ class FactoredHMMInference(ABC):
         for m in range(systems):
             # Forward probabilities
             for t in range(1, time):
-    #             alpha[t][m][:] = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
-                a = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
-                alpha[t][m][:] = a/np.sum(a)
+                alpha[t][m][:] = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
+                # a = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
+                # alpha[t][m][:] = a/np.sum(a)
             # Backward probabilities
             for t in range(time-2, -1, -1):
-    #             beta[t][m][:] = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
-                b = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
-                beta[t][m][:] = b/np.sum(b)
+                beta[t][m][:] = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
+                # b = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
+                # beta[t][m][:] = b/np.sum(b)
 
             #new prob for system
             gamma[:,m,:] = np.divide(alpha[:,m,:]*beta[:,m,:], 
@@ -1132,6 +1134,7 @@ class FactoredHMMInference(ABC):
         h_t_new = np.zeros((len(data), 
                             len(model.ns_hidden_states), 
                             np.max(model.ns_hidden_states)))
+
         systems = len(model.ns_hidden_states)
         
         for m in range(systems):
@@ -1207,6 +1210,7 @@ class FactoredHMMInference(ABC):
         backpoint_matrix = np.zeros((time,systems,n))
         best_path = np.zeros((systems, time))
         initial_state = model.initial_state_matrix
+
         # TODO (isalju): fix masks for all params
         log_initial_state = np.log(
             np.array(initial_state),
