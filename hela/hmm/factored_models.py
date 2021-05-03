@@ -1042,7 +1042,9 @@ class FactoredHMMInference(ABC):
         beta = np.empty((time, systems, np.max(model.ns_hidden_states)))
         alpha = np.empty((time, systems, np.max(model.ns_hidden_states)))
         gamma = np.empty((time,systems,np.max(model.ns_hidden_states)))
-        initial_state = model.initial_state_matrix
+        initial_state = np.zeros(alpha[0].shape)
+        for m in range(systems):
+            initial_state[m,:model.ns_hidden_states[m]] = np.array(model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
         # TODO (isalju): fix mask for all params
         log_initial_state = np.log(
             np.array(initial_state),
