@@ -1151,14 +1151,13 @@ class FactoredHMMInference(ABC):
 
                 residual_error = gauss_data.T - error
 
-                temp = np.tensordot(np.tensordot(residual_error, inv_cov, axes=((0,1))), 
-                                    mean, axes=((1,1)))
+                for t in range(gamma.shape[0]):
+                    temp = residual_error[:,t] @ inv_cov @ mean
+                    h_t_new[t,m,:] = np.exp(-delta/2 + temp)
 
             if len(model.categorical_features) > 0:
                 raise NotImplementedError(
                     "Structured VI with categorical features is not yet implemented")
-
-            h_t_new[:,m,:] = np.exp(-delta/2 + temp)
             
         return h_t_new
 
