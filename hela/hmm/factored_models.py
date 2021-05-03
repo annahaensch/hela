@@ -1065,7 +1065,7 @@ class FactoredHMMInference(ABC):
         for m in range(systems):
             # Forward probabilities
             for t in range(1, time):
-                alpha_t = logsumexp(alpha[t-1][m][:] + log_transition[m], axis=0)
+                alpha_t = logsumexp(alpha[t-1][m][:].reshape(-1,1) + log_transition[m], axis=0)
                 alpha[t][m][:] = log_h_t[t][m] + alpha_t
             # Backward probabilities
             for t in range(time-2, -1, -1):
