@@ -1220,7 +1220,9 @@ class FactoredHMMInference(ABC):
         viterbi_matrix = np.zeros((time,systems,n))
         backpoint_matrix = np.zeros((time,systems,n))
         best_path = np.zeros((systems, time))
-        initial_state = model.initial_state_matrix
+        initial_state = np.zeros(h_t[0].shape)
+        for m in range(systems):
+            initial_state[m,:model.ns_hidden_states[m]] = np.array(model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
 
         # TODO (isalju): fix masks for all params
         log_initial_state = np.log(
