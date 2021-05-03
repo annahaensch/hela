@@ -276,18 +276,18 @@ class FactoredHMM(ABC):
             for t in range(gamma.shape[0]):
                 blocks = []
                 other_systems = [system for system in range(systems) if system != m and system > m]
-                padding = np.zeros((hidden_state*m, hidden_state))
+                padding = np.zeros((csum[m], hidden_state))
                 blocks.append(padding)
                 if t > 0:
                     Xi[m,t-1,:,:] = np.tensordot(gamma[t-1,m,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1)))
 
-                blocks.append(blocks.append(np.diag(gamma[t,m,:hidden_state])))
+                blocks.append(np.diag(gamma[t,m,:hidden_state]))
 
                 for m_prime in other_systems:
                     blocks.append((gamma[t,m,:hidden_state].reshape(-1,1) @ 
-                        gamma[t,m_prime,:ns_hidden_states[m_prime]].reshape(1,-1)).transpose())
+                            gamma[t,m_prime,:ns_hidden_states[m_prime]].reshape(1,-1)).transpose())
 
-                Gamma[t,:,m*hidden_state:m*hidden_state+hidden_state] = np.vstack(blocks)
+                Gamma[t,:,csum[m]:csum[m+1]] = np.vstack(blocks)
 
         update_statistics = {
                 "Gamma": Gamma,
@@ -778,7 +778,7 @@ class FactoredHMMLearningAlgorithm(ABC):
             inf = new_model.load_inference_interface(data)
 
             for i in range(5):
-                gamma, alpha, beta = inf.forward_backward(h_t)
+                gamma, alpha, beta = inf.log_forward_backward(h_t)
                 h_t = inf.h_t_update(gamma, data)
 
             update_statistics = new_model.get_update_statistics(gamma)
@@ -1064,18 +1064,20 @@ class FactoredHMMInference(ABC):
         beta[time-1][:][:] = np.zeros((len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
 
         for m in range(systems):
+            hidden_state = model.ns_hidden_states[m]
             # Forward probabilities
             for t in range(1, time):
-                alpha_t = logsumexp(alpha[t-1][m][:].reshape(-1,1) + log_transition[m], axis=0)
-                alpha[t][m][:] = log_h_t[t][m] + alpha_t
+                alpha_t = logsumexp((alpha[t-1][m][:].reshape(-1,1) + log_transition[m]) 
+                                           [:hidden_state,:hidden_state], axis=0)
+                alpha[t][m][:hidden_state] = log_h_t[t][m] + alpha_t
             # Backward probabilities
             for t in range(time-2, -1, -1):
                 beta_t = log_h_t[t+1][m] + log_transition[m] + beta[t+1][m][:]
-                beta[t][m][:] = logsumexp(beta_t, axis = 1)
+                beta[t][m][:hidden_state] = logsumexp(beta_t[:hidden_state], axis = 1)
 
-            gamma[:,m,:] = np.asarray(alpha[:,m,:]) + np.asarray(beta[:,m,:])
-
-        gamma = np.exp(gamma - logsumexp(gamma[...,np.newaxis], axis=2))
+            gamma[:,m,:hidden_state] = np.asarray(alpha[:,m,:hidden_state]) + np.asarray(beta[:,m,:hidden_state])
+            gamma[:,m,:hidden_state] = np.exp(gamma[:,m,:hidden_state] - 
+                                    logsumexp(gamma[:,m,:hidden_state], axis=1).reshape(-1,1))
 
         return gamma, alpha, beta
 
