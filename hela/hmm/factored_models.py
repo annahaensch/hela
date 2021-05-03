@@ -296,7 +296,7 @@ class FactoredHMM(ABC):
 
         return update_statistics
 
-    def update_model_parameters_with_gibbs(self, data, update_statistics):
+    def update_model_parameters(self, data, update_statistics):
         """ Returns updated model
 
         Arguments: 
@@ -748,7 +748,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                 "hidden_state_vector_df": hidden_state_vector_df
             }
 
-            new_model = new_model.update_model_parameters_with_gibbs(
+            new_model = new_model.update_model_parameters(
                 data, update_statistics)
 
             self.sufficient_statistics.append(update_statistics)
@@ -782,7 +782,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                 h_t = inf.h_t_update(gamma, data)
 
             update_statistics = new_model.get_update_statistics(gamma)
-            new_model = new_model.update_model_parameters_with_gibbs(data, update_statistics)
+            new_model = new_model.update_model_parameters(data, update_statistics)
             self.sufficient_statistics.append(update_statistics)
             self.model_results.append(new_model)
 
