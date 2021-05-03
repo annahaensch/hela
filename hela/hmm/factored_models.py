@@ -1067,11 +1067,11 @@ class FactoredHMMInference(ABC):
             hidden_state = model.ns_hidden_states[m]
             # Forward probabilities
             for t in range(1, time):
-                alpha_t = logsumexp((alpha[t-1][m][:hidden_state].reshape(-1,1) + log_transition[m]), axis=0)
+                alpha_t = logsumexp((alpha[t-1][m][:hidden_state].reshape(-1,1) + log_transition[m,:hidden_state,:hidden_state]), axis=0)
                 alpha[t][m][:hidden_state] = log_h_t[t][m][:hidden_state] + alpha_t
             # Backward probabilities
             for t in range(time-2, -1, -1):
-                beta_t = log_h_t[t+1][m][:hidden_state] + log_transition[m] + beta[t+1][m][:hidden_state]
+                beta_t = log_h_t[t+1][m][:hidden_state] + log_transition[m,:hidden_state,:hidden_state] + beta[t+1][m][:hidden_state]
                 beta[t][m][:hidden_state] = logsumexp(beta_t[:hidden_state], axis = 1)
 
             gamma[:,m,:hidden_state] = np.asarray(alpha[:,m,:hidden_state]) + np.asarray(beta[:,m,:hidden_state])
@@ -1124,6 +1124,7 @@ class FactoredHMMInference(ABC):
 
         Arguments: 
             gamma: (array) array of dimension T x M X N
+            data: dataframe of gaussian and categorical observations.
         
         Returns: 
             Array of updated variational parameters
@@ -1131,6 +1132,10 @@ class FactoredHMMInference(ABC):
         model = self.model
         inv_cov = np.linalg.inv(model.gaussian_model.covariance)
         gauss_data = np.array(data.loc[:, model.gaussian_features])
+        cat_data_enum = [
+                model.categorical_model.categorical_vector_to_enum[str(list(d))
+                ] for d in np.array(data.loc[:,model.categorical_features])
+                ]  
 
         h_t_new = np.zeros((len(data), 
                             len(model.ns_hidden_states), 
@@ -1140,27 +1145,28 @@ class FactoredHMMInference(ABC):
         
         for m in range(systems):
             hidden_state = model.ns_hidden_states[m]
+            gaussian_upgrade = np.zeros_like(h_t_new[:,m,:hidden_state])
+            categorical_upgrade = np.zeros_like(h_t_new[:,m,:hidden_state])
+            
             if len(model.gaussian_features) > 0:
-                mean = model.gaussian_model.means[m][:,:hidden_state]
-                #TODO check dimenstions
-                delta = np.dot(np.dot(mean.T, inv_cov), mean).diagonal()
+                mean = model.gaussian_model.means[m].data[:,:hidden_state]
+                delta = (mean.T @ inv_cov @ mean).diagonal()
                 other_systems = [i for i in range(systems) if i != m]
-                error = np.zeros(gauss_data.T.shape)
+                error = np.zeros(gauss_data.shape)
                 for system in other_systems:
-                    hs = model.ns_hidden_states[system]
-                    error += np.tensordot(model.gaussian_model.means[system][:,:hs],
-                                       gamma[:,system,:hs], axes=((1,1)))
+                    error += gamma[:,system,:model.ns_hidden_states[system]] @ (
+                        model.gaussian_model.means[system].data[:,:model.ns_hidden_states[system]].T)
 
-                residual_error = gauss_data.T - error
+                residual_error = gauss_data - error
 
-                for t in range(gamma.shape[0]):
-                    temp = np.dot(np.dot(residual_error[:,t].reshape(1,-1), inv_cov), mean)
-                    h_t_new[t,m,:hidden_state] = np.exp(-delta/2 + temp)
+                gaussian_upgrade = np.exp((residual_error @ inv_cov @ mean) - (delta/2))
 
             if len(model.categorical_features) > 0:
-                raise NotImplementedError(
-                    "Structured VI with categorical features is not yet implemented")
+                hidden_states_enum = [[k for k,v in model.hidden_state_enum_to_vector.items() if v[m] == i] for i in range(hidden_state)]
+                categorical_upgrade = np.array([[np.sum(model.categorical_model.emission_matrix[i,j]) for j in hidden_states_enum] for i in cat_data_enum])
             
+            h_t_new[:,m,:hidden_state] = np.exp(gaussian_upgrade + categorical_upgrade)
+
         return h_t_new
 
     def predict_hidden_states_viterbi(self, h_t):
@@ -1235,7 +1241,7 @@ class FactoredHMMInference(ABC):
         for m in range(systems):
             hidden_state = model.ns_hidden_states[m]
             for t in range(1, time):
-                step = log_h_t[t][m][:hidden_state, np.newaxis] + model.transition_matrix[m] + viterbi_matrix[t-1][m][:hidden_state]
+                step = log_h_t[t][m][:hidden_state, np.newaxis] + model.transition_matrix[m,:hidden_state,:hidden_state] + viterbi_matrix[t-1][m][:hidden_state]
                 viterbi_matrix[t][m][:hidden_state] = np.max(step, axis=1)
                 backpoint_matrix[t][m][:hidden_state] = np.argmax(step, axis=1)
 
