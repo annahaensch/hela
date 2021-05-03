@@ -1159,7 +1159,7 @@ class FactoredHMMInference(ABC):
 
                 residual_error = gauss_data - error
 
-                gaussian_upgrade = np.exp((residual_error @ inv_cov @ mean) - (delta/2))
+                gaussian_upgrade = (residual_error @ inv_cov @ mean) - (delta/2)
 
             if len(model.categorical_features) > 0:
                 hidden_states_enum = [[k for k,v in model.hidden_state_enum_to_vector.items() if v[m] == i] for i in range(hidden_state)]
