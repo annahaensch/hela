@@ -284,7 +284,8 @@ class FactoredHMM(ABC):
                 blocks.append(blocks.append(np.diag(gamma[t,m,:hidden_state])))
 
                 for m_prime in other_systems:
-                    blocks.append(np.tensordot(gamma[t,m_prime,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1))))
+                    blocks.append((gamma[t,m,:hidden_state].reshape(-1,1) @ 
+                        gamma[t,m_prime,:ns_hidden_states[m_prime]].reshape(1,-1)).transpose())
 
                 Gamma[t,:,m*hidden_state:m*hidden_state+hidden_state] = np.vstack(blocks)
 
