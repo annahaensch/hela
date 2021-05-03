@@ -281,7 +281,7 @@ class FactoredHMM(ABC):
                 if t > 0:
                     Xi[m,t-1,:,:] = np.tensordot(gamma[t-1,m,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1)))
 
-                blocks.append(np.tensordot(gamma[t,m,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1))))
+                blocks.append(blocks.append(np.diag(gamma[t,m,:hidden_state])))
 
                 for m_prime in other_systems:
                     blocks.append(np.tensordot(gamma[t,m_prime,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1))))
