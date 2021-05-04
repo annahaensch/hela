@@ -144,6 +144,7 @@ def test_learning_with_gibbs(generative_model):
 
     assert np.all(np.array(concavity) < 0)
 
+
 def test_learning_with_structured_vi(generative_model):
 
     fhmm_training_spec = generative_model["fhmm_training_spec"]
@@ -155,10 +156,7 @@ def test_learning_with_structured_vi(generative_model):
     inf = untrained_model.load_inference_interface(dataset)
     alg = untrained_model.load_learning_interface()
 
-    model = alg.run(
-        data=dataset,
-        method='structured_vi',
-        training_iterations=5)
+    model = alg.run(data=dataset, method='structured_vi', training_iterations=5)
 
     # Check that complete data likelihood is increasing with each iteration.
     likelihood = []

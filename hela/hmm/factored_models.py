@@ -266,33 +266,39 @@ class FactoredHMM(ABC):
         systems = len(ns_hidden_states)
         csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
 
-        Gamma = np.zeros((gamma.shape[0], csum[-1],
-                              csum[-1]))
-        Xi = np.zeros((len(ns_hidden_states),
-                           gamma.shape[0] - 1,
-                           np.max(ns_hidden_states), np.max(ns_hidden_states)))
+        Gamma = np.zeros((gamma.shape[0], csum[-1], csum[-1]))
+        Xi = np.zeros((len(ns_hidden_states), gamma.shape[0] - 1,
+                       np.max(ns_hidden_states), np.max(ns_hidden_states)))
 
         for m, hidden_state in enumerate(ns_hidden_states):
             for t in range(gamma.shape[0]):
                 blocks = []
-                other_systems = [system for system in range(systems) if system != m and system > m]
+                other_systems = [
+                    system for system in range(systems)
+                    if system != m and system > m
+                ]
                 padding = np.zeros((csum[m], hidden_state))
                 blocks.append(padding)
                 if t > 0:
-                    Xi[m,t-1,:,:] = np.tensordot(gamma[t-1,m,:,np.newaxis], gamma[t,m,:,np.newaxis], axes=((1,1)))
+                    Xi[m, t - 1, :, :] = np.tensordot(
+                        gamma[t - 1, m, :, np.newaxis],
+                        gamma[t, m, :, np.newaxis],
+                        axes=((1, 1)))
 
-                blocks.append(np.diag(gamma[t,m,:hidden_state]))
+                blocks.append(np.diag(gamma[t, m, :hidden_state]))
 
                 for m_prime in other_systems:
-                    blocks.append((gamma[t,m,:hidden_state].reshape(-1,1) @ 
-                            gamma[t,m_prime,:ns_hidden_states[m_prime]].reshape(1,-1)).transpose())
+                    blocks.append(
+                        (gamma[t, m, :hidden_state].reshape(-1, 1) @ gamma[
+                            t, m_prime, :ns_hidden_states[m_prime]].reshape(
+                                1, -1)).transpose())
 
-                Gamma[t,:,csum[m]:csum[m+1]] = np.vstack(blocks)
+                Gamma[t, :, csum[m]:csum[m + 1]] = np.vstack(blocks)
 
         update_statistics = {
-                "Gamma": Gamma,
-                "Xi": Xi,
-            }
+            "Gamma": Gamma,
+            "Xi": Xi,
+        }
 
         return update_statistics
 
@@ -695,8 +701,8 @@ class FactoredHMMLearningAlgorithm(ABC):
                 distributed, n_workers)
 
         if method.lower() == "structured_vi":
-            return self.train_model_with_structured_vi(
-                data, training_iterations)
+            return self.train_model_with_structured_vi(data,
+                                                       training_iterations)
 
         else:
             raise NotImplementedError(
@@ -770,9 +776,8 @@ class FactoredHMMLearningAlgorithm(ABC):
         new_model = model.model_config.to_model()
         ns_hidden_states = model.ns_hidden_states
 
-        h_t = np.random.rand(len(data), 
-                        len(ns_hidden_states), 
-                        np.max(ns_hidden_states))
+        h_t = np.random.rand(
+            len(data), len(ns_hidden_states), np.max(ns_hidden_states))
 
         for r in range(training_iterations):
             inf = new_model.load_inference_interface(data)
@@ -782,7 +787,8 @@ class FactoredHMMLearningAlgorithm(ABC):
                 h_t = inf.h_t_update(gamma, data)
 
             update_statistics = new_model.get_update_statistics(gamma)
-            new_model = new_model.update_model_parameters(data, update_statistics)
+            new_model = new_model.update_model_parameters(
+                data, update_statistics)
             self.sufficient_statistics.append(update_statistics)
             self.model_results.append(new_model)
 
@@ -793,7 +799,6 @@ class FactoredHMMLearningAlgorithm(ABC):
         }
 
         return new_model
-
 
 
 class FactoredHMMInference(ABC):
@@ -1041,43 +1046,61 @@ class FactoredHMMInference(ABC):
         systems = len(model.ns_hidden_states)
         beta = np.empty((time, systems, np.max(model.ns_hidden_states)))
         alpha = np.empty((time, systems, np.max(model.ns_hidden_states)))
-        gamma = np.empty((time,systems,np.max(model.ns_hidden_states)))
+        gamma = np.empty((time, systems, np.max(model.ns_hidden_states)))
         initial_state = np.zeros(alpha[0].shape)
         for m in range(systems):
-            initial_state[m,:model.ns_hidden_states[m]] = np.array(model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
+            initial_state[m, :model.ns_hidden_states[m]] = np.array(
+                model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
 
         log_initial_state = np.log(
             np.array(initial_state),
             out=np.zeros_like(np.array(initial_state)) + LOG_ZERO,
             where=(np.array(initial_state) != 0))
 
-        log_transition = np.array([np.log(
-            transition,
-            out=np.zeros_like(transition) + LOG_ZERO,
-            where=(np.array(transition) != 0)) for transition in model.transition_matrix])
+        log_transition = np.array([
+            np.log(
+                transition,
+                out=np.zeros_like(transition) + LOG_ZERO,
+                where=(np.array(transition) != 0))
+            for transition in model.transition_matrix
+        ])
 
         log_h_t = np.log(
-                    h_t,
-                    out=np.zeros_like(h_t) + LOG_ZERO,
-                    where=(h_t != 0))
+            h_t, out=np.zeros_like(h_t) + LOG_ZERO, where=(h_t != 0))
 
         alpha[0][:][:] = log_h_t[0][:][:] + log_initial_state
-        beta[time-1][:][:] = np.zeros((len(model.ns_hidden_states), np.max(model.ns_hidden_states)))
+        beta[time - 1][:][:] = np.zeros((len(model.ns_hidden_states),
+                                         np.max(model.ns_hidden_states)))
 
         for m in range(systems):
             hidden_state = model.ns_hidden_states[m]
             # Forward probabilities
             for t in range(1, time):
-                alpha_t = logsumexp((alpha[t-1][m][:hidden_state].reshape(-1,1) + log_transition[m,:hidden_state,:hidden_state]), axis=0)
-                alpha[t][m][:hidden_state] = log_h_t[t][m][:hidden_state] + alpha_t
+                alpha_t = logsumexp(
+                    (alpha[t - 1][m][:hidden_state].reshape(-1, 1) +
+                     log_transition[m, :hidden_state, :hidden_state]),
+                    axis=0)
+                alpha[t][
+                    m][:hidden_state] = log_h_t[t][m][:hidden_state] + alpha_t
             # Backward probabilities
-            for t in range(time-2, -1, -1):
-                beta_t = log_h_t[t+1][m][:hidden_state] + log_transition[m,:hidden_state,:hidden_state] + beta[t+1][m][:hidden_state]
-                beta[t][m][:hidden_state] = logsumexp(beta_t[:hidden_state], axis = 1)
+            for t in range(time - 2, -1, -1):
+                beta_t = log_h_t[t +
+                                 1][m][:
+                                       hidden_state] + log_transition[m, :
+                                                                      hidden_state, :
+                                                                      hidden_state] + beta[t
+                                                                                           +
+                                                                                           1][m][:
+                                                                                                 hidden_state]
+                beta[t][m][:hidden_state] = logsumexp(
+                    beta_t[:hidden_state], axis=1)
 
-            gamma[:,m,:hidden_state] = np.asarray(alpha[:,m,:hidden_state]) + np.asarray(beta[:,m,:hidden_state])
-            gamma[:,m,:hidden_state] = np.exp(gamma[:,m,:hidden_state] - 
-                                    logsumexp(gamma[:,m,:hidden_state], axis=1).reshape(-1,1))
+            gamma[:, m, :hidden_state] = np.asarray(
+                alpha[:, m, :hidden_state]) + np.asarray(
+                    beta[:, m, :hidden_state])
+            gamma[:, m, :hidden_state] = np.exp(
+                gamma[:, m, :hidden_state] -
+                logsumexp(gamma[:, m, :hidden_state], axis=1).reshape(-1, 1))
 
         return gamma, alpha, beta
 
@@ -1096,39 +1119,50 @@ class FactoredHMMInference(ABC):
         inv_cov = np.linalg.inv(model.gaussian_model.covariance)
         gauss_data = np.array(data.loc[:, model.gaussian_features])
         cat_data_enum = [
-                model.categorical_model.categorical_vector_to_enum[str(list(d))
-                ] for d in np.array(data.loc[:,model.categorical_features])
-                ]  
+            model.categorical_model.categorical_vector_to_enum[str(list(d))]
+            for d in np.array(data.loc[:, model.categorical_features])
+        ]
 
-        h_t_new = np.zeros((len(data), 
-                            len(model.ns_hidden_states), 
+        h_t_new = np.zeros((len(data), len(model.ns_hidden_states),
                             np.max(model.ns_hidden_states)))
 
         systems = len(model.ns_hidden_states)
-        
+
         for m in range(systems):
             hidden_state = model.ns_hidden_states[m]
-            gaussian_upgrade = np.zeros_like(h_t_new[:,m,:hidden_state])
-            categorical_upgrade = np.zeros_like(h_t_new[:,m,:hidden_state])
-            
+            gaussian_upgrade = np.zeros_like(h_t_new[:, m, :hidden_state])
+            categorical_upgrade = np.zeros_like(h_t_new[:, m, :hidden_state])
+
             if len(model.gaussian_features) > 0:
-                mean = model.gaussian_model.means[m].data[:,:hidden_state]
+                mean = model.gaussian_model.means[m].data[:, :hidden_state]
                 delta = (mean.T @ inv_cov @ mean).diagonal()
                 other_systems = [i for i in range(systems) if i != m]
                 error = np.zeros(gauss_data.shape)
                 for system in other_systems:
-                    error += gamma[:,system,:model.ns_hidden_states[system]] @ (
-                        model.gaussian_model.means[system].data[:,:model.ns_hidden_states[system]].T)
+                    error += gamma[:, system, :model.ns_hidden_states[
+                        system]] @ (model.gaussian_model.means[system]
+                                    .data[:, :model.ns_hidden_states[system]].T)
 
                 residual_error = gauss_data - error
 
-                gaussian_upgrade = (residual_error @ inv_cov @ mean) - (delta/2)
+                gaussian_upgrade = (residual_error @ inv_cov @ mean) - (
+                    delta / 2)
 
             if len(model.categorical_features) > 0:
-                hidden_states_enum = [[k for k,v in model.hidden_state_enum_to_vector.items() if v[m] == i] for i in range(hidden_state)]
-                categorical_upgrade = np.array([[np.sum(model.categorical_model.emission_matrix[i,j]) for j in hidden_states_enum] for i in cat_data_enum])
-            
-            h_t_new[:,m,:hidden_state] = np.exp(gaussian_upgrade + categorical_upgrade)
+                hidden_states_enum = [[
+                    k
+                    for k, v in model.hidden_state_enum_to_vector.items()
+                    if v[m] == i
+                ]
+                                      for i in range(hidden_state)]
+                categorical_upgrade = np.array([[
+                    np.sum(model.categorical_model.emission_matrix[i, j])
+                    for j in hidden_states_enum
+                ]
+                                                for i in cat_data_enum])
+
+            h_t_new[:, m, :hidden_state] = np.exp(
+                gaussian_upgrade + categorical_upgrade)
 
         return h_t_new
 
@@ -1146,22 +1180,23 @@ class FactoredHMMInference(ABC):
         model = self.model
         systems = len(model.ns_hidden_states)
         n = np.max(model.ns_hidden_states)
-        viterbi_matrix = np.zeros((time,systems,n))
-        backpoint_matrix = np.zeros((time,systems,n))
+        viterbi_matrix = np.zeros((time, systems, n))
+        backpoint_matrix = np.zeros((time, systems, n))
         best_path = np.zeros((systems, time))
         viterbi_matrix[0][:][:] = h_t[0][:][:] * model.initial_state_matrix
         for m in range(systems):
             for t in range(1, time):
-                step = h_t[t][m][:, np.newaxis] * model.transition_matrix[m] * viterbi_matrix[t-1][m][:]
+                step = h_t[t][m][:, np.newaxis] * model.transition_matrix[
+                    m] * viterbi_matrix[t - 1][m][:]
                 viterbi_matrix[t][m][:] = np.max(step, axis=1)
                 backpoint_matrix[t][m][:] = np.argmax(step, axis=1)
-        
+
         for m in range(systems):
-            best_path[m][time-1] = np.argmax(viterbi_matrix[time-1][m][:])
-            for t in range(time-2, -1, -1):
-                forward_state = int(best_path[m][t+1])
-                best_path[m][t] = backpoint_matrix[t+1][m][forward_state]
-                
+            best_path[m][time - 1] = np.argmax(viterbi_matrix[time - 1][m][:])
+            for t in range(time - 2, -1, -1):
+                forward_state = int(best_path[m][t + 1])
+                best_path[m][t] = backpoint_matrix[t + 1][m][forward_state]
+
         return pd.DataFrame(best_path.T, index=self.data.index)
 
     def predict_hidden_states_log_viterbi(self, h_t):
@@ -1178,43 +1213,52 @@ class FactoredHMMInference(ABC):
         model = self.model
         systems = len(model.ns_hidden_states)
         n = np.max(model.ns_hidden_states)
-        viterbi_matrix = np.zeros((time,systems,n))
-        backpoint_matrix = np.zeros((time,systems,n))
+        viterbi_matrix = np.zeros((time, systems, n))
+        backpoint_matrix = np.zeros((time, systems, n))
         best_path = np.zeros((systems, time))
         initial_state = np.zeros(h_t[0].shape)
         for m in range(systems):
-            initial_state[m,:model.ns_hidden_states[m]] = np.array(model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
+            initial_state[m, :model.ns_hidden_states[m]] = np.array(
+                model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
 
         log_initial_state = np.log(
             np.array(initial_state),
             out=np.zeros_like(np.array(initial_state)) + LOG_ZERO,
             where=(np.array(initial_state) != 0))
 
-        log_transition = np.array([np.log(
-            transition,
-            out=np.zeros_like(transition) + LOG_ZERO,
-            where=(np.array(transition) != 0)) for transition in model.transition_matrix])
+        log_transition = np.array([
+            np.log(
+                transition,
+                out=np.zeros_like(transition) + LOG_ZERO,
+                where=(np.array(transition) != 0))
+            for transition in model.transition_matrix
+        ])
 
         log_h_t = np.log(
-                    h_t,
-                    out=np.zeros_like(h_t) + LOG_ZERO,
-                    where=(h_t != 0))
+            h_t, out=np.zeros_like(h_t) + LOG_ZERO, where=(h_t != 0))
 
         viterbi_matrix[0][:][:] = log_h_t[0][:][:] + log_initial_state
-        
+
         for m in range(systems):
             hidden_state = model.ns_hidden_states[m]
             for t in range(1, time):
-                step = log_h_t[t][m][:hidden_state, np.newaxis] + model.transition_matrix[m,:hidden_state,:hidden_state] + viterbi_matrix[t-1][m][:hidden_state]
+                step = log_h_t[t][m][:hidden_state, np.
+                                     newaxis] + model.transition_matrix[m, :
+                                                                        hidden_state, :
+                                                                        hidden_state] + viterbi_matrix[t
+                                                                                                       -
+                                                                                                       1][m][:
+                                                                                                             hidden_state]
                 viterbi_matrix[t][m][:hidden_state] = np.max(step, axis=1)
                 backpoint_matrix[t][m][:hidden_state] = np.argmax(step, axis=1)
 
         for m in range(systems):
             hidden_state = model.ns_hidden_states[m]
-            best_path[m][time-1] = np.argmax(viterbi_matrix[time-1][m][:hidden_state])
-            for t in range(time-2, -1, -1):
-                forward_state = int(best_path[m][t+1])
-                best_path[m][t] = backpoint_matrix[t+1][m][forward_state]
+            best_path[m][time - 1] = np.argmax(
+                viterbi_matrix[time - 1][m][:hidden_state])
+            for t in range(time - 2, -1, -1):
+                forward_state = int(best_path[m][t + 1])
+                best_path[m][t] = backpoint_matrix[t + 1][m][forward_state]
 
         return pd.DataFrame(best_path.T, index=self.data.index)
 
