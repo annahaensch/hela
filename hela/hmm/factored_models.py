@@ -1082,44 +1082,6 @@ class FactoredHMMInference(ABC):
 
         return gamma, alpha, beta
 
-    def forward_backward(self, h_t):
-        """  
-        Gets probabilities under current model parameters
-        
-        Arguments: 
-            h_t: (array) array of dimension T x M X N for current variational parameters
-        
-        Returns: 
-            Arrays for alpha, beta, gamma
-        """
-        time = len(self.data)
-        model = self.model
-        systems = len(model.ns_hidden_states)
-        n = np.max(model.ns_hidden_states)
-        alpha = np.zeros((time,systems,n))
-        beta = np.zeros((time,systems,n))
-        gamma = np.zeros((time,systems,n))
-
-        alpha[0][:][:] = h_t[0][:][:] * model.initial_state_matrix
-        beta[time-1][:][:] = np.ones((len(model.ns_hidden_states), n))
-
-        for m in range(systems):
-            # Forward probabilities
-            for t in range(1, time):
-                alpha[t][m][:] = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
-                # a = h_t[t][m] * np.dot(alpha[t-1][m][:], model.transition_matrix[m])
-                # alpha[t][m][:] = a/np.sum(a)
-            # Backward probabilities
-            for t in range(time-2, -1, -1):
-                beta[t][m][:] = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
-                # b = np.sum(h_t[t+1][m] * model.transition_matrix[m] * beta[t+1][m][:], axis=1)
-                # beta[t][m][:] = b/np.sum(b)
-
-            #new prob for system
-            gamma[:,m,:] = np.divide(alpha[:,m,:]*beta[:,m,:], 
-                                          np.sum(alpha[:,m,:]*beta[:,m,:], axis=1).reshape(-1,1))
-        return gamma, alpha, beta
-
     def h_t_update(self, gamma, data):
         """  
         Updates variational parameters under the current expectations
