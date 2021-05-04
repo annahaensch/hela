@@ -454,28 +454,28 @@ to keep our notation consistent with the notation in \cite{GJ95}, for
 each $m$ we 
 introduce the $N\times 1$ vector $\langle Z_t^{(m)}\rangle$ whose 
 $n^{th}$ component is given by 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:bracket1}
 \langle Z_t^{(m)}\rangle_n &=& p\left(Z_t^{(m)}=h_n^{(m)}\mid 
 X_{1:T},\Theta'\right),
-\end{eqnarray*}
+\end{eqnarray}
 which is equivalent to the definiton in
 \cite[Appendix B]{GJ95}. Similarly, for each $m$, we will introduce the the $N\times N$ matrix 
 $\langle Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle$ 
 where the entry in row $n$ and column $n'$ is given by 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:bracket2}
 \langle Z_{t-1}^{(m)}Z_t^{(m)^\intercal}\rangle_{nn'} &=& 
 p\left(Z_{t-1}^{(m)}=h_n^{(m)},Z_t^{(m)}=h_{n'}^{(m)}\mid 
 X_{1:T},\Theta'\right).
-\end{eqnarray*}
+\end{eqnarray}
 Finally, we introduce a collection of $M\times M$ many $N\times N$ 
 matrices $\langle 
 Z_t^{(m)}Z_t^{(m')^\intercal} \rangle$ where the entry in row $n$ and column $n'$ is 
 given by  
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:bracket3}
 \langle Z_t^{(m)}Z_t^{(m')^\intercal}\rangle_{nn'} &=& 
 p\left(Z_t^{(m)}=h_n^{(m)},Z_t^{(m')}=h_{n'}^{(m')}\mid 
 X_{1:T},\Theta'\right).
-\end{eqnarray*}
+\end{eqnarray}
 Since it will be helpful in what follows, we define 
 \[
 \delta_{i,j}=\begin{cases}
@@ -1300,11 +1300,11 @@ W^{(m)}$ and we will use the fact that
 which is given as equation D.4 in \cite[Appendix D]{GJ95}.  Now setting 
 the coefficient in parentheses equal to 0, we can solve for 
 $\lambda_t^{(m)}$, giving 
-\begin{eqnarray*}
+\begin{eqnarray}\label{eqn:updatelambda}
 \lambda_t^{(m)^\text{ new}} & = & 
 \exp\left\{\frac{1}{M}\overrightarrow{b^{(m)}}-\frac{1}{2}\triangle^{(m)} + \widetilde{V_t}^{(m)}\cdot \Sigma^{-1}\cdot 
 W^{(m)}\right\} 
-\end{eqnarray*}
+\end{eqnarray}
 where the residual error is given by 
 \begin{eqnarray*}
 \widetilde{V_t}^{(m)} &=&V_t^\intercal - \sum_{n\neq m}\langle 
@@ -1470,8 +1470,50 @@ easily carried out with time complexity $O(TMN^2)$.
   \end{algorithmic}
 \end{algorithm}
 
+\subsubsection{Learning with Structured Variational Inference}
 
+In the case where model parameters are not already known, variational  
+inference can also be used for learning.  In practice, it is known that 
+the variational parameters converge to optimal values after relatively 
+few iterations.  This means, that for a given set of model parameters, 
+the optimization routine described in the previous sections can be 
+carried out relatively quickly.  Combining this with the learning 
+methods employed with Gibbs sampling, we are able to develop a learning 
+algorithm using variational inferece, the details of which are given as 
+pseudocode in Algorithm \ref{alg:vilearning}. The critical observation 
+is that as the KL divergence gets small, the bracket values returned by 
+the Algorithm \ref{alg:fb} will approximate the bracket values of the 
+true posterior, equations (\ref{eqn:bracket1}) - 
+(\ref{eqn:bracket3}), which are all that is necessary to carry out the steps of the approximate EM 
+algorithm. 
 
+\begin{algorithm}
+  \caption{Learning with Variational Inference\label{alg:vilearning}}
+  \begin{algorithmic}[1]
+    \Function{LearningWithVI}{model, $\Theta$, data $X_{1:T}$, 
+    number of iterations, ${\tt R}$}
+    \For{${\tt r}$ in ${\tt R}$}
+	\State Initialize variational parameters $\{\lambda_{t,n}^{(m)}\}$ 
+	for all $t,n$ and $m$.
+	\For{${\tt i}$ in range(5)}\hfill\Comment{5 should work in practice}
+	\State ${\tt \gamma}\leftarrow ${\sc ForwardBackward($\Theta,\{\lambda_{t,n}^{(m)}\}$)}
+	\For{${\tt t}$ in range(T)}
+	\For{${\tt n}$ in range(N)}
+	\For{${\tt m}$ in range(M)}
+	\State $\lambda_{t,n}^{(m)\text{new}}\leftarrow $ update 
+	$\lambda_{t,n}^{(m)}\leftarrow $ according 
+	to (\ref{eqn:updatelambda})
+	\EndFor
+	\EndFor
+	\EndFor
+	\EndFor
+	\State $\Theta^\text{new}\leftarrow$ using most recent $\gamma$, update $\Theta$ according to 
+	equations (\ref{eqn:updateinitial})-(\ref{eqn:updatecovariance})
+	\EndFor
+    \State\Return ${\Theta^\text{new}}$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
 
 
 \bibliographystyle{siam}
