@@ -1045,13 +1045,12 @@ class FactoredHMMInference(ABC):
         initial_state = np.zeros(alpha[0].shape)
         for m in range(systems):
             initial_state[m,:model.ns_hidden_states[m]] = np.array(model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
-        # TODO (isalju): fix mask for all params
+
         log_initial_state = np.log(
             np.array(initial_state),
             out=np.zeros_like(np.array(initial_state)) + LOG_ZERO,
             where=(np.array(initial_state) != 0))
 
-        # transition = model.transition_matrix
         log_transition = np.array([np.log(
             transition,
             out=np.zeros_like(transition) + LOG_ZERO,
@@ -1186,7 +1185,6 @@ class FactoredHMMInference(ABC):
         for m in range(systems):
             initial_state[m,:model.ns_hidden_states[m]] = np.array(model.initial_state_matrix[m])[:model.ns_hidden_states[m]]
 
-        # TODO (isalju): fix masks for all params
         log_initial_state = np.log(
             np.array(initial_state),
             out=np.zeros_like(np.array(initial_state)) + LOG_ZERO,
