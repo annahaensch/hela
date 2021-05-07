@@ -175,7 +175,7 @@ class FactoredHMM(ABC):
         self.gaussian_model = gaussian_model
 
         self.training_dict = training_dict
-        self.graph = graph
+        # self.graph = graph
 
     @classmethod
     def from_config(cls, model_config, random_state):
@@ -217,7 +217,7 @@ class FactoredHMM(ABC):
         model.initial_state_matrix = model_config.model_parameter_constraints[
             'initial_state_constraints'].copy()
 
-        model.graph = fhmm_model_to_graph(model)
+        # model.graph = fhmm_model_to_graph(model)
 
         return model
 
@@ -615,7 +615,7 @@ class GaussianModel(FactoredHMM):
 
         means_concat = Gamma_sum @ Gamma_inv
         for i in range(len(ns_hidden_states)):
-            means[i, :ns_hidden_states[i], :ns_hidden_states[i]] = [
+            means[i, :, :ns_hidden_states[i]] = [
                 w[csum[i]:csum[i + 1]] for w in means_concat
             ]
 
@@ -640,7 +640,7 @@ class GaussianModel(FactoredHMM):
         Gamma_sum = [
             np.sum(
                 [
-                    means[i][:ns_hidden_states[i], :ns_hidden_states[i]]
+                    means[i][:, :ns_hidden_states[i]]
                     .data @ g.diagonal()[csum[i]:csum[i + 1]].reshape(-1, 1)
                     for i in range(len(ns_hidden_states))
                 ],
