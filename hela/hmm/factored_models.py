@@ -1118,10 +1118,12 @@ class FactoredHMMInference(ABC):
         model = self.model
         inv_cov = np.linalg.inv(model.gaussian_model.covariance)
         gauss_data = np.array(data.loc[:, model.gaussian_features])
-        cat_data_enum = [
-            model.categorical_model.categorical_vector_to_enum[str(list(d))]
-            for d in np.array(data.loc[:, model.categorical_features])
-        ]
+
+        if model.categorical_model:
+            cat_data_enum = [
+                model.categorical_model.categorical_vector_to_enum[str(list(d))]
+                for d in np.array(data.loc[:, model.categorical_features])
+            ]
 
         h_t_new = np.zeros((len(data), len(model.ns_hidden_states),
                             np.max(model.ns_hidden_states)))
