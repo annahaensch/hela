@@ -1116,8 +1116,10 @@ class FactoredHMMInference(ABC):
             Array of updated variational parameters
         """
         model = self.model
-        inv_cov = np.linalg.inv(model.gaussian_model.covariance)
-        gauss_data = np.array(data.loc[:, model.gaussian_features])
+
+        if model.gaussian_model:
+            inv_cov = np.linalg.inv(model.gaussian_model.covariance)
+            gauss_data = np.array(data.loc[:, model.gaussian_features])
 
         if model.categorical_model:
             cat_data_enum = [
