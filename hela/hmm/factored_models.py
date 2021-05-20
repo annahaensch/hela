@@ -933,14 +933,9 @@ class FactoredHMMInference(ABC):
 
         Gamma = None
         Xi = None
+        full_sample = np.empty((iterations,data.shape[0],len(model.ns_hidden_states)))
 
         for r in range(iterations + burn_down_period):
-
-            # Gather statistics
-            if r >= burn_down_period:
-                if gather_statistics == True:
-                    Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
-                                                       Gamma, Xi)
 
             # Carry out sampling
             sample_times = np.random.choice(
@@ -974,6 +969,19 @@ class FactoredHMMInference(ABC):
 
                     hidden_state_vector_df.iloc[t, m] = _sample(
                         updated_state_prob, sample_parameter[t])
+            
+            # Gather statistics
+            if r >= burn_down_period:
+
+                full_sample[r - burn_down_period,:,:] = hidden_state_vector_df.values
+
+                if gather_statistics == True:
+                    Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
+                                                       Gamma, Xi)
+
+        # Compute mode of full sample
+        for i in range(len(model.ns_hidden_states)):
+            hidden_state_vector_df.iloc[:,i] = stats.mode(full_sample[:,:,i].transpose(), axis = 1).mode.astype(int)
 
         # Normalize gathered statistics
         if gather_statistics == True:
