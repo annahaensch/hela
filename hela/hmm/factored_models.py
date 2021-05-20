@@ -924,7 +924,8 @@ class FactoredHMMInference(ABC):
 
         Gamma = None
         Xi = None
-        full_sample = np.empty((iterations,data.shape[0],len(model.ns_hidden_states)))
+        full_sample = np.empty((iterations, data.shape[0],
+                                len(model.ns_hidden_states)))
 
         for r in range(iterations + burn_down_period):
 
@@ -960,11 +961,12 @@ class FactoredHMMInference(ABC):
 
                     hidden_state_vector_df.iloc[t, m] = _sample(
                         updated_state_prob, sample_parameter[t])
-            
+
             # Gather statistics
             if r >= burn_down_period:
 
-                full_sample[r - burn_down_period,:,:] = hidden_state_vector_df.values
+                full_sample[
+                    r - burn_down_period, :, :] = hidden_state_vector_df.values
 
                 if gather_statistics == True:
                     Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
@@ -972,7 +974,8 @@ class FactoredHMMInference(ABC):
 
         # Compute mode of full sample
         for i in range(len(model.ns_hidden_states)):
-            hidden_state_vector_df.iloc[:,i] = stats.mode(full_sample[:,:,i].transpose(), axis = 1).mode.astype(int)
+            hidden_state_vector_df.iloc[:, i] = stats.mode(
+                full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
 
         # Normalize gathered statistics
         if gather_statistics == True:
@@ -1186,9 +1189,9 @@ class FactoredHMMInference(ABC):
         n = np.max(model.ns_hidden_states)
 
         # randomly initialize variational parameters
-        h_t = np.random.rand(len(data), 
-                        len(self.model.ns_hidden_states), 
-                        np.max(self.model.ns_hidden_states))
+        h_t = np.random.rand(
+            len(data), len(self.model.ns_hidden_states),
+            np.max(self.model.ns_hidden_states))
 
         # Log forward-backward
         for i in range(5):
@@ -1230,9 +1233,9 @@ class FactoredHMMInference(ABC):
         n = np.max(model.ns_hidden_states)
 
         # randomly initialize variational parameters
-        h_t = np.random.rand(len(data), 
-                        len(self.model.ns_hidden_states), 
-                        np.max(self.model.ns_hidden_states))
+        h_t = np.random.rand(
+            len(data), len(self.model.ns_hidden_states),
+            np.max(self.model.ns_hidden_states))
 
         # Log forward-backward
         for i in range(5):
