@@ -221,16 +221,13 @@ class FactoredHMM(ABC):
 
         return model
 
-    def load_inference_interface(self, data):
+    def load_inference_interface(self):
         """ Returns FactoredHMMInference object
-
-        Arguments: 
-            data: timeseries data for which to perform inference
 
         Returns:
             Initialized FactoredHMMInference object
         """
-        return FactoredHMMInference(self, data)
+        return FactoredHMMInference(self)
 
     def load_learning_interface(self):
         """ Returns FactoredHMMInference object
@@ -316,8 +313,6 @@ class FactoredHMM(ABC):
 
         Gamma = update_statistics["Gamma"]
         Xi = update_statistics["Xi"]
-
-        #inf = new_model.load_inference_interface(data)
 
         # Update and verify initial state matrix.
         new_model.initial_state_matrix = np.array([
@@ -738,7 +733,7 @@ class FactoredHMMLearningAlgorithm(ABC):
         ns_hidden_states = model.ns_hidden_states
         hidden_state_vector_df = None
         for r in range(training_iterations):
-            inf = new_model.load_inference_interface(data)
+            inf = new_model.load_inference_interface()
             Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
                 data,
                 iterations=gibbs_iterations,
@@ -780,10 +775,10 @@ class FactoredHMMLearningAlgorithm(ABC):
             len(data), len(ns_hidden_states), np.max(ns_hidden_states))
 
         for r in range(training_iterations):
-            inf = new_model.load_inference_interface(data)
+            inf = new_model.load_inference_interface()
 
             for i in range(5):
-                gamma, alpha, beta = inf.log_forward_backward(h_t)
+                gamma, alpha, beta = inf.log_forward_backward(data, h_t)
                 h_t = inf.h_t_update(gamma, data)
 
             update_statistics = new_model.get_update_statistics(gamma)
@@ -803,9 +798,8 @@ class FactoredHMMLearningAlgorithm(ABC):
 
 class FactoredHMMInference(ABC):
 
-    def __init__(self, model, data):
+    def __init__(self, model):
         self.model = model
-        self.data = data
 
     def emission_probabilities(self, data):
         """ Returns emission probabilities for observed data
@@ -1039,17 +1033,18 @@ class FactoredHMMInference(ABC):
 
         return Gamma, Xi
 
-    def log_forward_backward(self, h_t):
+    def log_forward_backward(self, data, h_t):
         """  
         Gets log probabilities under current model parameters
 
         Arguments: 
+            data: (dataframe) df on which to peform inference
             h_t: (array) array of dimension T x M X N for current variational parameters
         
         Returns: 
             Arrays for alpha, beta, gamma
         """
-        time = len(self.data)
+        time = len(data)
         model = self.model
         systems = len(model.ns_hidden_states)
         beta = np.empty((time, systems, np.max(model.ns_hidden_states)))
@@ -1178,17 +1173,18 @@ class FactoredHMMInference(ABC):
 
         return h_t_new
 
-    def predict_hidden_states_viterbi(self, h_t):
+    def predict_hidden_states_viterbi(self, data, h_t):
         """  
         Predicts the most likely series of hidden states using viterbi algorithm
 
         Arguments: 
+            data: (dataframe) df on which to perform inference
             h_t: (array) array of dimension T x M X N for current variational parameters
         
         Returns: 
             DataFrame of most likely series of hidden states
         """
-        time = len(self.data)
+        time = len(data)
         model = self.model
         systems = len(model.ns_hidden_states)
         n = np.max(model.ns_hidden_states)
@@ -1209,19 +1205,20 @@ class FactoredHMMInference(ABC):
                 forward_state = int(best_path[m][t + 1])
                 best_path[m][t] = backpoint_matrix[t + 1][m][forward_state]
 
-        return pd.DataFrame(best_path.T, index=self.data.index)
+        return pd.DataFrame(best_path.T, index=data.index)
 
-    def predict_hidden_states_log_viterbi(self, h_t):
+    def predict_hidden_states_log_viterbi(self, data, h_t):
         """  
         Predicts the most likely series of hidden states using viterbi algorithm
 
         Arguments: 
+            data: (dataframe) df on which to perform inference
             h_t: (array) array of dimension T x M X N for current variational parameters
         
         Returns: 
             DataFrame of most likely series of hidden states
         """
-        time = len(self.data)
+        time = len(data)
         model = self.model
         systems = len(model.ns_hidden_states)
         n = np.max(model.ns_hidden_states)
@@ -1272,7 +1269,7 @@ class FactoredHMMInference(ABC):
                 forward_state = int(best_path[m][t + 1])
                 best_path[m][t] = backpoint_matrix[t + 1][m][forward_state]
 
-        return pd.DataFrame(best_path.T, index=self.data.index)
+        return pd.DataFrame(best_path.T, index=data.index)
 
 
 def _sample(probability_distribution, sample_parameter):
