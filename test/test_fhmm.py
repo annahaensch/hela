@@ -65,7 +65,7 @@ def test_model_sampling_and_inference(generative_model):
 
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
     model = model_config.to_model()
-    inf = model.load_inference_interface(dataset)
+    inf = model.load_inference_interface()
 
     Gamma, Xi, gibbs_states = inf.gibbs_sampling(
         dataset, iterations=1, burn_down_period=1)
@@ -103,7 +103,7 @@ def test_learning_with_gibbs(generative_model):
 
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
     untrained_model = model_config.to_model()
-    inf = untrained_model.load_inference_interface(dataset)
+    inf = untrained_model.load_inference_interface()
     alg = untrained_model.load_learning_interface()
 
     model = alg.run(
@@ -153,7 +153,7 @@ def test_learning_with_structured_vi(generative_model):
 
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
     untrained_model = model_config.to_model()
-    inf = untrained_model.load_inference_interface(dataset)
+    inf = untrained_model.load_inference_interface()
     alg = untrained_model.load_learning_interface()
 
     model = alg.run(data=dataset, method='structured_vi', training_iterations=5)
