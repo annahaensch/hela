@@ -1170,14 +1170,13 @@ class FactoredHMMInference(ABC):
 
         return h_t_new
 
-    def predict_hidden_states_viterbi(self, data, h_t):
+    def predict_hidden_states_viterbi(self, data):
         """  
         Predicts the most likely series of hidden states using viterbi algorithm
 
         Arguments: 
             data: (dataframe) df on which to perform inference
-            h_t: (array) array of dimension T x M X N for current variational parameters
-        
+
         Returns: 
             DataFrame of most likely series of hidden states
         """
@@ -1185,6 +1184,17 @@ class FactoredHMMInference(ABC):
         model = self.model
         systems = len(model.ns_hidden_states)
         n = np.max(model.ns_hidden_states)
+
+        # randomly initialize variational parameters
+        h_t = np.random.rand(len(data), 
+                        len(self.model.ns_hidden_states), 
+                        np.max(self.model.ns_hidden_states))
+
+        # Log forward-backward
+        for i in range(5):
+            gamma, alpha, beta = self.log_forward_backward(data, h_t)
+            h_t = self.h_t_update(gamma, data)
+
         viterbi_matrix = np.zeros((time, systems, n))
         backpoint_matrix = np.zeros((time, systems, n))
         best_path = np.zeros((systems, time))
@@ -1204,14 +1214,13 @@ class FactoredHMMInference(ABC):
 
         return pd.DataFrame(best_path.T, index=data.index)
 
-    def predict_hidden_states_log_viterbi(self, data, h_t):
+    def predict_hidden_states_log_viterbi(self, data):
         """  
         Predicts the most likely series of hidden states using viterbi algorithm
 
         Arguments: 
             data: (dataframe) df on which to perform inference
-            h_t: (array) array of dimension T x M X N for current variational parameters
-        
+
         Returns: 
             DataFrame of most likely series of hidden states
         """
@@ -1219,6 +1228,17 @@ class FactoredHMMInference(ABC):
         model = self.model
         systems = len(model.ns_hidden_states)
         n = np.max(model.ns_hidden_states)
+
+        # randomly initialize variational parameters
+        h_t = np.random.rand(len(data), 
+                        len(self.model.ns_hidden_states), 
+                        np.max(self.model.ns_hidden_states))
+
+        # Log forward-backward
+        for i in range(5):
+            gamma, alpha, beta = self.log_forward_backward(data, h_t)
+            h_t = self.h_t_update(gamma, data)
+
         viterbi_matrix = np.zeros((time, systems, n))
         backpoint_matrix = np.zeros((time, systems, n))
         best_path = np.zeros((systems, time))
