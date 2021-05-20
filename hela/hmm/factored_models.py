@@ -230,13 +230,10 @@ class FactoredHMM(ABC):
         return FactoredHMMInference(self)
 
     def load_learning_interface(self):
-        """ Returns FactoredHMMInference object
-
-        Arguments: 
-            data: timeseries data for which to perform inference
+        """ Returns FactoredHMMLearning object
 
         Returns:
-            Initialized FactoredHMMInference object
+            Initialized FactoredHMMLearning object
         """
         return FactoredHMMLearningAlgorithm(self)
 
