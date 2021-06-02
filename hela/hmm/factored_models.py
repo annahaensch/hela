@@ -738,7 +738,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                     burn_down_period=burn_down_period,
                     gather_statistics=False,
                     hidden_state_vector_df=hidden_state_vector_df,
-                    distributed=False,
+                    distributed=True,
                     n_workers=n_workers)
 
                 Gamma, Xi, hidden_state_vector_df = inf.distributed_gibbs_sampling(
@@ -756,7 +756,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                     burn_down_period=burn_down_period,
                     gather_statistics=True,
                     hidden_state_vector_df=hidden_state_vector_df,
-                    distributed=distributed,
+                    distributed=False,
                     n_workers=n_workers)
 
             update_statistics = {
@@ -990,16 +990,16 @@ class FactoredHMMInference(ABC):
                 if gather_statistics == True:
                     Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
                                                        Gamma, Xi)
-
+        if distributed == False:
         # Compute mode of full sample
-        for i in range(len(model.ns_hidden_states)):
-            hidden_state_vector_df.iloc[:, i] = stats.mode(
-                full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
+            for i in range(len(model.ns_hidden_states)):
+                hidden_state_vector_df.iloc[:, i] = stats.mode(
+                    full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
 
-        # Normalize gathered statistics
-        if gather_statistics == True:
-            Gamma = Gamma / iterations
-            Xi = Xi / iterations
+            # Normalize gathered statistics
+            if gather_statistics == True:
+                Gamma = Gamma / iterations
+                Xi = Xi / iterations
 
         return Gamma, Xi, hidden_state_vector_df
 
