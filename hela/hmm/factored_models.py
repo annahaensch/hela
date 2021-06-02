@@ -731,14 +731,33 @@ class FactoredHMMLearningAlgorithm(ABC):
         hidden_state_vector_df = None
         for r in range(training_iterations):
             inf = new_model.load_inference_interface()
-            Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
-                data,
-                iterations=gibbs_iterations,
-                burn_down_period=burn_down_period,
-                gather_statistics=True,
-                hidden_state_vector_df=hidden_state_vector_df,
-                distributed=distributed,
-                n_workers=n_workers)
+            if distributed == True:
+                Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
+                    data,
+                    iterations=0,
+                    burn_down_period=burn_down_period,
+                    gather_statistics=False,
+                    hidden_state_vector_df=hidden_state_vector_df,
+                    distributed=False,
+                    n_workers=n_workers)
+
+                Gamma, Xi, hidden_state_vector_df = inf.distributed_gibbs_sampling(
+                    data,
+                    iterations=gibbs_iterations,
+                    burn_down_period=0,
+                    gather_statistics=True,
+                    hidden_state_vector_df=hidden_state_vector_df,
+                    distributed=True,
+                    n_workers=n_workers)
+            else:
+                Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
+                    data,
+                    iterations=gibbs_iterations,
+                    burn_down_period=burn_down_period,
+                    gather_statistics=True,
+                    hidden_state_vector_df=hidden_state_vector_df,
+                    distributed=distributed,
+                    n_workers=n_workers)
 
             update_statistics = {
                 "Gamma": Gamma,
