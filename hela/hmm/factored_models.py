@@ -366,11 +366,9 @@ class FactoredHMM(ABC):
                 new_model.gaussian_model.means, data, Gamma)
 
             msg = "Covariance update is not positive definite: {}".format(
-                    new_model.gaussian_model.covariance
-                    )
+                new_model.gaussian_model.covariance)
             assert np.all(
-                np.linalg.eigvals(new_model.gaussian_model.covariance) > 0
-                ), msg
+                np.linalg.eigvals(new_model.gaussian_model.covariance) > 0), msg
 
         return new_model
 
@@ -639,15 +637,18 @@ class GaussianModel(FactoredHMM):
         new_cov = np.zeros((gauss_data.shape[1], gauss_data.shape[1]))
 
         for t in range(len(Gamma)):
-            error = np.zeros((gauss_data.shape[1],1))
+            error = np.zeros((gauss_data.shape[1], 1))
 
             for m in range(len(ns_hidden_states)):
-                W = means[m].data[:,:ns_hidden_states[m]]
-                G = np.array([Gamma[t][c][c] for c in range(csum[m],csum[m+1])]).reshape(-1,1)
+                W = means[m].data[:, :ns_hidden_states[m]]
+                G = np.array([
+                    Gamma[t][c][c] for c in range(csum[m], csum[m + 1])
+                ]).reshape(-1, 1)
 
                 error += W @ G
 
-            new_cov += (gauss_data[t].reshape(-1,1) - error) @ ((gauss_data[t].reshape(-1,1) - error)).reshape(1,-1)
+            new_cov += (gauss_data[t].reshape(-1, 1) - error) @ ((
+                gauss_data[t].reshape(-1, 1) - error)).reshape(1, -1)
 
         new_cov = new_cov / gauss_data.shape[0]
 

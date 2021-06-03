@@ -1,24 +1,22 @@
-import hela
-
-import pandas as pd
-import numpy as np
-
-from sklearn.mixture import GaussianMixture
+import itertools
+import logging
+import sys
 import time
-
-# Hela ML libraries
-from hela import hmm
-import hela.generation.hmm as hmm_gen
-
 # Utility Libraries
 from datetime import datetime
-from dask.distributed import Client
-from scipy.special import logsumexp
-from scipy import stats
-import itertools
-import sys
 
-import logging
+import numpy as np
+import pandas as pd
+from dask.distributed import Client
+from scipy import stats
+from scipy.special import logsumexp
+from sklearn.mixture import GaussianMixture
+
+import hela
+import hela.generation.hmm as hmm_gen
+# Hela ML libraries
+from hela import hmm
+
 logging.basicConfig(level=logging.INFO)
 
 LOG_ZERO = -1e8
@@ -266,6 +264,8 @@ def main(argv):
 
         random_state = RANDOM_STATES[t]
 
+        logging.info("\n\n random state: {}".format(random_state))
+
         time_df.loc[t, 'systems'] = m
         time_df.loc[t, 'states'] = n
         time_df.loc[t, 'trial'] = t
@@ -317,83 +317,104 @@ def main(argv):
         # Compute true log likelihood
         train_true, test_true = get_true_ll(gen, train_data, test_data)
 
-        logging.info("True train: {}".format(train_true))
-        logging.info("True test: {}".format(test_true))
+        logging.info("\n True:")
+        logging.info("...train_ll: {}".format(train_true))
+        logging.info("...test_ll: {}".format(test_true))
 
         ll_df.loc[t, 'train_true'] = train_true
         ll_df.loc[t, 'test_true'] = test_true
 
         # Train flattened HMM with EM
-        em_start = time.time()
+        em = "failed"
+        em_random_state = random_state
+        while em == "failed":
+            em_start = time.time()
 
-        try:
-            em_alg, em_hmm_model = train_hmm_em(gen, random_state, train_data)
-            time_df.loc[t, 'em'] = (time.time() - em_start) / ITERATIONS
+            try:
+                em_alg, em_hmm_model = train_hmm_em(gen, em_random_state,
+                                                    train_data)
+                time_df.loc[t, 'em'] = (time.time() - em_start) / ITERATIONS
 
-            logging.info("\n EM: complete")
+                em = "successful"
+                logging.info("\n EM: {} - {}".format(em, em_random_state))
 
-            em_learning_ll = compute_learning_ll(em_alg, train_data, "hmm")
-            em_df[str(random_state)] = em_learning_ll
+                em_learning_ll = compute_learning_ll(em_alg, train_data, "hmm")
+                em_df[str(random_state)] = em_learning_ll
 
-            em_train_ll, em_test_ll = compute_model_ll(em_hmm_model, train_data,
-                                                       test_data, "hmm")
-            ll_df.loc[t, 'train_em'] = em_train_ll
-            ll_df.loc[t, 'test_em'] = em_test_ll
+                em_train_ll, em_test_ll = compute_model_ll(
+                    em_hmm_model, train_data, test_data, "hmm")
+                ll_df.loc[t, 'train_em'] = em_train_ll
+                ll_df.loc[t, 'test_em'] = em_test_ll
 
-            logging.info("...train_ll: {}".format(em_train_ll))
-            logging.info("...test_ll: {}".format(em_test_ll))
+                logging.info("...train_ll: {}".format(em_train_ll))
+                logging.info("...test_ll: {}".format(em_test_ll))
 
-        except:
-            logging.info("\n EM: failed")
+            except:
+                em_random_state = em_random_state + 1
+                logging.info("EM: {}".format(em))
 
         # Train with Variational Inference
-        vi_start = time.time()
+        vi = "failed"
+        vi_random_state = random_state
+        while vi == "failed":
+            vi_start = time.time()
 
-        try:
-            vi_alg, vi_fhmm_model = train_fhmm_vi(gen, random_state, train_data,
-                                                  train_fact_hidden_states)
-            time_df.loc[t, 'vi'] = (time.time() - vi_start) / ITERATIONS
+            try:
+                vi_alg, vi_fhmm_model = train_fhmm_vi(
+                    gen, vi_random_state, train_data, train_fact_hidden_states)
+                time_df.loc[t, 'vi'] = (time.time() - vi_start) / ITERATIONS
 
-            logging.info("\n VI: complete")
+                vi = "successful"
+                logging.info("\n VI: {} - {}".format(vi, vi_random_state))
 
-            vi_learning_ll = compute_learning_ll(vi_alg, train_data, "fhmm")
-            vi_df[str(random_state)] = vi_learning_ll
+                vi_learning_ll = compute_learning_ll(vi_alg, train_data, "fhmm")
+                vi_df[str(random_state)] = vi_learning_ll
 
-            vi_train_ll, vi_test_ll = compute_model_ll(vi_fhmm_model, train_data,
-                                                       test_data, "fhmm")
-            ll_df.loc[t, 'train_vi'] = vi_train_ll
-            ll_df.loc[t, 'test_vi'] = vi_test_ll
+                vi_train_ll, vi_test_ll = compute_model_ll(
+                    vi_fhmm_model, train_data, test_data, "fhmm")
+                ll_df.loc[t, 'train_vi'] = vi_train_ll
+                ll_df.loc[t, 'test_vi'] = vi_test_ll
 
-            logging.info("...train_ll: {}".format(vi_train_ll))
-            logging.info("...test_ll: {}".format(vi_test_ll))
+                logging.info("...train_ll: {}".format(vi_train_ll))
+                logging.info("...test_ll: {}".format(vi_test_ll))
 
-        except:
-            logging.info("\n VI: failed")
+            except:
+                vi_random_state = vi_random_state + 1
+                logging.info("VI: {}".format(vi))
 
         # Train with Gibbs sampling
-        gibbs_start = time.time()
-        
-        try:
-            gibbs_alg, gibbs_fhmm_model = train_fhmm_gibbs(
-                gen, random_state, train_data, train_fact_hidden_states)
+        gibbs = "failed"
+        gibbs_random_state = random_state
+        while gibbs == "failed":
+            gibbs_start = time.time()
 
-            time_df.loc[t, 'gibbs'] = (time.time() - gibbs_start) / ITERATIONS
+            try:
+                gibbs_alg, gibbs_fhmm_model = train_fhmm_gibbs(
+                    gen, gibbs_random_state, train_data,
+                    train_fact_hidden_states)
 
-            logging.info("\n Gibbs: complete")
+                time_df.loc[t, 'gibbs'] = (
+                    time.time() - gibbs_start) / ITERATIONS
 
-            gibbs_learning_ll = compute_learning_ll(gibbs_alg, train_data, "fhmm")
-            gibbs_df[str(random_state)] = gibbs_learning_ll
+                gibbs = "successful"
+                logging.info("\n Gibbs: {} - {}".format(gibbs,
+                                                        gibbs_random_state))
 
-            gibbs_train_ll, gibbs_test_ll = compute_model_ll(
-                gibbs_fhmm_model, train_data, test_data, "fhmm")
-            ll_df.loc[t, 'train_gibbs'] = gibbs_train_ll
-            ll_df.loc[t, 'test_gibbs'] = gibbs_test_ll
+                gibbs_learning_ll = compute_learning_ll(gibbs_alg, train_data,
+                                                        "fhmm")
+                gibbs_df[str(random_state)] = gibbs_learning_ll
 
-            logging.info("...train_ll: {}".format(vi_train_ll))
-            logging.info("...test_ll: {}".format(vi_test_ll))
+                gibbs_train_ll, gibbs_test_ll = compute_model_ll(
+                    gibbs_fhmm_model, train_data, test_data, "fhmm")
+                ll_df.loc[t, 'train_gibbs'] = gibbs_train_ll
+                ll_df.loc[t, 'test_gibbs'] = gibbs_test_ll
 
-        except:
-            logging.info("\n Gibbs: failed")
+                logging.info("...train_ll: {}".format(vi_train_ll))
+                logging.info("...test_ll: {}".format(vi_test_ll))
+
+            except:
+                gibbs_random_state = gibbs_random_state + 1
+                logging.info("Gibbs: {}".format(gibbs))
 
     time_df.to_parquet("training_table_data/{}_{}_time_df.pq".format(m, n))
     ll_df.to_parquet("training_table_data/{}_{}_ll_df.pq".format(m, n))
