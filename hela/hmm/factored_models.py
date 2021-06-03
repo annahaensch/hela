@@ -750,8 +750,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                     burn_down_period=burn_down_period,
                     gather_statistics=True,
                     hidden_state_vector_df=hidden_state_vector_df,
-                    distributed=False,
-                    n_workers=n_workers)
+                    distributed=False)
 
             update_statistics = {
                 "Gamma": Gamma,
@@ -900,8 +899,7 @@ class FactoredHMMInference(ABC):
                        burn_down_period=10,
                        gather_statistics=False,
                        hidden_state_vector_df=None,
-                       distributed=False,
-                       n_workers=9):
+                       distributed=False):
         """ Samples hidden state sequence for given data
 
         Arguments: 
@@ -1019,8 +1017,7 @@ class FactoredHMMInference(ABC):
                                                                burn_down_period=burn_down_period, 
                                                                gather_statistics = False, 
                                                                hidden_state_vector_df = hidden_state_vector_df, 
-                                                               distributed=False, 
-                                                               n_workers=n_workers)
+                                                               distributed=False)
         # Initialize workers
         local_iterations = iterations // n_workers
         
