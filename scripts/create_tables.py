@@ -325,65 +325,81 @@ def main(argv):
 
         # Train flattened HMM with EM
         em_start = time.time()
-        em_alg, em_hmm_model = train_hmm_em(gen, random_state, train_data)
-        time_df.loc[t, 'em'] = (time.time() - em_start) / ITERATIONS
 
-        logging.info("\n EM: complete")
+        try:
+            em_alg, em_hmm_model = train_hmm_em(gen, random_state, train_data)
+            time_df.loc[t, 'em'] = (time.time() - em_start) / ITERATIONS
 
-        em_learning_ll = compute_learning_ll(em_alg, train_data, "hmm")
-        em_df[str(random_state)] = em_learning_ll
+            logging.info("\n EM: complete")
 
-        em_train_ll, em_test_ll = compute_model_ll(em_hmm_model, train_data,
-                                                   test_data, "hmm")
-        ll_df.loc[t, 'train_em'] = em_train_ll
-        ll_df.loc[t, 'test_em'] = em_test_ll
+            em_learning_ll = compute_learning_ll(em_alg, train_data, "hmm")
+            em_df[str(random_state)] = em_learning_ll
 
-        logging.info("...train_ll: {}".format(em_train_ll))
-        logging.info("...test_ll: {}".format(em_test_ll))
+            em_train_ll, em_test_ll = compute_model_ll(em_hmm_model, train_data,
+                                                       test_data, "hmm")
+            ll_df.loc[t, 'train_em'] = em_train_ll
+            ll_df.loc[t, 'test_em'] = em_test_ll
+
+            logging.info("...train_ll: {}".format(em_train_ll))
+            logging.info("...test_ll: {}".format(em_test_ll))
+
+        except:
+            logging.info("\n EM: failed")
 
         # Train with Variational Inference
         vi_start = time.time()
-        vi_alg, vi_fhmm_model = train_fhmm_vi(gen, random_state, train_data,
-                                              train_fact_hidden_states)
-        time_df.loc[t, 'vi'] = (time.time() - vi_start) / ITERATIONS
 
-        logging.info("\n VI: complete")
+        try:
+            vi_alg, vi_fhmm_model = train_fhmm_vi(gen, random_state, train_data,
+                                                  train_fact_hidden_states)
+            time_df.loc[t, 'vi'] = (time.time() - vi_start) / ITERATIONS
 
-        vi_learning_ll = compute_learning_ll(vi_alg, train_data, "fhmm")
-        vi_df[str(random_state)] = vi_learning_ll
+            logging.info("\n VI: complete")
 
-        vi_train_ll, vi_test_ll = compute_model_ll(vi_fhmm_model, train_data,
-                                                   test_data, "fhmm")
-        ll_df.loc[t, 'train_vi'] = vi_train_ll
-        ll_df.loc[t, 'test_vi'] = vi_test_ll
+            vi_learning_ll = compute_learning_ll(vi_alg, train_data, "fhmm")
+            vi_df[str(random_state)] = vi_learning_ll
 
-        logging.info("...train_ll: {}".format(vi_train_ll))
-        logging.info("...test_ll: {}".format(vi_test_ll))
+            vi_train_ll, vi_test_ll = compute_model_ll(vi_fhmm_model, train_data,
+                                                       test_data, "fhmm")
+            ll_df.loc[t, 'train_vi'] = vi_train_ll
+            ll_df.loc[t, 'test_vi'] = vi_test_ll
+
+            logging.info("...train_ll: {}".format(vi_train_ll))
+            logging.info("...test_ll: {}".format(vi_test_ll))
+
+        except:
+            logging.info("\n VI: failed")
 
         # Train with Gibbs sampling
         gibbs_start = time.time()
-        gibbs_alg, gibbs_fhmm_model = train_fhmm_gibbs(
-            gen, random_state, train_data, train_fact_hidden_states)
-        time_df.loc[t, 'gibbs'] = (time.time() - gibbs_start) / ITERATIONS
+        
+        try:
+            gibbs_alg, gibbs_fhmm_model = train_fhmm_gibbs(
+                gen, random_state, train_data, train_fact_hidden_states)
 
-        logging.info("\n Gibbs: complete")
+            time_df.loc[t, 'gibbs'] = (time.time() - gibbs_start) / ITERATIONS
 
-        gibbs_learning_ll = compute_learning_ll(gibbs_alg, train_data, "fhmm")
-        gibbs_df[str(random_state)] = gibbs_learning_ll
+            logging.info("\n Gibbs: complete")
 
-        gibbs_train_ll, gibbs_test_ll = compute_model_ll(
-            gibbs_fhmm_model, train_data, test_data, "fhmm")
-        ll_df.loc[t, 'train_gibbs'] = gibbs_train_ll
-        ll_df.loc[t, 'test_gibbs'] = gibbs_test_ll
+            gibbs_learning_ll = compute_learning_ll(gibbs_alg, train_data, "fhmm")
+            gibbs_df[str(random_state)] = gibbs_learning_ll
 
-        logging.info("...train_ll: {}".format(vi_train_ll))
-        logging.info("...test_ll: {}".format(vi_test_ll))
+            gibbs_train_ll, gibbs_test_ll = compute_model_ll(
+                gibbs_fhmm_model, train_data, test_data, "fhmm")
+            ll_df.loc[t, 'train_gibbs'] = gibbs_train_ll
+            ll_df.loc[t, 'test_gibbs'] = gibbs_test_ll
 
-    time_df.to_parquet("training_table_data/time_df_{}_{}.pq".format(n, m))
-    ll_df.to_parquet("training_table_data/ll_df_{}_{}.pq".format(n, m))
-    em_df.to_parquet("training_table_data/em_df_{}_{}.pq".format(n, m))
-    vi_df.to_parquet("training_table_data/vi_df_{}_{}.pq".format(n, m))
-    gibbs_df.to_parquet("training_table_data/gibbs_df_{}_{}.pq".format(n, m))
+            logging.info("...train_ll: {}".format(vi_train_ll))
+            logging.info("...test_ll: {}".format(vi_test_ll))
+
+        except:
+            logging.info("\n Gibbs: failed")
+
+    time_df.to_parquet("training_table_data/{}_{}_time_df.pq".format(m, n))
+    ll_df.to_parquet("training_table_data/{}_{}_ll_df.pq".format(m, n))
+    em_df.to_parquet("training_table_data/{}_{}_em_df.pq".format(m, n))
+    vi_df.to_parquet("training_table_data/{}_{}_vi_df.pq".format(m, n))
+    gibbs_df.to_parquet("training_table_data/{}_{}_gibbs_df.pq".format(m, n))
 
 
 if __name__ == "__main__":
