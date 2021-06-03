@@ -730,6 +730,8 @@ class FactoredHMMLearningAlgorithm(ABC):
         new_model = model.model_config.to_model()
         ns_hidden_states = model.ns_hidden_states
         hidden_state_vector_df = None
+        if distributed == True:
+            client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
         for r in range(training_iterations):
             inf = new_model.load_inference_interface()
             if distributed == True:
@@ -739,7 +741,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                     burn_down_period=burn_down_period,
                     gather_statistics=True,
                     hidden_state_vector_df=hidden_state_vector_df,
-                    distributed=True,
+                    client = client,
                     n_workers=n_workers)
             else:
                 Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
@@ -1006,7 +1008,7 @@ class FactoredHMMInference(ABC):
                                    burn_down_period=10,
                                    gather_statistics=False,
                                    hidden_state_vector_df=None,
-                                   distributed=False,
+                                   client = None,
                                    n_workers=9):
 
         model = self.model
@@ -1021,7 +1023,7 @@ class FactoredHMMInference(ABC):
                                                                n_workers=n_workers)
         # Initialize workers
         local_iterations = iterations // n_workers
-        client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
+        
         partition_labels = list(client.scheduler_info()["workers"].keys())
         partitions = {partition_label: (data, hidden_state_vector_df) for partition_label in partition_labels}
         scattered = client.scatter(list(partitions.values()))
