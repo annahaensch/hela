@@ -6,6 +6,7 @@ from abc import ABC
 
 import numpy as np
 import pandas as pd
+from dask.distributed import Client
 from scipy import linalg, stats
 from scipy.special import logsumexp
 
@@ -732,9 +733,9 @@ class FactoredHMMLearningAlgorithm(ABC):
         for r in range(training_iterations):
             inf = new_model.load_inference_interface()
             if distributed == True:
-                Gamma, Xi, hidden_state_vector_df = inf.distributed_gibbs_learning(
+                Gamma, Xi, hidden_state_vector_df = inf.distributed_gibbs_sampling(
                     data,
-                    iterations=iterations,
+                    iterations=gibbs_iterations,
                     burn_down_period=burn_down_period,
                     gather_statistics=True,
                     hidden_state_vector_df=hidden_state_vector_df,
@@ -1008,17 +1009,19 @@ class FactoredHMMInference(ABC):
                                    distributed=False,
                                    n_workers=9):
 
+        model = self.model
+
         # Carry out initial burn down period
-        Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(data, 
+        Gamma, Xi, hidden_state_vector_df = self.gibbs_sampling(data, 
                                                                iterations = 0, 
                                                                burn_down_period=burn_down_period, 
                                                                gather_statistics = False, 
                                                                hidden_state_vector_df = hidden_state_vector_df, 
-                                                               distributed=True, 
+                                                               distributed=False, 
                                                                n_workers=n_workers)
         # Initialize workers
         local_iterations = iterations // n_workers
-        client = Client(processes=True, n_workers=n_workers, threads_per_worker=1)
+        client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
         partition_labels = list(client.scheduler_info()["workers"].keys())
         partitions = {partition_label: (data, hidden_state_vector_df) for partition_label in partition_labels}
         scattered = client.scatter(list(partitions.values()))
@@ -1044,7 +1047,7 @@ class FactoredHMMInference(ABC):
         Gamma = Gamma / iterations
         Xi = Xi / iterations
 
-    return Gamma, Xi, hidden_state_vector_df
+        return Gamma, Xi, hidden_state_vector_df
 
 
     def gather_statistics(self, hidden_state_vector_df, Gamma=None, Xi=None):
