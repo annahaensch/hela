@@ -732,19 +732,10 @@ class FactoredHMMLearningAlgorithm(ABC):
         for r in range(training_iterations):
             inf = new_model.load_inference_interface()
             if distributed == True:
-                Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
+                Gamma, Xi, hidden_state_vector_df = self.distributed_gibbs_learning(
                     data,
-                    iterations=0,
+                    iterations=iterations,
                     burn_down_period=burn_down_period,
-                    gather_statistics=False,
-                    hidden_state_vector_df=hidden_state_vector_df,
-                    distributed=True,
-                    n_workers=n_workers)
-
-                Gamma, Xi, hidden_state_vector_df = inf.distributed_gibbs_sampling(
-                    data,
-                    iterations=gibbs_iterations,
-                    burn_down_period=0,
                     gather_statistics=True,
                     hidden_state_vector_df=hidden_state_vector_df,
                     distributed=True,
@@ -990,18 +981,63 @@ class FactoredHMMInference(ABC):
                 if gather_statistics == True:
                     Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
                                                        Gamma, Xi)
-        if distributed == False:
+
+        if distributed == True:
+            return Gamma, Xi, full_sample
+
         # Compute mode of full sample
+        if iterations > 0:
             for i in range(len(model.ns_hidden_states)):
                 hidden_state_vector_df.iloc[:, i] = stats.mode(
                     full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
 
-            # Normalize gathered statistics
-            if gather_statistics == True:
-                Gamma = Gamma / iterations
-                Xi = Xi / iterations
+        # Normalize gathered statistics
+        if gather_statistics == True:
+            Gamma = Gamma / iterations
+            Xi = Xi / iterations
 
         return Gamma, Xi, hidden_state_vector_df
+
+
+    def distributed_gibbs_sampling(self,
+                                   data,
+                                   iterations,
+                                   burn_down_period=10,
+                                   gather_statistics=False,
+                                   hidden_state_vector_df=None,
+                                   distributed=False,
+                                   n_workers=9):
+
+        # Carry out initial burn down period
+        Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(data, 
+                                                               iterations = 0, 
+                                                               burn_down_period=burn_down_period, 
+                                                               gather_statistics = False, 
+                                                               hidden_state_vector_df = hidden_state_vector_df, 
+                                                               distributed=True, 
+                                                               n_workers=n_workers)
+        local_iterations = iterations // n_workers
+        client = Client(processes=True, n_workers=n_workers, threads_per_worker=1)
+        partition_labels = list(client.scheduler_info()["workers"].keys())
+        partitions = {partition_label: (data, hidden_state_vector_df) for partition_label in partition_labels}
+        scattered = client.scatter(list(partitions.values()))
+        partition_states = {partition: 
+                            client.submit(distributed_gibbs_statistics, self, state, local_iterations)
+                            for partition, state in zip(partitions.keys(), scattered)}
+                            
+        results = client.gather([state for partition, state in partition_states.items()])
+        Gamma = np.zeros_like(results[0][0])
+        Xi = np.zeros_like(results[0][1])
+
+        for local_gamma, local_xi, local_samples in results:
+            Gamma += local_gamma
+            Xi += local_xi
+
+        Gamma = Gamma / iterations
+        Xi = Xi / iterations
+
+
+
 
     def gather_statistics(self, hidden_state_vector_df, Gamma=None, Xi=None):
         """ Compiles Gamma and Xi statistics 
