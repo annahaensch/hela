@@ -1019,6 +1019,7 @@ class FactoredHMMInference(ABC):
                                                                hidden_state_vector_df = hidden_state_vector_df, 
                                                                distributed=False)
         # Initialize workers
+        # TODO(isalju): partition iterations between workers
         local_iterations = iterations // n_workers
         
         partition_labels = list(client.scheduler_info()["workers"].keys())
