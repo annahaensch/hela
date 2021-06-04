@@ -1019,28 +1019,30 @@ class FactoredHMMInference(ABC):
                                                                hidden_state_vector_df = hidden_state_vector_df, 
                                                                distributed=False)
         # Initialize workers
-        # TODO(isalju): partition iterations between workers
-        local_iterations = iterations // n_workers
+        local_iterations = [iterations//n_workers if i >= (iterations % n_workers) 
+                            else (iterations//n_workers)+1 for i in range(n_workers)]
         
         partition_labels = list(client.scheduler_info()["workers"].keys())
-        partitions = {partition_label: (data, hidden_state_vector_df) for partition_label in partition_labels}
+        partitions = {partition_label: (data, hidden_state_vector_df, local_iterations[i]) 
+                                        for i, partition_label in enumerate(partition_labels)}
+
         scattered = client.scatter(list(partitions.values()))
 
         # Sample and gather statistics
         partition_states = {partition: 
-                            client.submit(distributed_gibbs_statistics, self, state, local_iterations)
+                            client.submit(distributed_gibbs_statistics, self, state)
                             for partition, state in zip(partitions.keys(), scattered)}
         
-        results = client.gather([state for partition, state in partition_states.items()])
-        Gamma = np.zeros_like(results[0][0])
-        Xi = np.zeros_like(results[0][1])
-        full_sample = np.concatenate([results[i][2] for i in range(len(results))], axis=0)
+        update_statistics = client.gather([state for partition, state in partition_states.items()])
+        Gamma = np.zeros_like(update_statistics[0][0])
+        Xi = np.zeros_like(update_statistics[0][1])
+        full_sample = np.concatenate([update_statistics[i][2] for i in range(len(update_statistics))], axis=0)
         # Compute mode of full sample
         for i in range(len(model.ns_hidden_states)):
             hidden_state_vector_df.iloc[:, i] = stats.mode(
                 full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
 
-        for local_gamma, local_xi, local_samples in results:
+        for local_gamma, local_xi, local_samples in update_statistics:
             Gamma += local_gamma
             Xi += local_xi
 
@@ -1376,11 +1378,11 @@ def _sample(probability_distribution, sample_parameter):
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
 
-def distributed_gibbs_statistics(inference, state, local_iterations):
-    data, hidden_state_vector_df = state
+def distributed_gibbs_statistics(inference, state):
+    data, hidden_state_vector_df, iterations = state
 
     local_results = inference.gibbs_sampling(data, 
-                                             local_iterations, 
+                                             iterations, 
                                              burn_down_period = 0,
                                              gather_statistics = True, 
                                              hidden_state_vector_df = hidden_state_vector_df, 
