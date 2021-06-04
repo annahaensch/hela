@@ -1018,6 +1018,8 @@ class FactoredHMMInference(ABC):
                                                                gather_statistics = False, 
                                                                hidden_state_vector_df = hidden_state_vector_df, 
                                                                distributed=False)
+        if client is None:
+            client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
         # Initialize workers
         local_iterations = [iterations//n_workers if i >= (iterations % n_workers) 
                             else (iterations//n_workers)+1 for i in range(n_workers)]
