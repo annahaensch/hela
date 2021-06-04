@@ -1032,7 +1032,7 @@ class FactoredHMMInference(ABC):
 
         # Sample and gather statistics
         partition_states = {partition: 
-                            client.submit(distributed_gibbs_statistics, self, state)
+                            client.submit(distributed_gibbs_statistics, self, state, gather_statistics)
                             for partition, state in zip(partitions.keys(), scattered)}
         
         update_statistics = client.gather([state for partition, state in partition_states.items()])
@@ -1380,13 +1380,13 @@ def _sample(probability_distribution, sample_parameter):
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
 
-def distributed_gibbs_statistics(inference, state):
+def distributed_gibbs_statistics(inference, state, gather_statistics):
     data, hidden_state_vector_df, iterations = state
 
     local_results = inference.gibbs_sampling(data, 
                                              iterations, 
                                              burn_down_period = 0,
-                                             gather_statistics = True, 
+                                             gather_statistics = gather_statistics, 
                                              hidden_state_vector_df = hidden_state_vector_df, 
                                              distributed=True)
     return local_results
