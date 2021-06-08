@@ -1051,7 +1051,7 @@ class FactoredHMMInference(ABC):
 
         # Sample and gather statistics
         partition_states = {partition: 
-                            client.submit(distributed_gibbs_statistics, self, state, gather_statistics)
+                            client.submit(_distributed_gibbs_statistics, self, state, gather_statistics)
                             for partition, state in zip(partitions.keys(), scattered)}
         
         update_statistics = client.gather([state for partition, state in partition_states.items()])
@@ -1401,7 +1401,7 @@ def _sample(probability_distribution, sample_parameter):
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
 
-def distributed_gibbs_statistics(inference, state, gather_statistics):
+def _distributed_gibbs_statistics(inference, state, gather_statistics):
     """Update the state of a worker with update statistics and hidden states
         found from gibbs_sampling.
 
@@ -1410,18 +1410,20 @@ def distributed_gibbs_statistics(inference, state, gather_statistics):
         state (tuple): a tuple of (data, hidden_state_vector_df, iterations) where
         data and hidden_state_vector_df are the same across workers. Iterations
         are the number of iterations the worker should sample.
+        gather_statistics: (bool) indicates whether to gather statistics while 
+                iterating.
     Returns:
-        new state with Gamma, Xi, full_sample where Gamma and Xi are unnormalized.
+        local_gamma, local_xi, local_full_sample where local_gamma and local_xi are unnormalized.
     """
     data, hidden_state_vector_df, iterations = state
 
-    local_results = inference.gibbs_sampling(data, 
-                                             iterations, 
-                                             burn_down_period = 0,
-                                             gather_statistics = gather_statistics, 
-                                             hidden_state_vector_df = hidden_state_vector_df, 
-                                             distributed=True)
-    return local_results
+    local_gamma, local_xi, local_full_sample = inference.gibbs_sampling(data, 
+                                                 iterations, 
+                                                 burn_down_period = 0,
+                                                 gather_statistics = gather_statistics, 
+                                                 hidden_state_vector_df = hidden_state_vector_df, 
+                                                 distributed=True)
+    return local_gamma, local_xi, local_full_sample
 
 
 def _factored_hmm_to_discrete_hmm(model):
