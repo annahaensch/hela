@@ -365,6 +365,11 @@ class FactoredHMM(ABC):
             new_model.gaussian_model.covariance = self.gaussian_model.update_covariance(
                 new_model.gaussian_model.means, data, Gamma)
 
+            msg = "Covariance update is not positive definite: {}".format(
+                new_model.gaussian_model.covariance)
+            assert np.all(
+                np.linalg.eigvals(new_model.gaussian_model.covariance) > 0), msg
+
         return new_model
 
 
@@ -629,27 +634,25 @@ class GaussianModel(FactoredHMM):
         csum = np.concatenate(([0], np.cumsum(ns_hidden_states)))
         gauss_data = np.array(data.loc[:, self.gaussian_features])
 
-        Gamma_sum = [
-            np.sum(
-                [
-                    means[i][:, :ns_hidden_states[i]]
-                    .data @ g.diagonal()[csum[i]:csum[i + 1]].reshape(-1, 1)
-                    for i in range(len(ns_hidden_states))
-                ],
-                axis=0)
-            for g in Gamma
-        ]
+        new_cov = np.zeros((gauss_data.shape[1], gauss_data.shape[1]))
 
-        covariance = np.sum(
-            np.array([d.reshape(-1, 1) @ d.reshape(1, -1)
-                      for d in gauss_data]) / len(gauss_data),
-            axis=0) - np.sum(
-                [
-                    Gamma_sum[j] @ gauss_data[j].reshape(1, -1)
-                    for j in range(len(Gamma_sum))
-                ],
-                axis=0) / len(Gamma)
-        return covariance
+        for t in range(len(Gamma)):
+            error = np.zeros((gauss_data.shape[1], 1))
+
+            for m in range(len(ns_hidden_states)):
+                W = means[m].data[:, :ns_hidden_states[m]]
+                G = np.array([
+                    Gamma[t][c][c] for c in range(csum[m], csum[m + 1])
+                ]).reshape(-1, 1)
+
+                error += W @ G
+
+            new_cov += (gauss_data[t].reshape(-1, 1) - error) @ ((
+                gauss_data[t].reshape(-1, 1) - error)).reshape(1, -1)
+
+        new_cov = new_cov / gauss_data.shape[0]
+
+        return new_cov
 
 
 class FactoredHMMLearningAlgorithm(ABC):
