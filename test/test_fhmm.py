@@ -144,6 +144,7 @@ def test_learning_with_gibbs(generative_model):
 
     assert np.all(np.array(concavity) < 0)
 
+
 def test_learning_with_distributed_gibbs(generative_model):
 
     fhmm_training_spec = generative_model["fhmm_training_spec"]

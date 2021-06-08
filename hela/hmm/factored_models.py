@@ -734,7 +734,8 @@ class FactoredHMMLearningAlgorithm(ABC):
         ns_hidden_states = model.ns_hidden_states
         hidden_state_vector_df = None
         if distributed == True:
-            client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
+            client = Client(
+                processes=True, n_workers=n_workers, threads_per_worker=1)
         for r in range(training_iterations):
             inf = new_model.load_inference_interface()
             if distributed == True:
@@ -744,7 +745,7 @@ class FactoredHMMLearningAlgorithm(ABC):
                     burn_down_period=burn_down_period,
                     gather_statistics=True,
                     hidden_state_vector_df=hidden_state_vector_df,
-                    client = client,
+                    client=client,
                     n_workers=n_workers)
             else:
                 Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
@@ -1001,16 +1002,14 @@ class FactoredHMMInference(ABC):
 
         return Gamma, Xi, hidden_state_vector_df
 
-
     def distributed_gibbs_sampling(self,
                                    data,
                                    iterations,
                                    burn_down_period=10,
                                    gather_statistics=False,
                                    hidden_state_vector_df=None,
-                                   client = None,
+                                   client=None,
                                    n_workers=9):
-
         """ Samples hidden state sequence for given data in a distributed way using Dask
 
         Arguments: 
@@ -1034,33 +1033,45 @@ class FactoredHMMInference(ABC):
         model = self.model
 
         # Carry out initial burn down period
-        Gamma, Xi, hidden_state_vector_df = self.gibbs_sampling(data, 
-                                                               iterations = 0, 
-                                                               burn_down_period=burn_down_period, 
-                                                               gather_statistics = False, 
-                                                               hidden_state_vector_df = hidden_state_vector_df, 
-                                                               distributed=False)
+        Gamma, Xi, hidden_state_vector_df = self.gibbs_sampling(
+            data,
+            iterations=0,
+            burn_down_period=burn_down_period,
+            gather_statistics=False,
+            hidden_state_vector_df=hidden_state_vector_df,
+            distributed=False)
         if client is None:
-            client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
+            client = Client(
+                processes=True, n_workers=n_workers, threads_per_worker=1)
         # Initialize workers
-        local_iterations = [iterations//n_workers if i >= (iterations % n_workers) 
-                            else (iterations//n_workers)+1 for i in range(n_workers)]
-        
+        local_iterations = [
+            iterations // n_workers
+            if i >= (iterations % n_workers) else (iterations // n_workers) + 1
+            for i in range(n_workers)
+        ]
+
         partition_labels = list(client.scheduler_info()["workers"].keys())
-        partitions = {partition_label: (data, hidden_state_vector_df, local_iterations[i]) 
-                                        for i, partition_label in enumerate(partition_labels)}
+        partitions = {
+            partition_label: (data, hidden_state_vector_df, local_iterations[i])
+            for i, partition_label in enumerate(partition_labels)
+        }
 
         scattered = client.scatter(list(partitions.values()))
 
         # Sample and gather statistics
-        partition_states = {partition: 
-                            client.submit(_distributed_gibbs_statistics, self, state, gather_statistics)
-                            for partition, state in zip(partitions.keys(), scattered)}
-        
-        update_statistics = client.gather([state for partition, state in partition_states.items()])
-        
+        partition_states = {
+            partition: client.submit(_distributed_gibbs_statistics, self, state,
+                                     gather_statistics)
+            for partition, state in zip(partitions.keys(), scattered)
+        }
+
+        update_statistics = client.gather(
+            [state for partition, state in partition_states.items()])
+
         # Compute mode of full sample
-        full_sample = np.concatenate([update_statistics[i][2] for i in range(len(update_statistics))], axis=0)
+        full_sample = np.concatenate(
+            [update_statistics[i][2] for i in range(len(update_statistics))],
+            axis=0)
         for i in range(len(model.ns_hidden_states)):
             hidden_state_vector_df.iloc[:, i] = stats.mode(
                 full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
@@ -1076,7 +1087,6 @@ class FactoredHMMInference(ABC):
             Xi = Xi / iterations
 
         return Gamma, Xi, hidden_state_vector_df
-
 
     def gather_statistics(self, hidden_state_vector_df, Gamma=None, Xi=None):
         """ Compiles Gamma and Xi statistics 
@@ -1404,6 +1414,7 @@ def _sample(probability_distribution, sample_parameter):
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
 
+
 def _distributed_gibbs_statistics(inference, state, gather_statistics):
     """Update the state of a worker with update statistics and hidden states
         found from gibbs_sampling.
@@ -1420,12 +1431,13 @@ def _distributed_gibbs_statistics(inference, state, gather_statistics):
     """
     data, hidden_state_vector_df, iterations = state
 
-    local_gamma, local_xi, local_full_sample = inference.gibbs_sampling(data, 
-                                                 iterations, 
-                                                 burn_down_period = 0,
-                                                 gather_statistics = gather_statistics, 
-                                                 hidden_state_vector_df = hidden_state_vector_df, 
-                                                 distributed=True)
+    local_gamma, local_xi, local_full_sample = inference.gibbs_sampling(
+        data,
+        iterations,
+        burn_down_period=0,
+        gather_statistics=gather_statistics,
+        hidden_state_vector_df=hidden_state_vector_df,
+        distributed=True)
     return local_gamma, local_xi, local_full_sample
 
 
