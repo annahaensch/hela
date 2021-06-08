@@ -6,6 +6,7 @@ from abc import ABC
 
 import numpy as np
 import pandas as pd
+from dask.distributed import Client
 from scipy import linalg, stats
 from scipy.special import logsumexp
 
@@ -732,16 +733,27 @@ class FactoredHMMLearningAlgorithm(ABC):
         new_model = model.model_config.to_model()
         ns_hidden_states = model.ns_hidden_states
         hidden_state_vector_df = None
+        if distributed == True:
+            client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
         for r in range(training_iterations):
             inf = new_model.load_inference_interface()
-            Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
-                data,
-                iterations=gibbs_iterations,
-                burn_down_period=burn_down_period,
-                gather_statistics=True,
-                hidden_state_vector_df=hidden_state_vector_df,
-                distributed=distributed,
-                n_workers=n_workers)
+            if distributed == True:
+                Gamma, Xi, hidden_state_vector_df = inf.distributed_gibbs_sampling(
+                    data,
+                    iterations=gibbs_iterations,
+                    burn_down_period=burn_down_period,
+                    gather_statistics=True,
+                    hidden_state_vector_df=hidden_state_vector_df,
+                    client = client,
+                    n_workers=n_workers)
+            else:
+                Gamma, Xi, hidden_state_vector_df = inf.gibbs_sampling(
+                    data,
+                    iterations=gibbs_iterations,
+                    burn_down_period=burn_down_period,
+                    gather_statistics=True,
+                    hidden_state_vector_df=hidden_state_vector_df,
+                    distributed=False)
 
             update_statistics = {
                 "Gamma": Gamma,
@@ -890,8 +902,7 @@ class FactoredHMMInference(ABC):
                        burn_down_period=10,
                        gather_statistics=False,
                        hidden_state_vector_df=None,
-                       distributed=False,
-                       n_workers=9):
+                       distributed=False):
         """ Samples hidden state sequence for given data
 
         Arguments: 
@@ -904,9 +915,8 @@ class FactoredHMMInference(ABC):
             hidden_state_vector_df: (dataframe) timeseries of hidden state vectors
                 with the same index as "data".  If default "None" is given, then
                 this dataframe will be seeded randomly.
-            distributed: (bool) if True the training will be distributed via 
-                Dask
-            n_workers: (int) number of works to use for distributed Dask training
+            distributed: (bool) if True the training will return unnormalized
+                 statistics.
 
         Returns: The arrays Gamma and Xi containing statistics, and an updated hidden 
             state vector
@@ -975,10 +985,14 @@ class FactoredHMMInference(ABC):
                     Gamma, Xi = self.gather_statistics(hidden_state_vector_df,
                                                        Gamma, Xi)
 
+        if distributed == True:
+            return Gamma, Xi, full_sample
+
         # Compute mode of full sample
-        for i in range(len(model.ns_hidden_states)):
-            hidden_state_vector_df.iloc[:, i] = stats.mode(
-                full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
+        if iterations > 0:
+            for i in range(len(model.ns_hidden_states)):
+                hidden_state_vector_df.iloc[:, i] = stats.mode(
+                    full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
 
         # Normalize gathered statistics
         if gather_statistics == True:
@@ -986,6 +1000,83 @@ class FactoredHMMInference(ABC):
             Xi = Xi / iterations
 
         return Gamma, Xi, hidden_state_vector_df
+
+
+    def distributed_gibbs_sampling(self,
+                                   data,
+                                   iterations,
+                                   burn_down_period=10,
+                                   gather_statistics=False,
+                                   hidden_state_vector_df=None,
+                                   client = None,
+                                   n_workers=9):
+
+        """ Samples hidden state sequence for given data in a distributed way using Dask
+
+        Arguments: 
+            data: (dataframe) observed timeseries data.
+            iterations: (int) number of rounds of sampling to carry out.
+            burn_down_period: (int) number of iterations for burn down before 
+                gathering statistics.
+            gather_statistics: (bool) indicates whether to gather statistics while 
+                iterating.
+            hidden_state_vector_df: (dataframe) timeseries of hidden state vectors
+                with the same index as "data".  If default "None" is given, then
+                this dataframe will be seeded randomly.
+            client: Dask client which connects to Dask cluster.  If "None", one is
+                initialized
+            n_workers: (int) number of works to use for distributed Dask training
+
+        Returns: The arrays Gamma and Xi containing statistics, and an updated hidden 
+            state vector
+        """
+
+        model = self.model
+
+        # Carry out initial burn down period
+        Gamma, Xi, hidden_state_vector_df = self.gibbs_sampling(data, 
+                                                               iterations = 0, 
+                                                               burn_down_period=burn_down_period, 
+                                                               gather_statistics = False, 
+                                                               hidden_state_vector_df = hidden_state_vector_df, 
+                                                               distributed=False)
+        if client is None:
+            client = Client(processes = True, n_workers=n_workers, threads_per_worker=1)
+        # Initialize workers
+        local_iterations = [iterations//n_workers if i >= (iterations % n_workers) 
+                            else (iterations//n_workers)+1 for i in range(n_workers)]
+        
+        partition_labels = list(client.scheduler_info()["workers"].keys())
+        partitions = {partition_label: (data, hidden_state_vector_df, local_iterations[i]) 
+                                        for i, partition_label in enumerate(partition_labels)}
+
+        scattered = client.scatter(list(partitions.values()))
+
+        # Sample and gather statistics
+        partition_states = {partition: 
+                            client.submit(_distributed_gibbs_statistics, self, state, gather_statistics)
+                            for partition, state in zip(partitions.keys(), scattered)}
+        
+        update_statistics = client.gather([state for partition, state in partition_states.items()])
+        
+        # Compute mode of full sample
+        full_sample = np.concatenate([update_statistics[i][2] for i in range(len(update_statistics))], axis=0)
+        for i in range(len(model.ns_hidden_states)):
+            hidden_state_vector_df.iloc[:, i] = stats.mode(
+                full_sample[:, :, i].transpose(), axis=1).mode.astype(int)
+
+        if gather_statistics == True:
+            Gamma = np.zeros_like(update_statistics[0][0])
+            Xi = np.zeros_like(update_statistics[0][1])
+            for local_gamma, local_xi, local_samples in update_statistics:
+                Gamma += local_gamma
+                Xi += local_xi
+
+            Gamma = Gamma / iterations
+            Xi = Xi / iterations
+
+        return Gamma, Xi, hidden_state_vector_df
+
 
     def gather_statistics(self, hidden_state_vector_df, Gamma=None, Xi=None):
         """ Compiles Gamma and Xi statistics 
@@ -1312,6 +1403,30 @@ def _sample(probability_distribution, sample_parameter):
     cumulative_prob = np.cumsum(probability_distribution)
     updated_state = np.where(cumulative_prob >= sample_parameter)[0][0]
     return updated_state
+
+def _distributed_gibbs_statistics(inference, state, gather_statistics):
+    """Update the state of a worker with update statistics and hidden states
+        found from gibbs_sampling.
+
+    Args:
+        inference: FactoredHMMInference, global copy
+        state (tuple): a tuple of (data, hidden_state_vector_df, iterations) where
+        data and hidden_state_vector_df are the same across workers. Iterations
+        are the number of iterations the worker should sample.
+        gather_statistics: (bool) indicates whether to gather statistics while 
+                iterating.
+    Returns:
+        local_gamma, local_xi, local_full_sample where local_gamma and local_xi are unnormalized.
+    """
+    data, hidden_state_vector_df, iterations = state
+
+    local_gamma, local_xi, local_full_sample = inference.gibbs_sampling(data, 
+                                                 iterations, 
+                                                 burn_down_period = 0,
+                                                 gather_statistics = gather_statistics, 
+                                                 hidden_state_vector_df = hidden_state_vector_df, 
+                                                 distributed=True)
+    return local_gamma, local_xi, local_full_sample
 
 
 def _factored_hmm_to_discrete_hmm(model):
