@@ -1146,7 +1146,7 @@ class FactoredHMMInference(ABC):
             h_t: (array) array of dimension T x M X N for current variational parameters
         
         Returns: 
-            Arrays for gamma
+            Array for gamma
         """
         time = len(data)
         model = self.model
