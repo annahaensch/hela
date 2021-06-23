@@ -1,5 +1,6 @@
 """ Functions that generate factored data using factored HMM.
 """
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -291,11 +292,15 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             Series of flattened hidden state values corresponding to
             the hidden state vectors in hidden_states.
         """
-        hidden_state_tuples = np.array(hidden_states.drop_duplicates())
-
+        hidden_state_values = [
+            [t for t in range(i)] for i in self.ns_hidden_states
+        ]
+        hidden_state_vectors = [
+                    list(t) for t in itertools.product(*hidden_state_values)
+                ]
         hidden_state_dict = {
-            str(list(hidden_state_tuples[i])): i
-            for i in range(len(hidden_state_tuples))
+            str(list(hidden_state_vectors[i])): i
+            for i in range(len(hidden_state_vectors))
         }
 
         return pd.Series(
