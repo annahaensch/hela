@@ -409,8 +409,8 @@ def main(argv):
                 ll_df.loc[t, 'train_gibbs'] = gibbs_train_ll
                 ll_df.loc[t, 'test_gibbs'] = gibbs_test_ll
 
-                logging.info("...train_ll: {}".format(vi_train_ll))
-                logging.info("...test_ll: {}".format(vi_test_ll))
+                logging.info("...train_ll: {}".format(gibbs_train_ll))
+                logging.info("...test_ll: {}".format(gibbs_test_ll))
 
             except:
                 gibbs_random_state = gibbs_random_state + 1
