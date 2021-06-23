@@ -268,7 +268,6 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                 -3, 3, (self.n_gaussian_features, max_hidden_state))
             if n < max_hidden_state:
                 weights[:, n:] = np.nan
-                # weights[:n,:] = np.nan
             # Mask all Nan entries
             weights = np.ma.masked_invalid(weights)
             means.append(weights)
