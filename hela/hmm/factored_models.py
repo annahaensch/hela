@@ -791,7 +791,7 @@ class FactoredHMMLearningAlgorithm(ABC):
             inf = new_model.load_inference_interface()
 
             for i in range(5):
-                gamma, alpha, beta = inf.log_forward_backward(data, h_t)
+                gamma = inf.log_forward_backward(data, h_t)
                 h_t = inf.h_t_update(gamma, data)
 
             update_statistics = new_model.get_update_statistics(gamma)
@@ -1146,7 +1146,7 @@ class FactoredHMMInference(ABC):
             h_t: (array) array of dimension T x M X N for current variational parameters
         
         Returns: 
-            Arrays for alpha, beta, gamma
+            Array for gamma
         """
         time = len(data)
         model = self.model
@@ -1209,7 +1209,7 @@ class FactoredHMMInference(ABC):
                 gamma[:, m, :hidden_state] -
                 logsumexp(gamma[:, m, :hidden_state], axis=1).reshape(-1, 1))
 
-        return gamma, alpha, beta
+        return gamma
 
     def h_t_update(self, gamma, data):
         """  
@@ -1299,7 +1299,7 @@ class FactoredHMMInference(ABC):
 
         # Log forward-backward
         for i in range(5):
-            gamma, alpha, beta = self.log_forward_backward(data, h_t)
+            gamma = self.log_forward_backward(data, h_t)
             h_t = self.h_t_update(gamma, data)
 
         viterbi_matrix = np.zeros((time, systems, n))
@@ -1343,7 +1343,7 @@ class FactoredHMMInference(ABC):
 
         # Log forward-backward
         for i in range(5):
-            gamma, alpha, beta = self.log_forward_backward(data, h_t)
+            gamma = self.log_forward_backward(data, h_t)
             h_t = self.h_t_update(gamma, data)
 
         viterbi_matrix = np.zeros((time, systems, n))
