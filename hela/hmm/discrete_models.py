@@ -402,11 +402,13 @@ class GaussianMixtureModel(DiscreteHMM):
                 [np.array(gmm.n_gmm_components * [np.identity(gmm.dims)])])
             gmm.covariances = covariances
         if gmm.component_weights is None:
-            rand_init = random_state.rand(gmm.n_gmm_components)
-            rand_init = rand_init / np.sum(rand_init)
-            gmm.component_weights = np.array([
-                w for w in itertools.permutations(rand_init)
-            ][0:gmm.n_hidden_states])
+            weights = np.empty((gmm.n_hidden_states, gmm.n_gmm_components))
+            for i in range(weights.shape[0]):
+                rand_init = random_state.rand(gmm.n_gmm_components)
+                rand_init = rand_init / np.sum(rand_init)
+                weights[i,:] = rand_init
+            
+            gmm.component_weights = weights
 
         return gmm
 
