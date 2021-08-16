@@ -49,6 +49,7 @@ class HMMConfiguration(ABC):
         self.finite_values_dict = {}
         self.finite_values_dict_inverse = {}
         self.continuous_features = []
+        self.continuous_values = None
 
     @classmethod
     def from_spec(cls, spec):
@@ -65,15 +66,17 @@ class HMMConfiguration(ABC):
         		* values - list of finite values if 'finite' else None.  
         	* model_parameter_constraints - (optional) dictionary giving 
         		model constraints with keys: 
-        		* transition_contraints - 
-        		* initial_state_constraints - 
-        		* gmm_parameter_constraints - 
+        		* transition_contraints 
+        		* initial_state_constraints
+        		* gmm_parameter_constraints 
 		
 		Optional parameters which are not given will be seeded using random 
 		state whenever the spec is used to generate an untrained model. 
         """
         #config = cls(hidden_state_count=spec['hidden_state_count'])
         config = cls(hidden_state_count=0)
+
+        print("here")
 
         finite_observations = [
             i for i in spec['observations'] if i['type'].lower() == 'finite'
@@ -155,7 +158,13 @@ class HMMConfiguration(ABC):
         # Add continuous features to a list and sort.
         continuous_features = list(continuous_features_dict.keys())
         continuous_features.sort()
-        self.continuous_features = continuous_features_dist_dict
+        self.continuous_features = continuous_features
+
+        continuous_values = pd.DataFrame(index = ["distribution", "dimension"], columns = continuous_features)
+        for c in continuous_values.columns:
+        	continuous_values.loc["distribution",c] = continuous_features_dict[c]
+        	continuous_values.loc["dimension",c] = 1
+        self.continuous_values = continuous_values	
 
     def add_model_parameter_constraints(self, parameter, constraint):
         """ Add constraints for seed parameters. """

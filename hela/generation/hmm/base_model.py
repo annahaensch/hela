@@ -197,7 +197,7 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
         sequence and the data which can be used as input in the
         hmm function `DiscreteHHHConfiguration.from_spec()`.
     """
-    spec = {"hidden_state": {"type": "finite", "count": n_hidden_states}}
+    spec = {"hidden_state_count": n_hidden_states}
     observations = []
     if categorical_features:
         categorical_features.sort()

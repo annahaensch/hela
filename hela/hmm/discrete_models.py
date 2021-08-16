@@ -17,13 +17,13 @@ from .utils import *
 class DiscreteHMMConfiguration(HMMConfiguration):
     """ Intilialize HMM configuration from specification dictionary. """
 
-    def __init__(self, hidden_state_type=None):
-        super().__init__(hidden_state_type)
+    def __init__(self, hidden_state_count=None):
+        super().__init__(hidden_state_count)
         self.n_hidden_states = None
 
     def _from_spec(self, spec):
         """ Discrete HMM specific implementation of `from_spec`. """
-        self.n_hidden_states = spec['hidden_state']['count']
+        self.n_hidden_states = spec['hidden_state_count']
         self.model_type = 'DiscreteHMM'
         return self
 
