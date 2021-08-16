@@ -610,15 +610,18 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
         self.sufficient_statistics = []
         self.model_results = []
 
-    def run(self, model, data, training_iterations, use_jax=False):
-        """ Base class method for EM learning algorithm.
+    def run(self, model, data, training_iterations, method = "em", use_jax=False):
+        """ Base class for EM learning methods.
 
         Arguments:
+            model: instance of DiscreteHMM
             data: dataframe with hybrid data for training.
             training_iterations: number of training iterations to carry out.
+            method: "em"
+            use_jax: (bool) If True, run distributed training using Jax. 
 
         Returns:
-            Trained instance of Discrete HiddenMarkovModel.  Also returns em training results.
+            Trained instance of DiscreteHMM.  Also returns em training results.
         """
         self.data = data
         if len(model.finite_features) > 0:
