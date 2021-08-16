@@ -53,12 +53,27 @@ class HMMConfiguration(ABC):
 
     @classmethod
     def from_spec(cls, spec):
-        """ Returns model configuration from specification dictionary.
+        """ Returns model configuration from specification dictionary (`spec`).  
+        
+        The specification dictionary contains the following key - value pairs:
+        
+        	* hidden_state_count - int or list of ints indicating number of 
+        		discrete hidden states for each Markov system.   
+        	* observations - list of observation dictionaries with keys:
+        		* name - string name of feature.
+        		* type - 'finite' or 'continuous'.
+        		* dist - named distribution of 'continuous' else None.
+        		* values - list of finite values if 'finite' else None.  
+        	* model_parameter_constraints - (optional) dictionary giving 
+        		model constraints with keys: 
+        		* transition_contraints - 
+        		* initial_state_constraints - 
+        		* gmm_parameter_constraints - 
+		
+		Optional parameters which are not given will be seeded using random state
+		whenever the spec is used to generate an untrained model. 
         """
-        hidden_state_type = spec['hidden_state']['type'].lower()
-        config = cls(hidden_state_type=hidden_state_type)
-        if hidden_state_type != 'finite':
-            raise RuntimeError("Unknown hidden state type")
+        config = cls(hidden_state_count=spec['hidden_state_count'])
 
         finite_observations = [
             i for i in spec['observations'] if i['type'].lower() == 'finite'
@@ -66,22 +81,24 @@ class HMMConfiguration(ABC):
         continuous_observations = [
             i for i in spec['observations'] if i['type'].lower() == 'continuous'
         ]
+
         other_observations = [
             i for i in spec['observations']
             if i['type'].lower() not in ['finite', 'continuous']
         ]
+        if len(other_observations) > 0:
+            raise NotImplementedError(
+                "The specification contains the following data types "
+                "which are not part of this implementation {}".format(
+                	", ".join([i['type'] for i in other_observations])))
 
         if len(finite_observations) > 0:
             config.add_finite_observations(finite_observations)
             config.set_finite_values_dict()
+
         if len(continuous_observations) > 0:
             config.add_continuous_observations(continuous_observations)
-        if len(other_observations) > 0:
-            raise NotImplementedError(
-                "The specification contains the following data types "
-                "which are not part of the current HMM "
-                "implementation: {}".format(", ".join(
-                    [i['type'] for i in other_observations])))
+
         if 'model_parameter_constraints' in spec:
             for param in spec['model_parameter_constraints']:
                 config.add_model_parameter_constraints(
