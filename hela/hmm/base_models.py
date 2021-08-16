@@ -273,7 +273,7 @@ class HMMLearningAlgorithm(ABC):
 
 
     @abstractmethod
-    def run(self, model, data, method, training_iterations, use_jax):
+    def run(self, model, data, training_iterations, method, use_jax):
         """ Runs specified training method for given data."""
 
 

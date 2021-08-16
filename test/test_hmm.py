@@ -106,7 +106,7 @@ def test_model_learning_and_imputation(generative_model):
 
     model_config = hmm.DiscreteHMMConfiguration.from_spec(training_parameters)
     model = model_config.to_model()
-    alg = hmm.LearningAlgorithm()
+    alg = model.load_learning_interface()
     new_model = alg.run(model, dataset, 2)
 
     assert len(alg.model_results) == 2
