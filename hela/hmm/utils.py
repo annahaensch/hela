@@ -32,7 +32,7 @@ def get_finite_observations_from_data(model, data):
         return data.loc[:, model.finite_features]
 
 
-def get_finite_observations_from_data_as_states(model, data):
+def get_finite_observations_from_data_as_enum(model, data):
     """Return finite observations as series
 
     Arguments:

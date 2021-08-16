@@ -2,8 +2,9 @@
 """
 
 from .base_models import (HiddenMarkovModel, HMMConfiguration, HMMForecasting,
-                          HMMValidationMetrics, LearningAlgorithm)
+                          HMMValidationMetrics, HMMLearningAlgorithm)
 from .discrete_models import (DiscreteHMM, DiscreteHMMConfiguration,
+							  DiscreteHMMLearningAlgorithm,
                               DiscreteHMMForecasting,
                               DiscreteHMMInferenceResults,
                               DiscreteHMMValidationMetrics)

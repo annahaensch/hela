@@ -188,6 +188,11 @@ class HMMConfiguration(ABC):
         random_state = np.random.RandomState(set_random_state)
         return self._to_model(random_state)
 
+    @abstractmethod
+    def _to_model(self, random_state):
+        """Child class specific implementation of `to_model`.
+        """
+
 
 class HiddenMarkovModel(ABC):
     """ Abstract base class for HMM model objects. """
@@ -200,20 +205,30 @@ class HiddenMarkovModel(ABC):
         """ Initilaize HiddenMarkovModel object from configuration.
 
         Arguments:
-            model_config: model configuration object, obtained by running `from_spec` with a model specifiction dictionary.
-            random_state: random seed for randomly initialized model paramters.
+            model_config: model configuration object, obtained by running 
+            	`from_spec` with a model specifiction dictionary.
+            random_state: random seed for randomly initialized model parameters.
 
         Returns:
             Object in HiddenMarkovModel child class.
         """
 
+    def load_learning_interface(self):
+    	"""  Loads LearningAlgorithm interface specific to model type. 
+    	"""
+    	return self._load_learning_interface()
+
     def load_inference_interface(self, use_jax=False):
-        """ Load HiddenMarkovModel inference interface.  This includes methods that comprise the forward-backward passes of EM as well as imputation and Viterbi prediction methods.
+        """ Load HiddenMarkovModel inference interface.  This includes 
+        methods that comprise the forward-backward passes of EM as well 
+        as imputation and Viterbi prediction methods.
         """
         return self._load_inference_interface(use_jax)
 
     def load_forecasting_interface(self, use_jax=False):
-        """ Load HiddenMarkovModel forecasting interface.  This includes methods to forecast hidden states and observations at timestep horizons for given conditioning date.
+        """ Load HiddenMarkovModel forecasting interface.  This includes 
+        methods to forecast hidden states and observations at timestep 
+        horizons for given conditioning date.
         """
         return self._load_forecasting_interface(use_jax)
 
@@ -225,6 +240,11 @@ class HiddenMarkovModel(ABC):
         """
         # FIXME(wrvb) The arguments don't line up with the definition below
         return self._load_validation_interface(actual_data, use_jax)
+
+
+    @abstractmethod
+    def _load_learning_interface(self):
+        """ Load learning interface specific to model type."""
 
     @abstractmethod
     def _load_inference_interface(self, use_jax):
@@ -240,50 +260,21 @@ class HiddenMarkovModel(ABC):
         """ Load validation interface specific to model type."""
 
 
-class LearningAlgorithm(ABC):
+class HMMLearningAlgorithm(ABC):
     """ Abstract base class for HMM learning algorithms """
 
     def __init__(self):
         self.data = None
         self.finite_state_data = None
         self.gaussian_data = None
-        self.other_data = None  #TODO: @AH incorporate other observation types.
+        self.other_data = None 
         self.sufficient_statistics = []
         self.model_results = []
 
-    def run(self, model, data, n_em_iterations, use_jax=False):
-        """ Base class method for EM learning algorithm.
 
-        Arguments:
-            data: dataframe with hybrid data for training.
-            n_em_iterations: number of em iterations to perform.
-
-        Returns:
-            Trained instance of HiddenMarkovModel belonging to the same child class as model.  Also returns em training results.
-        """
-        self.data = data
-        if len(model.finite_features) > 0:
-            self.finite_state_data = get_finite_observations_from_data_as_states(
-                model, data)
-        if len(model.continuous_features) > 0:
-            if model.gaussian_mixture_model:
-                self.gaussian_data = get_gaussian_observations_from_data(
-                    model, data)
-
-        new_model = model.model_config.to_model()
-
-        for _ in range(n_em_iterations):
-            # e_step
-            expectation = new_model.load_inference_interface(use_jax)
-            expectation.compute_sufficient_statistics(data)
-            self.sufficient_statistics.append(expectation)
-
-            # m_step
-            new_model = new_model.update_model_parameters(
-                self.finite_state_data, self.gaussian_data, expectation)
-            self.model_results.append(new_model)
-
-        return new_model
+    @abstractmethod
+    def run(self, model, data, method, training_iterations, use_jax):
+        """ Runs specified training method for given data."""
 
 
 class HMMForecasting(ABC):

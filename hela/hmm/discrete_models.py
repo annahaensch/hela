@@ -10,7 +10,7 @@ from scipy import linalg, stats
 from scipy.special import logsumexp
 
 from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
-                          HMMForecasting, HMMValidationMetrics)
+                          HMMForecasting, HMMValidationMetrics, HMMLearningAlgorithm)
 from .utils import *
 
 
@@ -19,7 +19,6 @@ class DiscreteHMMConfiguration(HMMConfiguration):
 
     def __init__(self, n_hidden_states=None):
         super().__init__(n_hidden_states)
-        self.n_hidden_states = None
 
     def _from_spec(self, spec):
         """ Discrete HMM specific implementation of `from_spec`. """
@@ -104,6 +103,10 @@ class DiscreteHMM(HiddenMarkovModel):
                 'initial_state_constraints'])
 
         return model
+
+    def _load_learning_interface(self):
+        """ Loads DiscreteHMM specific learning interface."""
+        return DiscreteHMMLearningAlgorithm()
 
     def _load_inference_interface(self, use_jax):
         """ Loads DiscreteHMM specific inference interface."""
@@ -249,26 +252,26 @@ class CategoricalModel(DiscreteHMM):
 
         return log_emission
 
-    def log_probability(self, finite_data):
+    def log_probability(self, finite_data_enum):
         """ Return log probability of finite observation given hidden state
 
         Arguments:
-            finite_data: observed finite data as Series.
+            finite_data_enum: finite observations by enumerator as Series.
 
         Returns:
             np.array where entry [t,i] is the log probability of emitting finite observation t in hidden state i.
         """
-        n_observations = finite_data.shape[0]
+        n_observations = finite_data_enum.shape[0]
         log_emission = np.array(self.log_emission_matrix)
 
         return pd.DataFrame(
             [
                 list(prob) for prob in np.array(
-                    finite_data.map(lambda x: log_emission[x]))
+                    finite_data_enum.map(lambda x: log_emission[x]))
             ],
-            index=finite_data.index)
+            index=finite_data_enum.index)
 
-    def update_log_emission_matrix(self, gamma, finite_state_data):
+    def update_log_emission_matrix(self, gamma, finite_data_enum):
         """ Update log emission matrix for categorical model
 
         Arguments:
@@ -280,10 +283,10 @@ class CategoricalModel(DiscreteHMM):
         """
         log_emission_matrix = np.full(
             (np.array(self.log_emission_matrix).shape), LOG_ZERO)
-        gamma_df = pd.DataFrame(gamma, index=finite_state_data.index)
+        gamma_df = pd.DataFrame(gamma, index=finite_data_enum.index)
         for l in self.finite_values.index:
-            if l in finite_state_data.unique():
-                l_index = finite_state_data[finite_state_data == l].index
+            if l in finite_data_enum.unique():
+                l_index = finite_data_enum[finite_data_enum == l].index
                 l_gamma_df = gamma_df.loc[l_index]
                 log_emission_matrix[l] = logsumexp(np.array(l_gamma_df), axis=0)
         log_emission_matrix -= logsumexp(gamma, axis=0)
@@ -596,6 +599,50 @@ class GaussianMixtureModel(DiscreteHMM):
 
         return marginal_prob
 
+class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
+    """ Discrete model class for HMM learning algorithms """
+
+    def __init__(self):
+        self.data = None
+        self.finite_data_enum = None
+        self.gaussian_data = None
+        self.other_data = None 
+        self.sufficient_statistics = []
+        self.model_results = []
+
+    def run(self, model, data, training_iterations, use_jax=False):
+        """ Base class method for EM learning algorithm.
+
+        Arguments:
+            data: dataframe with hybrid data for training.
+            training_iterations: number of training iterations to carry out.
+
+        Returns:
+            Trained instance of Discrete HiddenMarkovModel.  Also returns em training results.
+        """
+        self.data = data
+        if len(model.finite_features) > 0:
+            self.finite_data_enum = get_finite_observations_from_data_as_enum(
+                model, data)
+        if len(model.continuous_features) > 0:
+            if model.gaussian_mixture_model:
+                self.gaussian_data = get_gaussian_observations_from_data(
+                    model, data)
+
+        new_model = model.model_config.to_model()
+
+        for _ in range(training_iterations):
+            # e_step
+            expectation = new_model.load_inference_interface(use_jax)
+            expectation.compute_sufficient_statistics(data)
+            self.sufficient_statistics.append(expectation)
+
+            # m_step
+            new_model = new_model.update_model_parameters(
+                self.finite_data_enum, self.gaussian_data, expectation)
+            self.model_results.append(new_model)
+
+        return new_model
 
 class DiscreteHMMInferenceResults(ABC):
     """ Abstract base class for HMM inference results """
@@ -637,10 +684,10 @@ class DiscreteHMMInferenceResults(ABC):
         """
         log_probability = np.zeros((data.shape[0], self.model.n_hidden_states))
         if self.model.categorical_model is not None:
-            finite_state_data = get_finite_observations_from_data_as_states(
+            finite_data_enum = get_finite_observations_from_data_as_enum(
                 self.model, data)
             log_probability += np.array(
-                self.model.categorical_model.log_probability(finite_state_data))
+                self.model.categorical_model.log_probability(finite_data_enum))
         if self.model.gaussian_mixture_model is not None:
             gaussian_data = get_gaussian_observations_from_data(
                 self.model, data)
