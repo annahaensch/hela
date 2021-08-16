@@ -90,12 +90,7 @@ class DiscreteHMMGenerativeModel(HMMGenerativeModel):
         N.B.: This training spec will be suitable input for the hmm
             function `DiscreteHMMConfiguration.from_spec()`.
         """
-        training_spec = {
-            'hidden_state': {
-                'type': 'finite',
-                'count': self.n_hidden_states
-            }
-        }
+        training_spec = {'n_hidden_states': self.n_hidden_states}
 
         model_parameter_constraints = {
             'transition_constraints': self.transition_matrix
