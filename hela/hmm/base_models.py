@@ -66,17 +66,19 @@ class HMMConfiguration(ABC):
         		* values - list of finite values if 'finite' else None.  
         	* model_parameter_constraints - (optional) dictionary giving 
         		model constraints with keys: 
-        		* transition_contraints 
-        		* initial_state_constraints
-        		* gmm_parameter_constraints 
+        		* transition_contraints - array of transition probabilities.
+        		* initial_state_constraints -  array of initial state 
+        			probabilities.
+        		* gmm_parameter_constraints - dictionary with keys:
+        			* n_gmm_components - int number of gmm components.
+        			* means - array of means
+        			* covariances - array of covariance arrays
+        			* component_weights - array of component weights.
 		
 		Optional parameters which are not given will be seeded using random 
 		state whenever the spec is used to generate an untrained model. 
         """
-        #config = cls(hidden_state_count=spec['hidden_state_count'])
-        config = cls(hidden_state_count=0)
-
-        print("here")
+        config = cls(hidden_state_count=spec['hidden_state_count'])
 
         finite_observations = [
             i for i in spec['observations'] if i['type'].lower() == 'finite'
