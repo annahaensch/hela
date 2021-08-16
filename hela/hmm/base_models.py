@@ -36,8 +36,8 @@ logger.setLevel(level=logging.INFO)
 class HMMConfiguration(ABC):
     """ Abstract base class for HMM configuration """
 
-    def __init__(self, hidden_state_type=None):
-        self.hidden_state_type = hidden_state_type
+    def __init__(self, hidden_state_count=None):
+        self.hidden_state_count = hidden_state_count
         self.model_parameter_constraints = {
             'transition_constraints': None,
             'initial_state_constraints': None,
@@ -49,7 +49,6 @@ class HMMConfiguration(ABC):
         self.finite_values_dict = {}
         self.finite_values_dict_inverse = {}
         self.continuous_features = []
-        self.continuous_values = None
 
     @classmethod
     def from_spec(cls, spec):
@@ -70,10 +69,11 @@ class HMMConfiguration(ABC):
         		* initial_state_constraints - 
         		* gmm_parameter_constraints - 
 		
-		Optional parameters which are not given will be seeded using random state
-		whenever the spec is used to generate an untrained model. 
+		Optional parameters which are not given will be seeded using random 
+		state whenever the spec is used to generate an untrained model. 
         """
-        config = cls(hidden_state_count=spec['hidden_state_count'])
+        #config = cls(hidden_state_count=spec['hidden_state_count'])
+        config = cls(hidden_state_count=0)
 
         finite_observations = [
             i for i in spec['observations'] if i['type'].lower() == 'finite'
@@ -138,35 +138,24 @@ class HMMConfiguration(ABC):
 
     def add_continuous_observations(self, continuous_observations):
         """ Add a continuous observation to a DiscreteHMM object. """
-        continuous_features_dist_dict = {
+        continuous_features_dict = {
             i['name']: i['dist']
             for i in continuous_observations
         }
-        continuous_features_dim_dict = {
-            i['name']: i['dims']
-            for i in continuous_observations
-        }
+
+        for k,v in continuous_features_dict.items():
+        	if v.lower().replace(" ","_") not in [
+        	'gaussian', 'gaussian_mixture_model', 'gmm']:
+        		raise NotImplementedError(
+        			"This implementation only works for continuous values "
+        			"drawn from gaussian or gaussian mixture model "
+        			"distributions."
+        			)
 
         # Add continuous features to a list and sort.
-        continuous_features = [c for c in continuous_features_dim_dict]
+        continuous_features = list(continuous_features_dict.keys())
         continuous_features.sort()
-        self.continuous_features = [c for c in continuous_features_dim_dict]
-
-        continuous_values = pd.DataFrame(
-            index=['dimension', 'distribution'], columns=continuous_features)
-        for c in continuous_features:
-            if continuous_features_dim_dict[c] != 1:
-                raise ValueError(
-                    "Observation specification and accompanying "
-                    "data should be structured so that a single observation "
-                    "or data feature corresponds to one dimension.  For high "
-                    "dimensional data, input each dimension as a 1-dim "
-                    "observation.")
-            continuous_values.loc['dimension',
-                                  c] = continuous_features_dim_dict[c]
-            continuous_values.loc['distribution',
-                                  c] = continuous_features_dist_dict[c]
-        self.continuous_values = continuous_values
+        self.continuous_features = continuous_features_dist_dict
 
     def add_model_parameter_constraints(self, parameter, constraint):
         """ Add constraints for seed parameters. """
