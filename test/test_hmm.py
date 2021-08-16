@@ -163,7 +163,7 @@ def test_distributed(distributed_learning_model, generative_model):
     prediction = inf.predict_hidden_states_viterbi(dataset)
 
     assert set(prediction.unique()).issubset(
-        set([h for h in range(training_parameters['hidden_state']['count'])]))
+        set([h for h in range(training_parameters['n_hidden_states'])]))
 
     dataset_imputed = inf.impute_missing_data(dataset_redacted, method='argmax')
 
