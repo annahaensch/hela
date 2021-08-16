@@ -368,7 +368,7 @@ class EMObjective(object):
         self.data = data[0]
 
         if model.categorical_model:
-            self.finite_state_data = get_finite_observations_from_data_as_states(
+            self.finite_state_data = get_finite_observations_from_data_as_enum(
                 model, self.data)
         if model.gaussian_mixture_model:
             self.gaussian_data = get_gaussian_observations_from_data(
