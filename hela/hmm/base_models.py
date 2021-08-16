@@ -36,8 +36,8 @@ logger.setLevel(level=logging.INFO)
 class HMMConfiguration(ABC):
     """ Abstract base class for HMM configuration """
 
-    def __init__(self, hidden_state_count=None):
-        self.hidden_state_count = hidden_state_count
+    def __init__(self, n_hidden_states=None):
+        self.n_hidden_states = n_hidden_states
         self.model_parameter_constraints = {
             'transition_constraints': None,
             'initial_state_constraints': None,
@@ -57,7 +57,7 @@ class HMMConfiguration(ABC):
         
         The specification dictionary contains the following key - value pairs:
         
-        	* hidden_state_count - int or list of ints indicating number of 
+        	* n_hidden_states - int or list of ints indicating number of 
         		discrete hidden states for each Markov system.   
         	* observations - list of observation dictionaries with keys:
         		* name - string name of feature.
@@ -78,7 +78,7 @@ class HMMConfiguration(ABC):
 		Optional parameters which are not given will be seeded using random 
 		state whenever the spec is used to generate an untrained model. 
         """
-        config = cls(hidden_state_count=spec['hidden_state_count'])
+        config = cls(n_hidden_states=spec['n_hidden_states'])
 
         finite_observations = [
             i for i in spec['observations'] if i['type'].lower() == 'finite'

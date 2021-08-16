@@ -94,7 +94,7 @@ def test_model_loads_from_spec(generative_model):
     model_config = hmm.DiscreteHMMConfiguration.from_spec(training_parameters)
     model = model_config.to_model()
 
-    assert model.n_hidden_states == training_parameters['hidden_state_count']
+    assert model.n_hidden_states == training_parameters['n_hidden_states']
 
 
 def test_model_learning_and_imputation(generative_model):
