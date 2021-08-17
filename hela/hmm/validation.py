@@ -5,38 +5,44 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 
-from .imputation import HMMImputationTool
 from .utils import *
+
+LOG_ZERO = -1e8
 
 class HMMValidationTool(ABC):
     """ Abstract Base Class for HMM validation Metrics """
 
-    def __init__(self, model, actual_data, use_jax=False):
+    def __init__(self, model, true_data, use_jax=False):
         self.model = model
-        self.actual_data = actual_data
+        self.true_data = true_data
+        self.use_jax = use_jax
         self.inf = self.model.load_inference_interface(use_jax)
+
+        if model.categorical_model is not None:
+            self.true_finite_data = get_finite_observations_from_data(
+                self.model, self.true_data)
+        if model.gaussian_mixture_model is not None:
+            self.true_gaussian_data = get_gaussian_observations_from_data(
+                self.model, self.true_data)
 
     def predicted_hidden_state_log_likelihood_viterbi(self):
         """ Predict most likely hidden states with Viterbi algorithm
 
-        Arguments:
-            data: dataframe of mixed data types
-
         Returns:
             log likelihood of most likely series of hidden states
         """
-        inf = self.model.load_inference_interface(use_jax)
+        inf = self.model.load_inference_interface(self.use_jax)
         log_likelihood = inf.predict_hidden_states_viterbi(
-            self.actual_data).name.split(" ")[-1]
+            self.true_data).name.split(" ")[-1]
 
         return float(log_likelihood)
 
-    def validate_imputation(self, redacted_data, imputed_data):
+    def validate_imputation(self, incomplete_data, data_to_verify):
         """ Return dictionary of validation metrics for imputation.
 
         Arguments:
-            redacted_data: dataframe with values set to nan.
-            imputed_data: dataframe with missing values imputed.
+            incomplete_data: dataframe with values set to nan.
+            data_to_verify: dataframe with missing values imputed.
 
         Returns:
             Dictionary with validation metrics for imputed data against actual data.
@@ -44,84 +50,50 @@ class HMMValidationTool(ABC):
         # Make sure that integers are being cast as integers.
         float_to_int = {
             feature: "Int64"
-            for feature in redacted_data[self.model.finite_features]
+            for feature in incomplete_data[self.model.finite_features]
             .select_dtypes("float")
         }
-        redacted_data = redacted_data.astype(float_to_int, errors='ignore')
-        imputed_data = imputed_data.astype(float_to_int, errors='ignore')
+        incomplete_data = incomplete_data.astype(float_to_int, errors='ignore')
+        data_to_verify = data_to_verify.astype(float_to_int, errors='ignore')
 
-        return self._validate_imputation(redacted_data, imputed_data)
-
-    def validate_forecast(self, forecast_data):
-        """ Return dictionary of validation metrics for imputation.
-
-        Arguments:
-            forecast_data: dataframe with forecast data where the first row
-                of the dataframe is actual observed conditioning date data.
-
-        Returns:
-            Dictionary with validation metrics for forecast data against actual data.
-        """
-        return self._validate_forecast(forecast_data)
-
-class DiscreteHMMValidationTool(HMMValidationTool):
-    """ Validation class specific to discrete HMM
-    """
-
-    def __init__(self, model, actual_data, use_jax=False):
-        super().__init__(model, actual_data)
-        self.inf = model._load_inference_interface(use_jax)
-        self.actual_gaussian_data = get_gaussian_observations_from_data(
-            self.model, actual_data)
-        self.actual_categorical_data = get_finite_observations_from_data(
-            self.model, actual_data)
-
-    def _validate_imputation(self, redacted_data, imputed_data):
-        """ Return DiscreteHMM specific dictionary of validation metrics for imputation.
-
-        Arguments:
-            redacted_data: dataframe with values set to nan.
-            imputed_data: dataframe with missing values imputed.
-
-        Returns:
-            Dictionary with validation metrics for imputed data against actual data.
-        """
-        cond_prob_of_hidden_states = self.inf.conditional_probability_of_hidden_states(
-            redacted_data)
+        cond_prob_of_hidden_states = self.conditional_log_probability_of_hidden_states(
+            incomplete_data)
         val_dict = {}
 
         if self.model.categorical_model:
-            redacted_categorical_data = get_finite_observations_from_data(
-                self.model, redacted_data)
-            imputed_categorical_data = get_finite_observations_from_data(
-                self.model, imputed_data)
+            incomplete_finite_data = get_finite_observations_from_data(
+                self.model, incomplete_data)
+            verify_finite_data = get_finite_observations_from_data(
+                self.model, data_to_verify)
 
             val_dict[
-                'accuracy_of_imputed_categorical_data'] = self.accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, imputed_categorical_data)
+                'accuracy_of_verify_finite_data'] = self.accuracy_of_predicted_finite_data(
+                    incomplete_finite_data, verify_finite_data)
 
             val_dict[
-                'relative_accuracy_of_imputed_categorical_data'] = self.relative_accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, imputed_categorical_data)
+                'relative_accuracy_of_verify_finite_data'] = self.relative_accuracy_of_predicted_finite_data(
+                    incomplete_finite_data, verify_finite_data)
 
             val_dict[
-                'best_possible_accuracy_of_categorical_imputation'] = best_possible_accuracy_of_categorical_prediction(
-                    self.actual_categorical_data, redacted_categorical_data)
+                'best_possible_accuracy_of_finite_imputation'] = best_possible_accuracy_of_categorical_prediction(
+                    self.true_finite_data, incomplete_finite_data)
 
         if self.model.gaussian_mixture_model:
-            redacted_gaussian_data = get_gaussian_observations_from_data(
-                self.model, redacted_data)
-            imputed_gaussian_data = get_gaussian_observations_from_data(
-                self.model, imputed_data)
+            true_gaussian_data = get_gaussian_observations_from_data(
+                self.model, self.true_data)
+            incomplete_gaussian_data = get_gaussian_observations_from_data(
+                self.model, incomplete_data)
+            verify_gaussian_data = get_gaussian_observations_from_data(
+                self.model, data_to_verify)
 
             val_dict[
-                'average_relative_log_likelihood_of_imputed_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
-                    redacted_gaussian_data, imputed_gaussian_data,
+                'average_relative_log_likelihood_of_verify_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
+                    incomplete_gaussian_data, verify_gaussian_data,
                     cond_prob_of_hidden_states)
 
             val_dict[
-                'average_z_score_of_imputed_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
-                    redacted_gaussian_data, cond_prob_of_hidden_states)
+                'average_z_score_of_verify_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
+                    incomplete_gaussian_data, cond_prob_of_hidden_states)
 
         return val_dict
 
@@ -136,7 +108,7 @@ class DiscreteHMMValidationTool(HMMValidationTool):
             Dictionary with validation metrics for forecast data against actual data.
         """
         conditioning_date = forecast_data.index[0]
-        delta = self.actual_data.index[-1] - self.actual_data.index[-2]
+        delta = self.true_data.index[-1] - self.true_data.index[-2]
 
         horizon_timesteps = [
             int(t) for t in (forecast_data.index - conditioning_date) / delta
@@ -144,50 +116,163 @@ class DiscreteHMMValidationTool(HMMValidationTool):
 
         cond_prob_of_hidden_states = DiscreteHMMForecasting(
             self.model).hidden_state_probability_at_horizons(
-                self.actual_data, horizon_timesteps, conditioning_date)
+                self.true_data, horizon_timesteps, conditioning_date)
 
         val_dict = {}
 
         if self.model.categorical_model:
-            forecast_categorical_data = get_finite_observations_from_data(
+            forecast_finite_data = get_finite_observations_from_data(
                 self.model, forecast_data)
 
-            redacted_categorical_data = forecast_categorical_data.copy()
-            redacted_categorical_data.loc[:, :] = np.nan
+            incomplete_finite_data = forecast_finite_data.copy()
+            incomplete_finite_data.loc[:, :] = np.nan
 
             val_dict[
-                'accuracy_of_forecast_categorical_data'] = self.accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, forecast_categorical_data)
+                'accuracy_of_forecast_finite_data'] = self.accuracy_of_predicted_finite_data(
+                    incomplete_finite_data, forecast_finite_data)
 
             val_dict[
-                'relative_accuracy_of_forecast_categorical_data'] = self.relative_accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, forecast_categorical_data)
+                'relative_accuracy_of_forecast_finite_data'] = self.relative_accuracy_of_predicted_finite_data(
+                    incomplete_finite_data, forecast_finite_data)
 
             val_dict[
-                'best_possible_accuracy_of_categorical_forecast'] = best_possible_accuracy_of_categorical_prediction(
-                    self.actual_categorical_data, redacted_categorical_data)
+                'best_possible_accuracy_of_finite_forecast'] = best_possible_accuracy_of_finite_prediction(
+                    self.true_finite_data, incomplete_finite_data)
 
         if self.model.gaussian_mixture_model:
             forecast_gaussian_data = get_gaussian_observations_from_data(
                 self.model, forecast_data)
 
-            redacted_gaussian_data = forecast_gaussian_data.copy()
-            redacted_gaussian_data.loc[:, :] = np.nan
+            incomplete_gaussian_data = forecast_gaussian_data.copy()
+            incomplete_gaussian_data.loc[:, :] = np.nan
 
             val_dict[
                 'average_relative_log_likelihood_of_forecast_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
-                    redacted_gaussian_data, forecast_gaussian_data,
+                    incomplete_gaussian_data, forecast_gaussian_data,
                     cond_prob_of_hidden_states)
 
             val_dict[
                 'average_z_score_of_forecast_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
-                    redacted_gaussian_data, cond_prob_of_hidden_states)
+                    incomplete_gaussian_data, cond_prob_of_hidden_states)
 
         return val_dict
 
+    def conditional_log_probability_of_hidden_states(self, incomplete_data):
+        """
+
+        Arguments: 
+            incomplete_data: dataframe with missing values.
+
+        Returns: 
+            Dataframe of hidden state log probabilties for timesteps with missing values.
+
+        """
+
+        model = self.model
+        prob_df = pd.DataFrame(columns = [i for i in range(model.n_hidden_states)])
+        
+        # Create copy of dataframe with missing values.
+        verify_data = incomplete_data.copy()
+
+        # Get loc and iloc index for missing values.
+        red_idx = list(incomplete_data[incomplete_data.isna().any(axis = 1)].index)
+        ired_idx = [0] + [list(incomplete_data.index).index(i) for i in red_idx] + [incomplete_data.shape[0] + 1]
+
+        # Deal with missing values in chunks.
+        for i in range(len(red_idx)):
+
+            df_pre = incomplete_data.iloc[ired_idx[i]+1:ired_idx[i+1]]
+            # Dataframe of what is known after the missing value.
+            df_post = incomplete_data.iloc[ired_idx[i+1]+1:ired_idx[i+2]]
+
+            unknown_col = list(incomplete_data.loc[red_idx[i]][incomplete_data.loc[red_idx[i]].isna()].index)
+            known_col = [g for g in incomplete_data.columns if not g in unknown_col]
+
+            # Compute bracket Z star.
+            inf = self.inf
+            if df_pre.shape[0] == 0:
+                log_prob_pre = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+            else:
+                log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
+
+            if df_post.shape[0] == 0:
+                log_prob_post = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+            else:
+                log_prob_post = inf.predict_hidden_state_log_probability(df_post)
+
+            alpha = inf._compute_forward_probabilities(log_prob_pre)
+            beta = inf._compute_backward_probabilities(log_prob_post)
+
+            log_p_fb = logsumexp(alpha[-1].reshape(-1,1) + model.log_transition, axis = 0) + beta[0]
+
+            log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+            log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+
+            if model.categorical_model:
+                # Compute probability of finite observation components.
+                finite_obs = incomplete_data.loc[[red_idx[i]],list(model.finite_features)]
+                known_finite = [c for c in model.finite_features if c in known_col]
+
+                # If all finite observations are known...
+                if len(known_finite) == len(model.finite_features):
+                    finite_obs_enum = model.categorical_model.finite_values_dict_inverse[str(list(np.array(finite_obs)[0]))]
+                    log_p_finite = model.categorical_model.log_emission_matrix[finite_obs_enum]
+
+                # If no finite observations are known...
+                elif len(known_finite) == 0:
+                    possible_finite_obs_enum = list(model.finite_values.index)
+                    log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+
+                # If some finite observations are known, but not all...
+                else:
+                    possible_finite_obs_enum = []
+                    for c in known_col:
+                        if c in model.finite_features:
+                            possible_finite_obs_enum += list(model.finite_values[model.finite_values[c] == finite_obs.loc[red_idx[i],c]].index)  
+                    log_p_finite = logsumexp(model.categorical_model.log_emission_matrix[possible_finite_obs_enum], axis = 0)
+
+            if model.gaussian_mixture_model:
+
+                # Compute probability of Gaussian observation components.
+                gaussian_obs = incomplete_data.loc[[red_idx[i]],model.continuous_features]
+                known_gaussian = [c for c in model.continuous_features if c in known_col]
+
+                means = model.gaussian_mixture_model.means
+                covariances = model.gaussian_mixture_model.covariances
+                weights = model.gaussian_mixture_model.component_weights
+
+                # If all Gaussian observations are known...
+                if len(known_gaussian) == len(model.continuous_features):
+                    log_p_gauss = np.array(model.gaussian_mixture_model.log_probability(gaussian_obs))[0]
+
+                # If no Gaussian observations are known...
+                elif len(known_gaussian) == 0:
+                    log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+
+                # If some Gaussian observations are known...
+                else:
+                    known_gauss_dim = [i for i in range(len(model.continuous_features)) if model.continuous_features[i] in known_col]
+                    for h in range(model.n_hidden_states):
+                        for m in range(model.gaussian_mixture_model.n_gmm_components):
+
+                            k = int(known_col[0][-1])
+                            p = stats.multivariate_normal.logpdf(
+                                                    gaussian_obs.iloc[0,known_gauss_dim],
+                                                    means[h][m][known_gauss_dim],
+                                                    covariances[h][m][known_gauss_dim,:][:,known_gauss_dim],
+                                                    allow_singular=True)
+
+                            log_p_gauss[h] += p + np.log(weights[h][m])
+
+            Z_star = log_p_fb + log_p_finite + log_p_gauss - logsumexp(log_p_fb + log_p_finite + log_p_gauss)
+            
+            prob_df.loc[red_idx[i]] = Z_star
+        
+        return prob_df
+
     def average_relative_log_likelihood_of_predicted_gaussian_data(
-            self, redacted_gaussian_data, imputed_gaussian_data,
-            conditional_probability_of_hidden_states):
+            self, incomplete_gaussian_data, verify_gaussian_data,
+            conditional_log_probability_of_hidden_states):
         """Returns the difference between the log likelihood of the actual
         data and the log likelihood of the imputed data.  This is done
         using the probability density function for the conditional probability
@@ -196,63 +281,59 @@ class DiscreteHMMValidationTool(HMMValidationTool):
         you should be to see the actual value relative to the imputed value.
 
         Arguments:
-            redacted_gaussian_data: dataframe if Gaussian observations
+            incomplete_gaussian_data: dataframe if Gaussian observations
                 with values set to nan.
-            imputed_gaussian_data: dataframe with missing values imputed.
-            conditional_probability_of_hidden_states: dataframe with
-                conditional probability of hidden states given partial
-                observations at all timesteps with redacted data.
+            verify_gaussian_data: dataframe with missing values imputed.
+            conditional_log_probability_of_hidden_states: dataframe with
+                conditional log probability of hidden states given partial
+                observations at all timesteps with incomplete data.
 
         Returns:
             float
         """
-        actual_gaussian_data = self.actual_gaussian_data
         means = self.model.gaussian_mixture_model.means
         covariances = self.model.gaussian_mixture_model.covariances
         component_weights = self.model.gaussian_mixture_model.component_weights
 
-        redacted_index = redacted_gaussian_data[redacted_gaussian_data.isnull()
+        incomplete_index = incomplete_gaussian_data[incomplete_gaussian_data.isnull()
                                                 .any(axis=1)].index
-        imputed_likelihood = np.empty(len(redacted_index))
-        actual_likelihood = np.empty(len(redacted_index))
-        for i in range(len(redacted_index)):
-            idx = redacted_index[i]
-            p = np.float64(
-                np.array(conditional_probability_of_hidden_states.loc[idx]))
-            log_cond_prob = np.log(
-                p, np.full(p.shape, LOG_ZERO), where=(p != 0))
+        verify_likelihood = np.empty(len(incomplete_index))
+        true_likelihood = np.empty(len(incomplete_index))
+        for i in range(len(incomplete_index)):
+            idx = incomplete_index[i]
+            cond_prob = np.array(conditional_log_probability_of_hidden_states.loc[idx])
 
-            actual_gaussian_observation = actual_gaussian_data.loc[[idx]]
-            imputed_gaussian_observation = imputed_gaussian_data.loc[[idx]]
-            partial_gaussian_observation = redacted_gaussian_data.loc[[idx]]
+            true_gaussian_observation = self.true_gaussian_data.loc[[idx]]
+            verify_gaussian_observation = verify_gaussian_data.loc[[idx]]
+            partial_gaussian_observation = incomplete_gaussian_data.loc[[idx]]
 
-            actual_prob = compute_log_likelihood_with_inferred_pdf(
-                actual_gaussian_observation, partial_gaussian_observation,
+            true_prob = compute_log_likelihood_with_inferred_pdf(
+                true_gaussian_observation, partial_gaussian_observation,
                 means, covariances, component_weights)
-            actual_likelihood[i] = logsumexp(actual_prob + log_cond_prob)
+            true_likelihood[i] = logsumexp(true_prob + cond_prob)
 
-            imputed_prob = compute_log_likelihood_with_inferred_pdf(
-                imputed_gaussian_observation, partial_gaussian_observation,
+            verify_prob = compute_log_likelihood_with_inferred_pdf(
+                verify_gaussian_observation, partial_gaussian_observation,
                 means, covariances, component_weights)
-            imputed_likelihood[i] = logsumexp(imputed_prob + log_cond_prob)
+            verify_likelihood[i] = logsumexp(verify_prob + cond_prob)
 
-        total_actual_log_likelihood = logsumexp(actual_likelihood)
-        total_imputed_log_likelihood = logsumexp(imputed_likelihood)
+        total_true_log_likelihood = logsumexp(true_likelihood)
+        total_verify_log_likelihood = logsumexp(verify_likelihood)
 
-        return total_actual_log_likelihood - total_imputed_log_likelihood
+        return total_true_log_likelihood - total_verify_log_likelihood
 
     def average_z_score_of_predicted_gaussian_data(
-            self, redacted_gaussian_data,
-            conditional_probability_of_hidden_states):
+            self, incomplete_gaussian_data,
+            conditional_log_probability_of_hidden_states):
         """ Computes z score of gaussian data averaged over observations.
 
         Arguments:
-            redacted_gaussian_data: dataframe if Gaussian observations
+            incomplete_gaussian_data: dataframe if Gaussian observations
                 with values set to nan.
-            imputed_gaussian_data: dataframe with missing values imputed.
-            conditional_probability_of_hidden_states: dataframe with
-                conditional probability of hidden states given partial
-                observations at all timesteps with redacted data.
+            verify_gaussian_data: dataframe with missing values imputed.
+            conditional_log_probability_of_hidden_states: dataframe with
+                conditional log probability of hidden states given partial
+                observations at all timesteps with incomplete data.
 
         Returns:
             float
@@ -262,56 +343,58 @@ class DiscreteHMMValidationTool(HMMValidationTool):
         component_weights = self.model.gaussian_mixture_model.component_weights
 
         return average_z_score(
-            means, covariances, component_weights, self.actual_gaussian_data,
-            redacted_gaussian_data, conditional_probability_of_hidden_states)
+            means, covariances, component_weights, self.true_gaussian_data,
+            incomplete_gaussian_data, np.exp(conditional_log_probability_of_hidden_states))
 
-    def accuracy_of_predicted_categorical_data(self, redacted_categorical_data,
-                                               imputed_categorical_data):
-        """ Returns ratio of correctly imputed categorical values to total imputed categorical values.
+    def accuracy_of_predicted_finite_data(self, incomplete_finite_data,
+                                               verify_finite_data):
+        """ Returns ratio of correctly imputed finite values to total imputed finite values.
 
         Arguments:
-            redacted_categorical_data: dataframe of categorical data with
-                values set to nan.
-            imputed_categorical_data: dataframe of categorical data with missing values fill in.
+            incomplete_finite_data: dataframe of finite data with
+                some missing values.
+            verify_finite_data: dataframe of finite data with missing 
+                values filled in.
 
         Returns:
             float
         """
-        redacted_index = redacted_categorical_data[
-            redacted_categorical_data.isnull().any(axis=1)].index
+        incomplete_index = incomplete_finite_data[
+            incomplete_finite_data.isnull().any(axis=1)].index
 
         total_correct = np.sum(
-            (self.actual_categorical_data.loc[redacted_index] ==
-             imputed_categorical_data.loc[redacted_index]).all(axis=1))
+            (self.true_finite_data.loc[incomplete_index] ==
+             verify_finite_data.loc[incomplete_index]).all(axis=1))
 
-        return total_correct / len(redacted_index)
+        return total_correct / len(incomplete_index)
 
-    def relative_accuracy_of_predicted_categorical_data(
-            self, redacted_categorical_data, imputed_categorical_data):
+    def relative_accuracy_of_predicted_finite_data(
+            self, incomplete_finite_data, verify_finite_data):
         """ Returns ratio of rate of accuracy in imputed data to expected rate of accuracy with random guessing.
 
         Arguments:
-            redacted_categorical_data: dataframe of categorical data with
-                values set to nan.
-            imputed_categorical_data: dataframe of categorical data with missing values fill in.
-
+            incomplete_finite_data: dataframe of finite data with
+                some missing values.
+            verify_finite_data: dataframe of finite data with missing 
+                values filled in.
         Returns:
             float
         """
         expected_accuracy = expected_proportional_accuracy(
-            self.actual_categorical_data, redacted_categorical_data)
-        imputed_accuracy = self.accuracy_of_predicted_categorical_data(
-            redacted_categorical_data, imputed_categorical_data)
+            self.true_finite_data, incomplete_finite_data)
+        
+        verify_accuracy = self.accuracy_of_predicted_finite_data(
+            incomplete_finite_data, verify_finite_data)
 
-        return imputed_accuracy / expected_accuracy
+        return verify_accuracy / expected_accuracy
 
-    def precision_recall_df_for_predicted_categorical_data(
-            self, redacted_data, imputed_data):
-        """ Return DataFrame with precision, recall, and proportion of categorical values
+    def precision_recall_df_for_predicted_finite_data(
+            self, incomplete_data, data_to_verify):
+        """ Return DataFrame with precision, recall, and proportion of finite values
 
         Arguments:
-            redacted_data: dataframe with values set to nan.
-            imputed_data: dataframe with missing values imputed.
+            incomplete_data: dataframe with values set to nan.
+            data_to_verify: dataframe with missing values imputed.
 
         Returns:
             Dataframe with precision, recall, and proportion of imputed data against actual data.
@@ -319,24 +402,24 @@ class DiscreteHMMValidationTool(HMMValidationTool):
         if len(self.model.finite_features) == 0:
             return None
         else:
-            redacted_categorical_data = get_finite_observations_from_data(
-                self.model, redacted_data)
-            redacted_index = redacted_categorical_data[
-                redacted_categorical_data.isnull().any(axis=1)].index
+            incomplete_finite_data = get_finite_observations_from_data(
+                self.model, incomplete_data)
+            incomplete_index = incomplete_finite_data[
+                incomplete_finite_data.isnull().any(axis=1)].index
 
-            df = self.actual_data.copy()
+            df = self.true_data.copy()
             df['tuples'] = list(
                 zip(*[
-                    self.actual_data[c]
-                    for c in self.actual_categorical_data.columns
+                    self.true_data[c]
+                    for c in self.true_finite_data.columns
                 ]))
             proportion = (df['tuples'].value_counts() / df.shape[0]).to_dict()
 
-            df_imputed = imputed_data.copy()
+            df_imputed = data_to_verify.copy()
             df_imputed['tuples'] = list(
                 zip(*[
-                    imputed_data[c]
-                    for c in self.actual_categorical_data.columns
+                    data_to_verify[c]
+                    for c in self.true_finite_data.columns
                 ]))
 
             state = df['tuples'].unique()
@@ -350,9 +433,9 @@ class DiscreteHMMValidationTool(HMMValidationTool):
                 # pandas cannot use loc with tuples in the index
                 precision_recall.iloc[n]['proportion'] = proportion[idx]
 
-            actual = df.loc[redacted_index, 'tuples']
+            actual = df.loc[incomplete_index, 'tuples']
 
-            imputed = df_imputed.loc[redacted_index, 'tuples']
+            imputed = df_imputed.loc[incomplete_index, 'tuples']
 
             true_pos = ((np.array(actual)[:, None] == state) &
                         (np.array(imputed)[:, None] == state)).sum(axis=0)

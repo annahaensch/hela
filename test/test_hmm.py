@@ -142,21 +142,28 @@ def test_model_learning_and_imputation(generative_model):
             0) & (dataset_imputed[(
                 dataset_imputed.isna().any(axis=1))].shape[0] == 0)
 
-    #val = new_model.load_validation_interface(dataset)
-    #validation = val.validate_imputation(dataset_redacted, dataset_imputed)
+    val = hmm.HMMValidationTool(model = model, true_data = dataset)
+    validation = val.validate_imputation(incomplete_data = dataset_redacted, data_to_verify = dataset_imputed)
 
-    #precision_recall = val.precision_recall_df_for_predicted_categorical_data(
-    #    dataset_redacted, dataset_imputed)
-    #assert precision_recall['proportion'].sum() == 1
+    precision_recall = val.precision_recall_df_for_predicted_finite_data(
+        incomplete_data = dataset_redacted, data_to_verify= dataset_imputed)
+    assert precision_recall['proportion'].sum() == 1
 
-    #val1 = validation['relative_accuracy_of_imputed_categorical_data']
-    #val2 = validation[
-    #    'average_relative_log_likelihood_of_imputed_gaussian_data']
-    #val3 = validation['average_z_score_of_imputed_gaussian_data']
+    val1 = validation['relative_accuracy_of_verify_finite_data']
+    val2 = validation[
+        'average_relative_log_likelihood_of_verify_gaussian_data']
+    val3 = validation['average_z_score_of_verify_gaussian_data']
 
-    #assert val1 >= 1  #Accuracy should be at least as good as random guessing.
-    #assert val2 <= 0  #This metric returns
-
+    assert val1 >= 1  #Accuracy should be at least as good as random guessing.
+    assert val2 <= 0  #This metric returns
+    # log p(actual value)-log p(imputed value) for conditonal
+    # distribution. With imputation method 'argmax' the
+    # imputed value should be at least as likely as the
+    # actual value, so this should always be negative.
+    assert val3 < 3.3  # This metric returns the average z score.
+    # If this is larger than 3.3 then my imputed values,
+    # are on average, worse than the 99.9% confidence
+    # interval and something has gone wrong.
 
 def test_distributed(distributed_learning_model, generative_model):
 
@@ -180,25 +187,25 @@ def test_distributed(distributed_learning_model, generative_model):
             0) & (dataset_imputed[(
                 dataset_imputed.isna().any(axis=1))].shape[0] == 0)
 
-    #val = distributed_learning_model.load_validation_interface(dataset)
-    #validation = val.validate_imputation(dataset_redacted, dataset_imputed)
+    val = hmm.HMMValidationTool(model = model, true_data = dataset)
+    validation = val.validate_imputation(incomplete_data = dataset_redacted, data_to_verify = dataset_imputed)
 
-    #precision_recall = val.precision_recall_df_for_predicted_categorical_data(
-    #    dataset_redacted, dataset_imputed)
-    #assert precision_recall['proportion'].sum() == 1
+    precision_recall = val.precision_recall_df_for_predicted_finite_data(
+        incomplete_data = dataset_redacted, data_to_verify= dataset_imputed)
+    assert precision_recall['proportion'].sum() == 1
 
-    #val1 = validation['relative_accuracy_of_imputed_categorical_data']
-    #val2 = validation[
-    #    'average_relative_log_likelihood_of_imputed_gaussian_data']
-    #val3 = validation['average_z_score_of_imputed_gaussian_data']
+    val1 = validation['relative_accuracy_of_verify_finite_data']
+    val2 = validation[
+        'average_relative_log_likelihood_of_verify_gaussian_data']
+    val3 = validation['average_z_score_of_verify_gaussian_data']
 
-    #assert val1 >= 1  #Accuracy should be at least as good as random guessing.
-    #assert val2 <= 0  #This metric returns
+    assert val1 >= 1  #Accuracy should be at least as good as random guessing.
+    assert val2 <= 0  #This metric returns
     # log p(actual value)-log p(imputed value) for conditonal
     # distribution. With imputation method 'argmax' the
     # imputed value should be at least as likely as the
     # actual value, so this should always be negative.
-    #assert val3 < 3.3  # This metric returns the average z score.
+    assert val3 < 3.3  # This metric returns the average z score.
     # If this is larger than 3.3 then my imputed values,
     # are on average, worse than the 99.9% confidence
     # interval and something has gone wrong.
