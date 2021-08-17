@@ -8,8 +8,6 @@ import pandas as pd
 
 from .utils import *
 
-from .imputation import HMMImputationTool
-
 class HMMForecastingTool(ABC):
 
     def __init__(self, model, use_jax=False):
@@ -207,6 +205,7 @@ class HMMForecastingTool(ABC):
 
         model = self.model
         imp = HMMImputationTool(model = model, method = imputation_method)
+        
         forecast = self.inf.impute_missing_data_single_observation(
             observation.loc[[new_time]], hidden_state_prob, imputation_method)
 

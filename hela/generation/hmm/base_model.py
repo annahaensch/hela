@@ -62,7 +62,7 @@ class HMMGenerativeModel(ABC):
             if len(n_categorical_values) > 0:
                 msg = "n_categorical_features and n_categorical_values disagree"
                 assert n_categorical_features == len(n_categorical_values), msg
-            if categorical_values:
+            if categorical_values is not None:
                 msg = "categorical_features and n_categorical_values disagree"
                 assert n_categorical_features == categorical_values.shape[
                     1], msg

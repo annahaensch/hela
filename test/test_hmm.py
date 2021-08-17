@@ -241,64 +241,6 @@ def test_forecasting(generative_model):
     assert np.max(np.abs(step1 - step2)) < 1e-05
 
 
-def test_wfci(random, distributed_learning_model, generative_model):
-
-    horizons = [pd.Timedelta(days=h) for h in [2, 7]]
-    # validate on new, random datasets
-    c = 0
-    col = f"categorical_feature_{c}"
-    n_assets = 4
-    data = []
-    for i in range(n_assets):
-        hidden_states = generative_model[
-            "model"].generate_hidden_state_sequence(n_observations=100)
-        ds = generative_model["model"].generate_observations(hidden_states)
-        data.append(ds)
-    selected = [1]
-    assets = [f"test_asset_{i}" for i in range(n_assets)]
-
-    start = data[0].index[0]
-    end = data[0].index[-1]
-    time_resolution = pd.Timedelta(days=1)
-    prediction_dates = pd.date_range(
-        start.round(time_resolution),
-        end.round(time_resolution),
-        freq=time_resolution)
-
-    # Initializing Dask client
-    client = Client(processes=True, n_workers=n_assets)
-    mapped = client.map(
-        hmm.find_risk_at_horizons,
-        data,
-        assets,
-        model=distributed_learning_model,
-        label_column=col,
-        selected_labels=selected,
-        horizons=horizons,
-        prediction_dates=prediction_dates,
-        event_time_resolution=pd.Timedelta(days=1))
-    risk_result = client.gather(mapped)
-    client.shutdown()
-
-    #calculate WFCI
-    predictions = np.array([r[0] for r in risk_result])
-    prediction_times = risk_result[0][1]
-    validation_df = pd.concat([r[2] for r in risk_result], ignore_index=True)
-
-    wfci = WalkForwardConcordance(
-        predictions=predictions,
-        asset_ids=assets,
-        prediction_dates=prediction_times,
-        validation_df=validation_df,
-        predictive_horizons=horizons,
-        resolution="1h")
-    df = wfci.walk_forward_ci_df()[0]
-
-    for c in df.columns[::2].to_list():  # ci_ and n_pairs columns
-        assert len(df[~df[c].isna()]) > 0
-        assert df[c].mean() > 0.4
-
-
 def test_generative_model(generative_model, factored_generative_model):
 
     discrete_model = generative_model["model"]
