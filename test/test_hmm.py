@@ -306,8 +306,9 @@ def test_generative_model(generative_model, factored_generative_model):
     model = model_config.to_model()
     new_generative_model = gen.model_to_discrete_generative_spec(model)
 
-    assert np.all(discrete_model.categorical_values ==
-                  new_generative_model.categorical_values)
+    for c in discrete_model.categorical_values.columns:
+        assert set(discrete_model.categorical_values[c].unique()) == set(new_generative_model.categorical_values[c].unique())
+
     assert np.all(discrete_model.means == new_generative_model.means)
     assert np.min(discrete_model.transition_matrix -
                   new_generative_model.transition_matrix) < 1e-08
