@@ -187,7 +187,7 @@ def test_distributed(distributed_learning_model, generative_model):
             0) & (dataset_imputed[(
                 dataset_imputed.isna().any(axis=1))].shape[0] == 0)
 
-    val = hmm.HMMValidationTool(model = model, true_data = dataset)
+    val = hmm.HMMValidationTool(model = distributed_learning_model, true_data = dataset)
     validation = val.validate_imputation(incomplete_data = dataset_redacted, data_to_verify = dataset_imputed)
 
     precision_recall = val.precision_recall_df_for_predicted_finite_data(
@@ -220,14 +220,17 @@ def test_forecasting(generative_model):
     model = model_config.to_model()
 
     # Load forecasting tool
-    forc = hmm.HMMForecastingTool(model = model, data = dataset)
-    horizon_timesteps = [7,30]
+    conditioning_data = dataset.iloc[:-10]
+    horizon_timesteps = [2,7]
+    forc = hmm.HMMForecastingTool(model = model, data = conditioning_data)
     forecast = forc.forecast_observation_at_horizons(horizon_timesteps = horizon_timesteps)
 
     assert forecast[~forecast.isna().any(axis = 1)].shape[0] == len(horizon_timesteps)
 
-    #val = model.load_validation_interface(dataset)
-    #val.validate_forecast(forecast)
+    val = hmm.HMMValidationTool(model = model, true_data = dataset)
+    validation = val.validate_forecast(conditioning_data = conditioning_data, forecast = forecast)
+
+    assert validation['average_z_score_of_forecast_gaussian_data'] < 3.3
 
     steady_state = forc.steady_state_and_horizon()
     n_steps = steady_state['steady_state_horizon_timesteps'] + 1
