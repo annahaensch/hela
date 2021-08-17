@@ -135,7 +135,7 @@ def test_model_learning_and_imputation(generative_model):
                          predict_gibbs].shape[0] / hidden_states.shape[0] > .1
 
     # Load imputation tool.
-    imp = hmm.ImputationTool(model = new_model) 
+    imp = hmm.HMMImputationTool(model = new_model) 
     dataset_imputed = imp.impute_missing_data(dataset_redacted, method='hmm_argmax')
 
     assert (dataset_redacted[(dataset_redacted.isna().any(axis=1))].shape[0] >
@@ -171,7 +171,7 @@ def test_distributed(distributed_learning_model, generative_model):
         set([h for h in range(training_parameters['n_hidden_states'])]))
 
     # Load imputation tool.
-    imp = hmm.ImputationTool(model = distributed_learning_model) 
+    imp = hmm.HMMImputationTool(model = distributed_learning_model) 
     dataset_imputed = imp.impute_missing_data(dataset_redacted, method='hmm_argmax')
 
     #dataset_imputed = inf.impute_missing_data(dataset_redacted, method='argmax')
@@ -211,12 +211,14 @@ def test_forecasting(generative_model):
 
     model_config = hmm.DiscreteHMMConfiguration.from_spec(training_parameters)
     model = model_config.to_model()
-    fi = model.load_forecasting_interface()
+
+    # Load forecasting tool
+    forc = hmm.HMMForecastingTool(model)
 
     horizon_timesteps = [7, 30]
     conditioning_date = dataset.index[int(dataset.shape[0] / 2)]
 
-    forecast = fi.forecast_observation_at_horizons(dataset, horizon_timesteps,
+    forecast = forc.forecast_observation_at_horizons(dataset, horizon_timesteps,
                                                    conditioning_date)
 
     val = model.load_validation_interface(dataset)
