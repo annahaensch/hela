@@ -12,6 +12,7 @@ from .distributed import DistributedLearningAlgorithm
 from .factored_models import (FactoredHMMConfiguration, FactoredHMMInference,
                               FactoredHMMLearningAlgorithm,
                               _factored_hmm_to_discrete_hmm)
+from.imputation import ImputationTool, DiscreteHMMImputation
 from .graphical_models.DynamicBayesianNetwork import (fhmm_model_to_graph,
                                                       hmm_model_to_graph)
 from .utils import *

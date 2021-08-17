@@ -65,8 +65,15 @@ class DiscreteHMMImputation(ABC):
 
             # Compute bracket Z star.
             inf = model.load_inference_interface()
-            log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
-            log_prob_post = inf.predict_hidden_state_log_probability(df_post)
+            if df_pre.shape[0] == 0:
+                log_prob_pre = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+            else:
+                log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
+            
+            if df_post.shape[0] == 0:
+                log_prob_post = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+            else:
+                log_prob_post = inf.predict_hidden_state_log_probability(df_post)
 
             alpha = inf._compute_forward_probabilities(log_prob_pre)
             beta = inf._compute_backward_probabilities(log_prob_post)
@@ -79,14 +86,15 @@ class DiscreteHMMImputation(ABC):
             if model.categorical_model:
                 # Compute probability of finite observation components.
                 finite_obs = partial_data.loc[[red_idx[i]],list(model.finite_features)]
+                known_finite = [c for c in model.finite_features if c in known_col]
 
                 # If all finite observations are known...
-                if finite_obs[finite_obs.isna().any(axis = 1)].shape[0] == 0:
+                if len(known_finite) == len(model.finite_features):
                     finite_obs_enum = model.categorical_model.finite_values_dict_inverse[str(list(np.array(finite_obs)[0]))]
                     log_p_finite = model.categorical_model.log_emission_matrix[finite_obs_enum]
 
                 # If no finite observations are known...
-                elif finite_obs[finite_obs.isna().any(axis = 1)].shape[0] == len(model.finite_features):
+                elif len(known_finite) == 0:
                     possible_finite_obs_enum = list(model.finite_values.index)
                     log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
 
@@ -102,21 +110,22 @@ class DiscreteHMMImputation(ABC):
 
                 # Compute probability of Gaussian observation components.
                 gaussian_obs = partial_data.loc[[red_idx[i]],model.continuous_features]
+                known_gaussian = [c for c in model.continuous_features if c in known_col]
+
                 means = model.gaussian_mixture_model.means
                 covariances = model.gaussian_mixture_model.covariances
                 weights = model.gaussian_mixture_model.component_weights
                 
                 # If all Gaussian observations are known...
-                if gaussian_obs[gaussian_obs.isna().any(axis = 1)].shape[0] == 0:
+                if len(known_gaussian) == len(model.continuous_features):
                     log_p_gauss = np.array(model.gaussian_mixture_model.log_probability(gaussian_obs))[0]
 
                 # If no Gaussian observations are known...
-                elif gaussian_obs[gaussian_obs.isna().any(axis = 1)].shape[0] == len(model.continuous_features):
+                elif len(known_gaussian) == 0:
                     log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
                 
                 # If some Gaussian observations are known...
                 else:
-                    
                     known_gauss_dim = [i for i in range(len(model.continuous_features)) if model.continuous_features[i] in known_col]
                     for h in range(model.n_hidden_states):
                         for m in range(model.gaussian_mixture_model.n_gmm_components):
