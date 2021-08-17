@@ -133,7 +133,6 @@ class HMMValidationTool(ABC):
         forc = HMMForecastingTool(model=self.model, data=conditioning_data)
         cond_prob_of_hidden_states = forc.hidden_state_probability_at_horizons(
             horizon_timesteps=horizon_timesteps)
-        print(cond_prob_of_hidden_states)
         val_dict = {}
 
         if self.model.categorical_model:
