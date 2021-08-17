@@ -1,12 +1,10 @@
 """ Hidden Markov modeling implementation
 """
 
-from .base_models import (HiddenMarkovModel, HMMConfiguration,
-                          HMMValidationMetrics, HMMLearningAlgorithm)
+from .base_models import (HiddenMarkovModel, HMMConfiguration, HMMLearningAlgorithm)
 from .discrete_models import (DiscreteHMM, DiscreteHMMConfiguration,
 							  DiscreteHMMLearningAlgorithm,
-                              DiscreteHMMInferenceResults,
-                              DiscreteHMMValidationMetrics)
+                              DiscreteHMMInferenceResults)
 from .distributed import DistributedLearningAlgorithm
 from .factored_models import (FactoredHMMConfiguration, FactoredHMMInference,
                               FactoredHMMLearningAlgorithm,

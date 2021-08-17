@@ -225,23 +225,6 @@ class HiddenMarkovModel(ABC):
         """
         return self._load_inference_interface(use_jax)
 
-    def load_forecasting_interface(self, use_jax=False):
-        """ Load HiddenMarkovModel forecasting interface.  This includes 
-        methods to forecast hidden states and observations at timestep 
-        horizons for given conditioning date.
-        """
-        return self._load_forecasting_interface(use_jax)
-
-    def load_validation_interface(self, actual_data, use_jax=False):
-        """Load validation interface for imputation and forecasting.
-
-        This includes the tools the validate hidden state prediction,
-        imputation, and forecasting against `actual data`.
-        """
-        # FIXME(wrvb) The arguments don't line up with the definition below
-        return self._load_validation_interface(actual_data, use_jax)
-
-
     @abstractmethod
     def _load_learning_interface(self):
         """ Load learning interface specific to model type."""
@@ -249,11 +232,6 @@ class HiddenMarkovModel(ABC):
     @abstractmethod
     def _load_inference_interface(self, use_jax):
         """ Load inference interface specific to model type."""
-
-    @abstractmethod
-    def _load_validation_interface(self, actual_data, redacted_data,
-                                   imputed_data, forecast_data, use_jax):
-        """ Load validation interface specific to model type."""
 
 
 class HMMLearningAlgorithm(ABC):
@@ -272,58 +250,3 @@ class HMMLearningAlgorithm(ABC):
     def run(self, model, data, training_iterations, method, use_jax):
         """ Runs specified training method for given data."""
 
-class HMMValidationMetrics(ABC):
-    """ Abstract Base Class for HMM validation Metrics """
-
-    def __init__(self, model, actual_data, use_jax=False):
-        self.model = model
-        self.actual_data = actual_data
-        self.inf = self.model.load_inference_interface(use_jax)
-
-    def predicted_hidden_state_log_likelihood_viterbi(self):
-        """ Predict most likely hidden states with Viterbi algorithm
-
-        Arguments:
-            data: dataframe of mixed data types
-
-        Returns:
-            log likelihood of most likely series of hidden states
-        """
-        inf = self.model.load_inference_interface(use_jax)
-        log_likelihood = inf.predict_hidden_states_viterbi(
-            self.actual_data).name.split(" ")[-1]
-
-        return float(log_likelihood)
-
-    def validate_imputation(self, redacted_data, imputed_data):
-        """ Return dictionary of validation metrics for imputation.
-
-        Arguments:
-            redacted_data: dataframe with values set to nan.
-            imputed_data: dataframe with missing values imputed.
-
-        Returns:
-            Dictionary with validation metrics for imputed data against actual data.
-        """
-        # Make sure that integers are being cast as integers.
-        float_to_int = {
-            feature: "Int64"
-            for feature in redacted_data[self.model.finite_features]
-            .select_dtypes("float")
-        }
-        redacted_data = redacted_data.astype(float_to_int, errors='ignore')
-        imputed_data = imputed_data.astype(float_to_int, errors='ignore')
-
-        return self._validate_imputation(redacted_data, imputed_data)
-
-    def validate_forecast(self, forecast_data):
-        """ Return dictionary of validation metrics for imputation.
-
-        Arguments:
-            forecast_data: dataframe with forecast data where the first row
-                of the dataframe is actual observed conditioning date data.
-
-        Returns:
-            Dictionary with validation metrics for forecast data against actual data.
-        """
-        return self._validate_forecast(forecast_data)
