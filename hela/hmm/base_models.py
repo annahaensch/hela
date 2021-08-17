@@ -221,7 +221,7 @@ class HiddenMarkovModel(ABC):
     def load_inference_interface(self, use_jax=False):
         """ Load HiddenMarkovModel inference interface.  This includes 
         methods that comprise the forward-backward passes of EM as well 
-        as imputation and Viterbi prediction methods.
+        as Viterbi prediction methods.
         """
         return self._load_inference_interface(use_jax)
 
