@@ -68,17 +68,23 @@ class HMMValidationTool(ABC):
             verify_finite_data = get_finite_observations_from_data(
                 self.model, data_to_verify)
 
-            val_dict[
-                'accuracy_of_imputed_finite_data'] = self.accuracy_of_predicted_finite_data(
-                    incomplete_finite_data, verify_finite_data)
+            if incomplete_finite_data[incomplete_finite_data.isna().any(axis = 1)].shape[0] == 0:
+                val_dict['accuracy_of_imputed_finite_data'] = 1
+                val_dict['relative_accuracy_of_imputed_finite_data'] =1
+                val_dict['best_possible_accuracy_of_finite_imputation'] = 1
 
-            val_dict[
-                'relative_accuracy_of_imputed_finite_data'] = self.relative_accuracy_of_predicted_finite_data(
-                    incomplete_finite_data, verify_finite_data)
+            else:
+                val_dict[
+                    'accuracy_of_imputed_finite_data'] = self.accuracy_of_predicted_finite_data(
+                        incomplete_finite_data, verify_finite_data)
 
-            val_dict[
-                'best_possible_accuracy_of_finite_imputation'] = best_possible_accuracy_of_categorical_prediction(
-                    self.true_finite_data, incomplete_finite_data)
+                val_dict[
+                    'relative_accuracy_of_imputed_finite_data'] = self.relative_accuracy_of_predicted_finite_data(
+                        incomplete_finite_data, verify_finite_data)
+
+                val_dict[
+                    'best_possible_accuracy_of_finite_imputation'] = best_possible_accuracy_of_categorical_prediction(
+                        self.true_finite_data, incomplete_finite_data)
 
         if self.model.gaussian_mixture_model:
             true_gaussian_data = get_gaussian_observations_from_data(
