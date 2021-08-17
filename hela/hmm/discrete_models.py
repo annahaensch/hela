@@ -256,10 +256,12 @@ class CategoricalModel(DiscreteHMM):
         """ Return log probability of finite observation given hidden state
 
         Arguments:
-            finite_data_enum: finite observations by enumerator as Series.
+            finite_data_enum: (Series) finite observations by observation 
+                vector enumeration (i.e. 0 = (a,a), 1 = (a,b), etc.).
 
         Returns:
-            np.array where entry [t,i] is the log probability of emitting finite observation t in hidden state i.
+            Array where entry [t,i] is the log probability of observing the 
+            finite emission at time t given hidden state i.
         """
         n_observations = finite_data_enum.shape[0]
         log_emission = np.array(self.log_emission_matrix)
@@ -276,10 +278,11 @@ class CategoricalModel(DiscreteHMM):
 
         Arguments:
             gamma: output of DiscreteHMMInferenceResults
-            finite_states_data: series of finite state data
+            finite_data_enum: (Series) finite observations by observation 
+                vector enumeration (i.e. 0 = (a,a), 1 = (a,b), etc.).
 
         Returns:
-            Updated log emission matrix
+            Updated log emission matrix.
         """
         log_emission_matrix = np.full(
             (np.array(self.log_emission_matrix).shape), LOG_ZERO)
@@ -291,46 +294,6 @@ class CategoricalModel(DiscreteHMM):
                 log_emission_matrix[l] = logsumexp(np.array(l_gamma_df), axis=0)
         log_emission_matrix -= logsumexp(gamma, axis=0)
         return log_emission_matrix
-
-    def probability_of_hidden_state_from_discrete_obs(
-            self, partial_finite_observation):
-        """ Return probabilites associated to each hidden state given the partial observation.
-
-        Arguments:
-            partial_partial_observation: single row of a dataframe of finite observations.
-
-        Returns:
-            Array of probabilities where the ith entry is the probability of hidden state i given the partial finite observation.
-
-        TODO @annahaensch: this probabilty needs to be refined to include known sequential data.
-        """
-        finite_values = self.finite_values
-        emission_matrix = np.exp(np.array(self.log_emission_matrix))
-        known_features = partial_finite_observation.columns[
-            ~partial_finite_observation.isna().any()].tolist()
-        if len(known_features) == 0:
-            return np.ones(self.n_hidden_states)
-        elif len(known_features) == partial_finite_observation.shape[1]:
-            observation_tuple = str(
-                list(partial_finite_observation.loc[:, self.finite_features]
-                     .iloc[0]))
-            observation_state = self.finite_values_dict_inverse[
-                observation_tuple]
-            return emission_matrix[observation_state]
-        else:
-            eligible_states = []
-            for feat in known_features:
-                eligible_values = finite_values[finite_values[
-                    feat] == partial_finite_observation[feat][0]]
-                eligible_states.append([
-                    self.finite_values_dict_inverse[str(list(x))]
-                    for x in np.array(eligible_values)
-                ])
-
-            possible_states = list(
-                set.intersection(*[set(x) for x in eligible_states]))
-            return np.sum(emission_matrix[possible_states], axis=0)
-
 
 class GaussianMixtureModel(DiscreteHMM):
 
@@ -568,36 +531,6 @@ class GaussianMixtureModel(DiscreteHMM):
 
         return new_gmm
 
-    def marginal_probability_of_gaussian_observation_by_hidden_state(
-            self, partial_gaussian_observation):
-        """ Return marginal probabilty of observation by hidden state
-
-        Arguments:
-            partial_gaussian_obervation: single row of an observation dataframe containing guassian obsevations or nan.
-
-        Returns:
-            Array of probabilities of the given observation by hidden state
-        """
-        obs = np.array(partial_gaussian_observation.iloc[0])
-        nan_index = np.argwhere(np.isnan(obs)).flatten()
-
-        if len(nan_index) == len(obs):
-            marginal_prob = np.full(self.n_hidden_states,
-                                    1 / self.n_hidden_states)
-
-        elif len(nan_index) == 0:
-            marginal_prob = np.exp(
-                np.array(self.log_probability(partial_gaussian_observation)))
-
-        else:
-            marginal_prob = np.empty(self.n_hidden_states)
-            for i in range(self.n_hidden_states):
-                marginal_prob[
-                    i] = compute_marginal_probability_gaussian_mixture(
-                        partial_gaussian_observation, self.means[i],
-                        self.covariances[i], self.component_weights[i])
-
-        return marginal_prob
 
 class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
     """ Discrete model class for HMM learning algorithms """
@@ -826,275 +759,6 @@ class DiscreteHMMInferenceResults(ABC):
 
         return hidden_states
 
-    def conditional_probability_of_partial_observation(self, observation):
-        """ Returns probability of partial observation by hidden state.
-
-        Arguments:
-            observation: single row of a dataframe of mixed partial data
-
-        Returns:
-            Array of length (number of hidden states) were entry i is the  conditional probability of the partial observation given hidden state i.
-
-        """
-        partial_finite_observation = get_finite_observations_from_data(
-            self.model, observation)
-        partial_gaussian_observation = get_gaussian_observations_from_data(
-            self.model, observation)
-
-        prob = []
-        if self.model.categorical_model is not None:
-            prob.append(
-                self.model.categorical_model.
-                probability_of_hidden_state_from_discrete_obs(
-                    partial_finite_observation))
-        if self.model.gaussian_mixture_model is not None:
-            prob.append(
-                self.model.gaussian_mixture_model.
-                marginal_probability_of_gaussian_observation_by_hidden_state(
-                    partial_gaussian_observation))
-        prob = np.prod(prob, axis=0)
-
-        return prob
-
-    def conditional_probability_of_hidden_states(self, data):
-        """ Returns dataframe of conditional probability of hidden state given observation.
-
-        Arguments:
-            data: dataframe with possible NaN entries
-
-        Returns:
-            dataframe where iloc[t,i] is the conditional probability of hidden state i
-            given the complete/partial/missing observation at time t.  For complete observations,
-            this is done using the gamma_chunked method, for partial/missing observations, this is
-            done with a modified forward algorithm, computing p(z_t = i | x_t, x_(t-1)).
-        """
-        log_transition = self.model.log_transition
-        nan_index = data[data.isna().any(axis=1)].index
-        # Do forward backward for complete chunks of data
-        if len(nan_index) < data.shape[0]:
-            cond_prob = self._gamma_chunked(data)
-
-        nan_index_total = data[data.isna().all(axis=1)].index
-        nan_index_partial = [
-            idx for idx in nan_index if not idx in nan_index_total
-        ]
-
-        for idx in nan_index:
-            if idx in nan_index_total:
-                if idx == data.index[0]:
-                    cond_prob.loc[idx] = np.log(
-                        np.full(self.model.n_hidden_states,
-                                1 / self.model.n_hidden_states))
-                else:
-                    i = data.index.get_loc(idx)
-                    cond_prob.loc[idx] = logsumexp(
-                        np.array(cond_prob.iloc[i - 1]).reshape(-1, 1) +
-                        log_transition,
-                        axis=1)
-            else:
-                i = data.index.get_loc(idx)
-                p = self.conditional_probability_of_partial_observation(
-                    (data.iloc[[i - 1]]))
-                log_probability = np.log(
-                    p, out=np.full(p.shape, LOG_ZERO), where=(p != 0))
-                alpha = self._compute_forward_probabilities(
-                    pd.DataFrame(log_probability.reshape(1, -1), index=[idx]))
-                cond_prob_of_partial = \
-                    self.conditional_probability_of_partial_observation(
-                    data.loc[[idx]])
-                log_cond_prob_of_partial = [
-                    np.log(p) if p > 0 else LOG_ZERO
-                    for p in cond_prob_of_partial.flatten()
-                ]
-                joint_prob = log_cond_prob_of_partial + logsumexp(
-                    alpha.reshape(-1, 1) + log_transition, axis=1)
-                cond_prob.loc[idx] = joint_prob - logsumexp(joint_prob)
-
-        return np.exp(cond_prob.loc[nan_index])
-
-    def impute_missing_data_single_observation(self,
-                                               observation,
-                                               hidden_state_prob,
-                                               method='argmax'):
-        """ Return most observation with missing data imputed
-
-        Arguments:
-            observation: single row of a dataframe of incomplete mixed data.
-            hidden_state_prob: vector of relative probabilities of hidden states
-            given observation.
-            method: method of imputing Gaussian data, can be either 'average'
-                (which imputes the weighted average of the means) or 'maximal'
-                (which imputes the means of the most probable state and
-                component).
-
-        Returns:
-            Observation with missing data replaced by most data most likely to
-            be observed given the current model.
-        """
-        new_observation = observation.copy()
-
-        if self.model.categorical_model is not None:
-            partial_finite_observation = get_finite_observations_from_data(
-                self.model, observation)
-            known_features = partial_finite_observation.columns[
-                ~(partial_finite_observation.isna().any())].tolist()
-            emission_matrix = np.exp(
-                np.array(self.model.categorical_model.log_emission_matrix))
-
-            if len(known_features) < len(self.model.finite_features):
-                eligible_values_index_list = []
-                finite_values = self.model.finite_values
-                if len(known_features) == 0:
-                    # Impute missing values when all data is missing.
-                    eligible_values_index_list = list(finite_values.index)
-                else:
-                    # Impute missing values when partial data is missing.
-                    for feat in known_features:
-                        val = partial_finite_observation.loc[:, feat][0]
-                        eligible_values_index_list.append(
-                            set(finite_values[finite_values[feat] == val]
-                                .index))
-                    eligible_values_index_list = [
-                        i for i in set.intersection(*eligible_values_index_list)
-                    ]
-                eligible_values_index_list.sort()
-                eligible_emissions = np.array(
-                    [emission_matrix[i] for i in eligible_values_index_list])
-                maximum_index = np.argmax(
-                    np.sum(hidden_state_prob * eligible_emissions, axis=1))
-                most_likely_observation = self.model.finite_values.iloc[[
-                    eligible_values_index_list[maximum_index]
-                ]]
-                for col in most_likely_observation.columns:
-                    new_observation.loc[new_observation.index[
-                        0], col] = most_likely_observation.loc[
-                            most_likely_observation.index[0], col]
-
-        if self.model.gaussian_mixture_model is not None:
-            partial_gaussian_observation = get_gaussian_observations_from_data(
-                self.model, observation)
-            obs = np.array(partial_gaussian_observation.iloc[0])
-            index_nan = np.argwhere(np.isnan(obs)).flatten()
-            unknown_values = partial_gaussian_observation.columns[index_nan]
-            if len(unknown_values) > 0:
-                means = np.array(self.model.gaussian_mixture_model.means)
-                covariances = np.array(
-                    self.model.gaussian_mixture_model.covariances)
-                component_weights = np.array(
-                    self.model.gaussian_mixture_model.component_weights)
-                if method == 'average':
-                    conditional_means_of_missing_values = np.empty(
-                        (self.model.n_hidden_states, len(index_nan)))
-                    for i in range(self.model.n_hidden_states):
-                        conditional_means_of_missing_values[
-                            i] = compute_mean_of_conditional_probability_gaussian_mixture(
-                                partial_gaussian_observation, means[i],
-                                covariances[i], component_weights[i])
-                    conditional_means_of_missing_values = np.sum(
-                        np.array(hidden_state_prob).reshape(-1, 1) *
-                        conditional_means_of_missing_values,
-                        axis=0)
-
-                if method == 'maximal':
-                    maximal_hidden_state = np.argmax(hidden_state_prob)
-                    conditional_means_of_missing_values = compute_mean_of_conditional_probability_gaussian_mixture(
-                        partial_gaussian_observation,
-                        means[maximal_hidden_state],
-                        covariances[maximal_hidden_state],
-                        component_weights[maximal_hidden_state])
-
-                if method == 'argmax':
-                    new_covariances = np.empty((np.array(covariances).shape[0],
-                                                np.array(covariances).shape[1],
-                                                len(index_nan), len(index_nan)))
-                    new_means = np.empty((np.array(means).shape[0],
-                                          np.array(means).shape[1],
-                                          len(index_nan)))
-                    for i in range(new_covariances.shape[0]):
-                        for j in range(new_covariances.shape[1]):
-                            new_covariances[i][
-                                j] = compute_covariance_of_conditional_probability_gaussian(
-                                    partial_gaussian_observation, means[i][j],
-                                    covariances[i][j])
-                            new_means[i][
-                                j] = compute_mean_of_conditional_probability_gaussian(
-                                    partial_gaussian_observation, means[i][j],
-                                    covariances[i][j])
-
-                    covariances = np.array(
-                        self.model.gaussian_mixture_model.covariances)
-                    means = np.array(self.model.gaussian_mixture_model.means)
-                    component_weights = np.array(
-                        self.model.gaussian_mixture_model.component_weights)
-                    probabilities = np.zeros((means.shape[0], means.shape[1]))
-                    for i in range(probabilities.shape[0]):
-                        for j in range(probabilities.shape[1]):
-                            pdf = np.exp(
-                                stats.multivariate_normal.logpdf(
-                                    means[i][j],
-                                    means[i][j],
-                                    covariances[i][j],
-                                    allow_singular=True))
-                            probabilities[i][j] += hidden_state_prob[
-                                i] * component_weights[i][j] * pdf
-
-                    max_index = np.where(
-                        probabilities == np.amax(probabilities))
-
-                    conditional_means_of_missing_values = new_means[max_index[
-                        0][0]][max_index[1][0]]
-
-            for i in range(len(index_nan)):
-                new_observation.loc[new_observation.index[0], unknown_values[
-                    i]] = conditional_means_of_missing_values[i]
-
-        return new_observation
-
-    def impute_missing_data(self, data, method='argmax'):
-        """ Return dataframe with missing data imputed
-
-        Arguments:
-            data: dataframe of observations with some entries as NaN.
-            method: method of imputing Gaussian data, can be either 'average' (imputes the weighted average of the means) or 'maximal' (imputes the means of the most probable state and component) or 'argmax' (imputes the mean with highest probability).
-        Returns:
-            Observation with missing data replaced by most data most likely to be observed given the current model.
-        """
-        imputed_data = data.copy()
-        # Make sure that integer columns are being cast as integers.
-        float_to_int = {
-            feature: "Int64"
-            for feature in imputed_data[self.model.finite_features]
-            .select_dtypes("float")
-        }
-        imputed_data = imputed_data.astype(float_to_int, errors='ignore')
-
-        incomplete_observations = data[data.isna().any(axis=1)]
-        complete_data_chunks = get_complete_data_chunks(data)
-
-        for idx in incomplete_observations.index:
-            if idx < complete_data_chunks.iloc[0, 0]:
-                if idx == data.index[0]:
-                    cond_prob = np.full(self.model.n_hidden_states,
-                                        1 / self.model.n_hidden_states)
-                    hidden_state_probabilities = pd.DataFrame(
-                        cond_prob.reshape(1, -1), index=[idx])
-                else:
-                    hidden_state_probabilities = self.conditional_probability_of_hidden_states(
-                        imputed_data.loc[:idx])
-            else:
-                start = complete_data_chunks[
-                    complete_data_chunks['end'] < idx].iloc[-1, 0]
-                hidden_state_probabilities = self.conditional_probability_of_hidden_states(
-                    imputed_data.loc[start:idx])
-
-            imputed_data.loc[[
-                idx
-            ]] = self.impute_missing_data_single_observation(
-                incomplete_observations.loc[[idx]],
-                np.array(hidden_state_probabilities.loc[idx]), method)
-
-        return imputed_data
-
     def _compute_forward_probabilities(self, log_probability):
         """ Compute forward probabilities.
 
@@ -1202,34 +866,6 @@ class DiscreteHMMInferenceResults(ABC):
 
         return gamma_by_component
 
-    def _gamma_chunked(self, data):
-        """ Return gamma for chunks of non-NaN data.
-
-        Arguments:
-            data: dataframe with possible NaN entries
-
-        Returns:
-            Dataframe where iloc[t,i] is the probability of hidden state i
-            given the observation at time t, computed using the forward backward
-            algorithm; for rows with NaN entries, iloc[,i] is NaN.
-        """
-        gamma_chunk = pd.DataFrame()
-        data_chunks = get_complete_data_chunks(data)
-
-        def convert_chunk(data, chunks, i):
-            chunk = data.loc[chunks.loc[i, 'start']:chunks.loc[i, 'end']]
-            return pd.DataFrame(self._gamma(chunk), index=chunk.index)
-
-        gamma_chunk = pd.concat(
-            [convert_chunk(data, data_chunks, i) for i in data_chunks.index])
-
-        nan_entries = pd.DataFrame(
-            index=data[data.isna().any(axis=1)].index,
-            columns=gamma_chunk.columns)
-        gamma_chunk = pd.concat((gamma_chunk, nan_entries))
-        gamma_chunk.sort_index(inplace=True)
-
-        return gamma_chunk
 
     def _xi(self, data):
         """Auxiliary function for EM.
