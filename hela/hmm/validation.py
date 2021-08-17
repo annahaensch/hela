@@ -68,11 +68,11 @@ class HMMValidationTool(ABC):
                 self.model, data_to_verify)
 
             val_dict[
-                'accuracy_of_verify_finite_data'] = self.accuracy_of_predicted_finite_data(
+                'accuracy_of_imputed_finite_data'] = self.accuracy_of_predicted_finite_data(
                     incomplete_finite_data, verify_finite_data)
 
             val_dict[
-                'relative_accuracy_of_verify_finite_data'] = self.relative_accuracy_of_predicted_finite_data(
+                'relative_accuracy_of_imputed_finite_data'] = self.relative_accuracy_of_predicted_finite_data(
                     incomplete_finite_data, verify_finite_data)
 
             val_dict[
@@ -88,12 +88,12 @@ class HMMValidationTool(ABC):
                 self.model, data_to_verify)
 
             val_dict[
-                'average_relative_log_likelihood_of_verify_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
+                'average_relative_log_likelihood_of_imputed_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
                     incomplete_gaussian_data, verify_gaussian_data,
                     cond_prob_of_hidden_states)
 
             val_dict[
-                'average_z_score_of_verify_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
+                'average_z_score_of_imputed_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
                     incomplete_gaussian_data, cond_prob_of_hidden_states)
 
         return val_dict

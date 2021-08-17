@@ -194,10 +194,10 @@ def test_distributed(distributed_learning_model, generative_model):
         incomplete_data = dataset_redacted, data_to_verify= dataset_imputed)
     assert precision_recall['proportion'].sum() == 1
 
-    val1 = validation['relative_accuracy_of_verify_finite_data']
+    val1 = validation['relative_accuracy_of_imputed_finite_data']
     val2 = validation[
-        'average_relative_log_likelihood_of_verify_gaussian_data']
-    val3 = validation['average_z_score_of_verify_gaussian_data']
+        'average_relative_log_likelihood_of_imputed_gaussian_data']
+    val3 = validation['average_z_score_of_imputed_gaussian_data']
 
     assert val1 >= 1  #Accuracy should be at least as good as random guessing.
     assert val2 <= 0  #This metric returns
