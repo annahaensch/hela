@@ -11,7 +11,8 @@ from .factored_models import (FactoredHMMConfiguration, FactoredHMMInference,
                               _factored_hmm_to_discrete_hmm)
 from .imputation import (HMMImputationTool, DiscreteHMMImputation)
 from .forecasting import HMMForecastingTool
+from .validation import HMMValidationTool
 from .graphical_models.DynamicBayesianNetwork import (fhmm_model_to_graph,
                                                       hmm_model_to_graph)
 from .utils import *
-from .validation import find_risk_at_horizons
+
