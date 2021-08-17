@@ -251,10 +251,6 @@ class HiddenMarkovModel(ABC):
         """ Load inference interface specific to model type."""
 
     @abstractmethod
-    def _load_forecasting_interface(self, use_jax):
-        """ Load forecasting interface specific to model type."""
-
-    @abstractmethod
     def _load_validation_interface(self, actual_data, redacted_data,
                                    imputed_data, forecast_data, use_jax):
         """ Load validation interface specific to model type."""
@@ -275,81 +271,6 @@ class HMMLearningAlgorithm(ABC):
     @abstractmethod
     def run(self, model, data, training_iterations, method, use_jax):
         """ Runs specified training method for given data."""
-
-
-class HMMForecasting(ABC):
-
-    def __init__(self, model, use_jax=False):
-        self.model = model
-        self.inf = model.load_inference_interface(use_jax)
-
-    def forecast_hidden_state_at_horizons(self,
-                                          data,
-                                          horizon_timesteps,
-                                          conditioning_date=None):
-        """ Returns series with most likely hidden states at horizons.
-
-        Arguments:
-            data: dataframe with complete data
-            horizon_timesteps: list of timesteps to consider for horizons.  It
-                is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will consider
-                only the data up to this date.  If `None` the conditioning date is assumed to be the last entry of the index.
-
-        Returns:
-            Series with hidden state prections with the conditioning date as the first entry.
-        """
-        if conditioning_date is None:
-            conditioning_date = data.index[-1]
-        data_restricted = data.loc[:conditioning_date]
-
-        return self._forecast_hidden_state_at_horizons(
-            data_restricted, horizon_timesteps, conditioning_date)
-
-    def forecast_observation_at_horizons(self,
-                                         data,
-                                         horizon_timesteps,
-                                         conditioning_date=None):
-        """ Returns dataframe with most likely observations at horizons.
-
-        Arguments:
-            data: dataframe with complete data
-            horizon_timesteps: list of timesteps to consider for horizons.  It
-                is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will consider
-                only the data up to this date.  If `None` the conditioning date is assumed to be the last entry of the index.
-
-        Returns:
-            Dataframe with forecast observations for horizon_timestep dates.  The first row of the dataframe is the conditioning date.
-        """
-        if conditioning_date is None:
-            conditioning_date = data.index[-1]
-        data_restricted = data.loc[:conditioning_date]
-
-        return self._forecast_observation_at_horizons(
-            data_restricted, horizon_timesteps, conditioning_date)
-
-    def steady_state_and_horizon(self, data, conditioning_date=None,
-                                 atol=1e-05):
-        """ Returns dictionary with steady state information.
-
-        Arguments:
-            data: dataframe with complete data
-            conditioning_date: entry from `data` index, forecast will consider
-                only the data up to this date.  If `None` the conditioning date is assumed to be the last entry of the index.
-            atol: tolerance for determining whether steady state has been
-                reached.
-
-        Returns:
-            Dictionary with 'steady_state' for model and 'steady_state_horizon_timesteps', the timestep horizon at which the steady state has been achieved up to tolerance atol, and 'steady_state_horizon_date', the date at which the steady state has been achieved up to tolerance atol.
-        """
-        if conditioning_date is None:
-            conditioning_date = data.index[-1]
-        data_restricted = data.loc[:conditioning_date]
-
-        return self._steady_state_and_horizon(data_restricted,
-                                              conditioning_date, atol)
-
 
 class HMMValidationMetrics(ABC):
     """ Abstract Base Class for HMM validation Metrics """
