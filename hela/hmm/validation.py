@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .utils import *
+from .forecasting import HMMForecastingTool
 
 LOG_ZERO = -1e8
 
@@ -97,35 +98,46 @@ class HMMValidationTool(ABC):
 
         return val_dict
 
-    def _validate_forecast(self, forecast_data):
+    def validate_forecast(self, conditioning_data, forecast):
         """ Return DiscreteHMM specific dictionary of validation metrics for imputation.
 
         Arguments:
-            forecast_data: dataframe with forecast data where the first row
-                of the dataframe is actual observed conditioning date data.
+            conditioning_data: observed data from which forecast is taken.
+            forecast: dataframe with forecast data.
 
         Returns:
             Dictionary with validation metrics for forecast data against actual data.
         """
-        conditioning_date = forecast_data.index[0]
-        delta = self.true_data.index[-1] - self.true_data.index[-2]
+        # Data up to conditioning date and true observations for forecast horizons.
+        true_data = pd.concat([conditioning_data, self.true_data.loc[forecast.index]])
+        
+        forecast_data = pd.concat([conditioning_data, forecast])
+        incomplete_data = forecast_data.copy()
+        for idx in forecast.index:
+            incomplete_data.loc[idx] = np.nan
 
-        horizon_timesteps = [
-            int(t) for t in (forecast_data.index - conditioning_date) / delta
-        ]
+        delta = true_data.index[1] - true_data.index[0] 
+        horizon_timesteps = []
+        for idx in forecast.index:
+            horizon_timesteps.append(int((idx - conditioning_data.index[-1])/delta))
+        
 
-        cond_prob_of_hidden_states = DiscreteHMMForecasting(
-            self.model).hidden_state_probability_at_horizons(
-                self.true_data, horizon_timesteps, conditioning_date)
-
+        forc = HMMForecastingTool(model = self.model, data = conditioning_data)
+        cond_prob_of_hidden_states = forc.hidden_state_probability_at_horizons(
+                horizon_timesteps = horizon_timesteps)
+        print(cond_prob_of_hidden_states)
         val_dict = {}
+    
 
         if self.model.categorical_model:
             forecast_finite_data = get_finite_observations_from_data(
                 self.model, forecast_data)
 
-            incomplete_finite_data = forecast_finite_data.copy()
-            incomplete_finite_data.loc[:, :] = np.nan
+            incomplete_finite_data = get_finite_observations_from_data(
+                self.model, incomplete_data)
+            
+            incomplete_index = incomplete_finite_data[
+            incomplete_finite_data.isnull().any(axis=1)].index
 
             val_dict[
                 'accuracy_of_forecast_finite_data'] = self.accuracy_of_predicted_finite_data(
@@ -136,24 +148,24 @@ class HMMValidationTool(ABC):
                     incomplete_finite_data, forecast_finite_data)
 
             val_dict[
-                'best_possible_accuracy_of_finite_forecast'] = best_possible_accuracy_of_finite_prediction(
-                    self.true_finite_data, incomplete_finite_data)
+                'best_possible_accuracy_of_finite_forecast'] = best_possible_accuracy_of_categorical_prediction(
+                    forecast_finite_data, incomplete_finite_data)
 
         if self.model.gaussian_mixture_model:
             forecast_gaussian_data = get_gaussian_observations_from_data(
                 self.model, forecast_data)
 
-            incomplete_gaussian_data = forecast_gaussian_data.copy()
-            incomplete_gaussian_data.loc[:, :] = np.nan
-
+            incomplete_gaussian_data = get_gaussian_observations_from_data(
+                self.model, incomplete_data)
+        
             val_dict[
                 'average_relative_log_likelihood_of_forecast_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
                     incomplete_gaussian_data, forecast_gaussian_data,
-                    cond_prob_of_hidden_states)
+                    np.log(cond_prob_of_hidden_states))
 
             val_dict[
                 'average_z_score_of_forecast_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
-                    incomplete_gaussian_data, cond_prob_of_hidden_states)
+                    incomplete_gaussian_data, np.log(cond_prob_of_hidden_states))
 
         return val_dict
 
@@ -359,11 +371,12 @@ class HMMValidationTool(ABC):
         Returns:
             float
         """
+        true_finite_data = self.true_finite_data.loc[verify_finite_data.index]
         incomplete_index = incomplete_finite_data[
             incomplete_finite_data.isnull().any(axis=1)].index
 
         total_correct = np.sum(
-            (self.true_finite_data.loc[incomplete_index] ==
+            (true_finite_data.loc[incomplete_index] ==
              verify_finite_data.loc[incomplete_index]).all(axis=1))
 
         return total_correct / len(incomplete_index)
