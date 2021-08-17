@@ -28,8 +28,8 @@ class HMMForecastingTool(ABC):
                 uniform timedelta is 1 timestep
 
         Returns:
-            Series with hidden state prections with the conditioning date as the 
-            first entry.
+            Series with hidden state predictions with the last true observation 
+            corresponding to the first entry.
         """
         return self._forecast_hidden_state_at_horizons(horizon_timesteps)
 
@@ -44,7 +44,7 @@ class HMMForecastingTool(ABC):
 
         Returns:
             Dataframe with forecast observations for horizon_timestep dates.  The 
-            first row of the dataframe is the conditioning date.
+            first row of the dataframe is the last true observation.
         """
         return self._forecast_observation_at_horizons(horizon_timesteps)
 
@@ -165,7 +165,7 @@ class HMMForecastingTool(ABC):
 
         Returns:
             Dataframe with forecast observations for horizon_timestep dates. The 
-            first row of the dataframe is the conditioning date.
+            first row of the dataframe is the last true observation.
         """
         forecast = self.data.iloc[[-1]]
         for horizon in horizon_timesteps:
