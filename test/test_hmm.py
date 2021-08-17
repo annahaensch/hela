@@ -213,24 +213,18 @@ def test_forecasting(generative_model):
     model = model_config.to_model()
 
     # Load forecasting tool
-    forc = hmm.HMMForecastingTool(model)
+    forc = hmm.HMMForecastingTool(model = model, data = dataset)
+    horizon_timesteps = [7,30]
+    forecast = forc.forecast_observation_at_horizons(horizon_timesteps = horizon_timesteps)
 
-    horizon_timesteps = [7, 30]
-    conditioning_date = dataset.index[int(dataset.shape[0] / 2)]
+    assert forecast[~forecast.isna().any(axis = 1)].shape[0] == len(horizon_timesteps)
 
-    forecast = forc.forecast_observation_at_horizons(dataset, horizon_timesteps,
-                                                   conditioning_date)
+    #val = model.load_validation_interface(dataset)
+    #val.validate_forecast(forecast)
 
-    val = model.load_validation_interface(dataset)
-    val.validate_forecast(forecast)
-
-    assert forecast[~(forecast.isnull().any(axis=1))].shape[
-        0] == len(horizon_timesteps) + 1
-
-    steady_state = fi.steady_state_and_horizon(dataset)
+    steady_state = forc.steady_state_and_horizon()
     n_steps = steady_state['steady_state_horizon_timesteps'] + 1
-    initial_prob = fi.hidden_state_probability_at_conditioning_date(
-        dataset, dataset.index[-1])
+    initial_prob = forc.hidden_state_probability_at_last_observation()
 
     step1 = initial_prob @ np.linalg.matrix_power(
         np.exp(model.log_transition), n_steps)
