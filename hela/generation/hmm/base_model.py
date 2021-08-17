@@ -208,6 +208,7 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
             observations.append({
                 "name": feat,
                 "type": "finite",
+                "dist": None,
                 "values": values
             })
             categorical_values.append(values)
@@ -219,7 +220,7 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
                 "name": feat,
                 "type": "continuous",
                 "dist": "gaussian",
-                "dims": 1
+                "values": None
             })
     spec["observations"] = observations
 
