@@ -9,8 +9,7 @@ import pandas as pd
 from scipy import linalg, stats
 from scipy.special import logsumexp
 
-from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
-                         HMMValidationMetrics, HMMLearningAlgorithm)
+from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration, HMMLearningAlgorithm)
 from .utils import *
 
 

@@ -10,8 +10,7 @@ from dask.distributed import Client
 from scipy import linalg, stats
 from scipy.special import logsumexp
 
-from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
-                          HMMValidationMetrics)
+from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration)
 from .graphical_models.DynamicBayesianNetwork import fhmm_model_to_graph
 from .utils import *
 
