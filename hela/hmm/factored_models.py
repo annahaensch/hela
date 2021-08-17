@@ -220,7 +220,7 @@ class FactoredHMM(ABC):
         # model.graph = fhmm_model_to_graph(model)
 
         return model
-    
+
     def _load_learning_interface(self):
         """ Returns FactoredHMMLearning object
 

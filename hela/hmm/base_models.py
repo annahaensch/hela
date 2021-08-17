@@ -95,7 +95,7 @@ class HMMConfiguration(ABC):
             raise NotImplementedError(
                 "The specification contains the following data types "
                 "which are not part of this implementation {}".format(
-                	", ".join([i['type'] for i in other_observations])))
+                    ", ".join([i['type'] for i in other_observations])))
 
         if len(finite_observations) > 0:
             config.add_finite_observations(finite_observations)
@@ -148,25 +148,27 @@ class HMMConfiguration(ABC):
             for i in continuous_observations
         }
 
-        for k,v in continuous_features_dict.items():
-        	if v.lower().replace(" ","_") not in [
-        	'gaussian', 'gaussian_mixture_model', 'gmm']:
-        		raise NotImplementedError(
-        			"This implementation only works for continuous values "
-        			"drawn from gaussian or gaussian mixture model "
-        			"distributions."
-        			)
+        for k, v in continuous_features_dict.items():
+            if v.lower().replace(" ", "_") not in [
+                    'gaussian', 'gaussian_mixture_model', 'gmm'
+            ]:
+                raise NotImplementedError(
+                    "This implementation only works for continuous values "
+                    "drawn from gaussian or gaussian mixture model "
+                    "distributions.")
 
         # Add continuous features to a list and sort.
         continuous_features = list(continuous_features_dict.keys())
         continuous_features.sort()
         self.continuous_features = continuous_features
 
-        continuous_values = pd.DataFrame(index = ["distribution", "dimension"], columns = continuous_features)
+        continuous_values = pd.DataFrame(
+            index=["distribution", "dimension"], columns=continuous_features)
         for c in continuous_values.columns:
-        	continuous_values.loc["distribution",c] = continuous_features_dict[c]
-        	continuous_values.loc["dimension",c] = 1
-        self.continuous_values = continuous_values	
+            continuous_values.loc["distribution", c] = continuous_features_dict[
+                c]
+            continuous_values.loc["dimension", c] = 1
+        self.continuous_values = continuous_values
 
     def add_model_parameter_constraints(self, parameter, constraint):
         """ Add constraints for seed parameters. """
@@ -214,9 +216,9 @@ class HiddenMarkovModel(ABC):
         """
 
     def load_learning_interface(self):
-    	"""  Loads LearningAlgorithm interface specific to model type. 
+        """  Loads LearningAlgorithm interface specific to model type. 
     	"""
-    	return self._load_learning_interface()
+        return self._load_learning_interface()
 
     def load_inference_interface(self, use_jax=False):
         """ Load HiddenMarkovModel inference interface.  This includes 
@@ -241,12 +243,10 @@ class HMMLearningAlgorithm(ABC):
         self.data = None
         self.finite_state_data = None
         self.gaussian_data = None
-        self.other_data = None 
+        self.other_data = None
         self.sufficient_statistics = []
         self.model_results = []
-
 
     @abstractmethod
     def run(self, model, data, training_iterations, method, use_jax):
         """ Runs specified training method for given data."""
-

@@ -8,6 +8,7 @@ import pandas as pd
 
 from .utils import *
 
+
 class HMMImputationTool(ABC):
 
     def __init__(self, model):
@@ -23,13 +24,14 @@ class HMMImputationTool(ABC):
         Returns: 
             Complete dataframe with missing values imputed.
         """
-        if method.lower().replace(" ", "_") in ["hmm_argmax","hmm_maximal","hmm_average"]:
+        if method.lower().replace(
+                " ", "_") in ["hmm_argmax", "hmm_maximal", "hmm_average"]:
             imp = DiscreteHMMImputation(self.model, method)
             data = imp.hmm_imputation(partial_data)
 
         else:
             raise NotImplementedError("Other imputation methods"
-                "are not yet implemented.")
+                                      "are not yet implemented.")
         return data
 
 
@@ -48,106 +50,153 @@ class DiscreteHMMImputation(ABC):
         imputed_data = partial_data.copy()
 
         # Get loc and iloc index for missing values.
-        red_idx = list(partial_data[partial_data.isna().any(axis = 1)].index)
-        ired_idx = [0] + [list(partial_data.index).index(i) for i in red_idx] + [partial_data.shape[0] + 1]
+        red_idx = list(partial_data[partial_data.isna().any(axis=1)].index)
+        ired_idx = [0] + [list(partial_data.index).index(i) for i in red_idx
+                         ] + [partial_data.shape[0] + 1]
 
         # Deal with missing values in chunks.
         for i in range(len(red_idx)):
-                
-            df_pre = partial_data.iloc[ired_idx[i]+1:ired_idx[i+1]]
+
+            df_pre = partial_data.iloc[ired_idx[i] + 1:ired_idx[i + 1]]
             # Dataframe of what is known after the missing value.
-            df_post = partial_data.iloc[ired_idx[i+1]+1:ired_idx[i+2]]
-            
-            unknown_col = list(partial_data.loc[red_idx[i]][partial_data.loc[red_idx[i]].isna()].index)
-            known_col = [g for g in partial_data.columns if not g in unknown_col]
+            df_post = partial_data.iloc[ired_idx[i + 1] + 1:ired_idx[i + 2]]
+
+            unknown_col = list(partial_data.loc[red_idx[i]][partial_data.loc[
+                red_idx[i]].isna()].index)
+            known_col = [
+                g for g in partial_data.columns if not g in unknown_col
+            ]
 
             # Compute bracket Z star.
             inf = model.load_inference_interface()
             if df_pre.shape[0] == 0:
-                log_prob_pre = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+                log_prob_pre = pd.DataFrame([
+                    np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
+                ])
             else:
                 log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
-            
+
             if df_post.shape[0] == 0:
-                log_prob_post = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+                log_prob_post = pd.DataFrame([
+                    np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
+                ])
             else:
-                log_prob_post = inf.predict_hidden_state_log_probability(df_post)
+                log_prob_post = inf.predict_hidden_state_log_probability(
+                    df_post)
 
             alpha = inf._compute_forward_probabilities(log_prob_pre)
             beta = inf._compute_backward_probabilities(log_prob_post)
 
-            log_p_fb = logsumexp(alpha[-1].reshape(-1,1) + model.log_transition, axis = 0) + beta[0]
-            
-            log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
-            log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
-            
+            log_p_fb = logsumexp(
+                alpha[-1].reshape(-1, 1) + model.log_transition,
+                axis=0) + beta[0]
+
+            log_p_finite = np.log(
+                np.full(model.n_hidden_states, 1 / model.n_hidden_states))
+            log_p_gauss = np.log(
+                np.full(model.n_hidden_states, 1 / model.n_hidden_states))
+
             if model.categorical_model:
                 # Compute probability of finite observation components.
-                finite_obs = partial_data.loc[[red_idx[i]],list(model.finite_features)]
-                known_finite = [c for c in model.finite_features if c in known_col]
+                finite_obs = partial_data.loc[[red_idx[i]],
+                                              list(model.finite_features)]
+                known_finite = [
+                    c for c in model.finite_features if c in known_col
+                ]
 
                 # If all finite observations are known...
                 if len(known_finite) == len(model.finite_features):
-                    finite_obs_enum = model.categorical_model.finite_values_dict_inverse[str(list(np.array(finite_obs)[0]))]
-                    log_p_finite = model.categorical_model.log_emission_matrix[finite_obs_enum]
+                    finite_obs_enum = model.categorical_model.finite_values_dict_inverse[
+                        str(list(np.array(finite_obs)[0]))]
+                    log_p_finite = model.categorical_model.log_emission_matrix[
+                        finite_obs_enum]
 
                 # If no finite observations are known...
                 elif len(known_finite) == 0:
                     possible_finite_obs_enum = list(model.finite_values.index)
-                    log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+                    log_p_finite = np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
 
                 # If some finite observations are known, but not all...
                 else:
                     possible_finite_obs_enum = []
                     for c in known_col:
                         if c in model.finite_features:
-                            possible_finite_obs_enum += list(model.finite_values[model.finite_values[c] == finite_obs.loc[red_idx[i],c]].index)  
-                    log_p_finite = logsumexp(model.categorical_model.log_emission_matrix[possible_finite_obs_enum], axis = 0)
+                            possible_finite_obs_enum += list(
+                                model.finite_values[model.finite_values[
+                                    c] == finite_obs.loc[red_idx[i], c]].index)
+                    log_p_finite = logsumexp(
+                        model.categorical_model.log_emission_matrix[
+                            possible_finite_obs_enum],
+                        axis=0)
 
             if model.gaussian_mixture_model:
 
                 # Compute probability of Gaussian observation components.
-                gaussian_obs = partial_data.loc[[red_idx[i]],model.continuous_features]
-                known_gaussian = [c for c in model.continuous_features if c in known_col]
+                gaussian_obs = partial_data.loc[[red_idx[i]],
+                                                model.continuous_features]
+                known_gaussian = [
+                    c for c in model.continuous_features if c in known_col
+                ]
 
                 means = model.gaussian_mixture_model.means
                 covariances = model.gaussian_mixture_model.covariances
                 weights = model.gaussian_mixture_model.component_weights
-                
+
                 # If all Gaussian observations are known...
                 if len(known_gaussian) == len(model.continuous_features):
-                    log_p_gauss = np.array(model.gaussian_mixture_model.log_probability(gaussian_obs))[0]
+                    log_p_gauss = np.array(
+                        model.gaussian_mixture_model.log_probability(
+                            gaussian_obs))[0]
 
                 # If no Gaussian observations are known...
                 elif len(known_gaussian) == 0:
-                    log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
-                
+                    log_p_gauss = np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
+
                 # If some Gaussian observations are known...
                 else:
-                    known_gauss_dim = [i for i in range(len(model.continuous_features)) if model.continuous_features[i] in known_col]
+                    known_gauss_dim = [
+                        i for i in range(len(model.continuous_features))
+                        if model.continuous_features[i] in known_col
+                    ]
                     for h in range(model.n_hidden_states):
-                        for m in range(model.gaussian_mixture_model.n_gmm_components):
+                        for m in range(
+                                model.gaussian_mixture_model.n_gmm_components):
 
                             k = int(known_col[0][-1])
                             p = stats.multivariate_normal.logpdf(
-                                                    gaussian_obs.iloc[0,known_gauss_dim],
-                                                    means[h][m][known_gauss_dim],
-                                                    covariances[h][m][known_gauss_dim,:][:,known_gauss_dim],
-                                                    allow_singular=True)
+                                gaussian_obs.iloc[0, known_gauss_dim],
+                                means[h][m][known_gauss_dim],
+                                covariances[h][m][known_gauss_dim, :]
+                                [:, known_gauss_dim],
+                                allow_singular=True)
 
                             log_p_gauss[h] += p + np.log(weights[h][m])
-                
-            Z_star = log_p_fb + log_p_finite + log_p_gauss - logsumexp(log_p_fb + log_p_finite + log_p_gauss)
+
+            Z_star = log_p_fb + log_p_finite + log_p_gauss - logsumexp(
+                log_p_fb + log_p_finite + log_p_gauss)
 
             for c in unknown_col:
-                
+
                 if c in model.finite_features:
                     # Impute finite observation.
-                    log_emission = model.categorical_model.log_emission_matrix[possible_finite_obs_enum,:]
-                    y_star_enum = np.sum(log_emission + Z_star.reshape(-1,model.n_hidden_states) - logsumexp(log_emission, axis = 0).reshape(-1,model.n_hidden_states), axis = 1).argmax()
-                    y_star = model.categorical_model.finite_values_dict[y_star_enum][list(model.finite_features).index(c)]
+                    log_emission = model.categorical_model.log_emission_matrix[
+                        possible_finite_obs_enum, :]
+                    y_star_enum = np.sum(
+                        log_emission + Z_star.reshape(-1, model.n_hidden_states)
+                        - logsumexp(log_emission, axis=0).reshape(
+                            -1, model.n_hidden_states),
+                        axis=1).argmax()
+                    y_star = model.categorical_model.finite_values_dict[
+                        y_star_enum][list(model.finite_features).index(c)]
 
-                    
                 if c in model.continuous_features:
                     # Impute Gaussian observation.
                     idx = model.continuous_features.index(c)
@@ -162,16 +211,17 @@ class DiscreteHMMImputation(ABC):
                         mu = means[hidden_state]
                         probs = []
                         for m in range(len(means)):
-                            p = stats.multivariate_normal.logpdf(mu[m],mu[m],covariances[hidden_state][m])
+                            p = stats.multivariate_normal.logpdf(
+                                mu[m], mu[m], covariances[hidden_state][m])
                             probs.append(p)
                         component = np.array(probs).argmax()
                         y_star = means[hidden_state][component][idx]
 
                     if self.method == "hmm_average":
-                        mu = means[:,:,idx]
-                        y_star = np.sum(mu * weights * np.exp(Z_star).reshape(-1,1))
-                        
+                        mu = means[:, :, idx]
+                        y_star = np.sum(
+                            mu * weights * np.exp(Z_star).reshape(-1, 1))
 
-                imputed_data.loc[red_idx[i],c] = y_star
+                imputed_data.loc[red_idx[i], c] = y_star
 
         return imputed_data

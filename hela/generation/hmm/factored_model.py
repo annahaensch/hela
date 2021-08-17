@@ -295,8 +295,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             [t for t in range(i)] for i in self.ns_hidden_states
         ]
         hidden_state_vectors = [
-                    list(t) for t in itertools.product(*hidden_state_values)
-                ]
+            list(t) for t in itertools.product(*hidden_state_values)
+        ]
         hidden_state_dict = {
             str(list(hidden_state_vectors[i])): i
             for i in range(len(hidden_state_vectors))

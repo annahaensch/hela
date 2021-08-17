@@ -20,8 +20,7 @@ class HMMForecastingTool(ABC):
         self.data = data
         self.use_jax = use_jax
 
-    def forecast_hidden_state_at_horizons(self,
-                                          horizon_timesteps):
+    def forecast_hidden_state_at_horizons(self, horizon_timesteps):
         """ Returns series with most likely hidden states at horizons.
 
         Arguments:
@@ -35,8 +34,7 @@ class HMMForecastingTool(ABC):
         """
         return self._forecast_hidden_state_at_horizons(horizon_timesteps)
 
-    def forecast_observation_at_horizons(self,
-                                         horizon_timesteps):
+    def forecast_observation_at_horizons(self, horizon_timesteps):
         """ Returns dataframe with most likely observations at horizons.
 
         Arguments:
@@ -64,7 +62,6 @@ class HMMForecastingTool(ABC):
             state has been achieved up to tolerance atol.
         """
         return self._steady_state_and_horizon(atol)
-
 
     def hidden_state_probability_at_last_observation(self):
         """ Compute probability of hidden state given data up to last observation,
@@ -115,8 +112,8 @@ class HMMForecastingTool(ABC):
             self.data.index[-1] + (t * delta) for t in horizon_timesteps
         ]
         horizon_prediction = np.array([
-            hidden_state_prob @ np.linalg.matrix_power(
-                transition_matrix, t) for t in horizon_timesteps
+            hidden_state_prob @ np.linalg.matrix_power(transition_matrix, t)
+            for t in horizon_timesteps
         ])
 
         return pd.DataFrame(
@@ -125,8 +122,8 @@ class HMMForecastingTool(ABC):
             columns=[i for i in range(len(transition_matrix))])
 
     def forecast_observation_at_horizons(self,
-                                        horizon_timesteps,
-                                        imputation_method='hmm_average'):
+                                         horizon_timesteps,
+                                         imputation_method='hmm_average'):
         """ Returns dataframe with most likely observations at horizon.
 
         Arguments:
@@ -140,12 +137,19 @@ class HMMForecastingTool(ABC):
         # length of timestep.
         delta = self.data.index[-1] - self.data.index[-2]
         model = self.model
-        
-        forecast_df = pd.DataFrame(index = [self.data.index[-1] + delta * (t+1) for t in range(horizon_timesteps[-1])], columns = self.data.columns)
+
+        forecast_df = pd.DataFrame(
+            index=[
+                self.data.index[-1] + delta * (t + 1)
+                for t in range(horizon_timesteps[-1])
+            ],
+            columns=self.data.columns)
         df = self.data.copy()
-        imp = HMMImputationTool(model = model)
+        imp = HMMImputationTool(model=model)
         for i in forecast_df.index:
-            df = imp.impute_missing_data(pd.concat([df,forecast_df.loc[[i],:]]), method = imputation_method)
+            df = imp.impute_missing_data(
+                pd.concat([df, forecast_df.loc[[i], :]]),
+                method=imputation_method)
 
         return df.loc[forecast_df.index[[t - 1 for t in horizon_timesteps]]]
 
@@ -160,7 +164,7 @@ class HMMForecastingTool(ABC):
 
         return vec / np.sum(vec)
 
-    def steady_state_and_horizon(self, atol = 1e-05):
+    def steady_state_and_horizon(self, atol=1e-05):
         """ Returns dictionary with steady state information.
 
         Arguments:
@@ -179,8 +183,8 @@ class HMMForecastingTool(ABC):
 
         i = 1
         while np.max(
-                np.abs(hidden_state_prob @ np.linalg.matrix_power(transition, i) -
-                       vec)) > atol:
+                np.abs(hidden_state_prob @ np.linalg.
+                       matrix_power(transition, i) - vec)) > atol:
             i += 1
 
         delta = self.data.index[-1] - self.data.index[-2]

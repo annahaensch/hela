@@ -10,6 +10,7 @@ from .forecasting import HMMForecastingTool
 
 LOG_ZERO = -1e8
 
+
 class HMMValidationTool(ABC):
     """ Abstract Base Class for HMM validation Metrics """
 
@@ -109,25 +110,25 @@ class HMMValidationTool(ABC):
             Dictionary with validation metrics for forecast data against actual data.
         """
         # Data up to conditioning date and true observations for forecast horizons.
-        true_data = pd.concat([conditioning_data, self.true_data.loc[forecast.index]])
-        
+        true_data = pd.concat(
+            [conditioning_data, self.true_data.loc[forecast.index]])
+
         forecast_data = pd.concat([conditioning_data, forecast])
         incomplete_data = forecast_data.copy()
         for idx in forecast.index:
             incomplete_data.loc[idx] = np.nan
 
-        delta = true_data.index[1] - true_data.index[0] 
+        delta = true_data.index[1] - true_data.index[0]
         horizon_timesteps = []
         for idx in forecast.index:
-            horizon_timesteps.append(int((idx - conditioning_data.index[-1])/delta))
-        
+            horizon_timesteps.append(
+                int((idx - conditioning_data.index[-1]) / delta))
 
-        forc = HMMForecastingTool(model = self.model, data = conditioning_data)
+        forc = HMMForecastingTool(model=self.model, data=conditioning_data)
         cond_prob_of_hidden_states = forc.hidden_state_probability_at_horizons(
-                horizon_timesteps = horizon_timesteps)
+            horizon_timesteps=horizon_timesteps)
         print(cond_prob_of_hidden_states)
         val_dict = {}
-    
 
         if self.model.categorical_model:
             forecast_finite_data = get_finite_observations_from_data(
@@ -135,9 +136,9 @@ class HMMValidationTool(ABC):
 
             incomplete_finite_data = get_finite_observations_from_data(
                 self.model, incomplete_data)
-            
+
             incomplete_index = incomplete_finite_data[
-            incomplete_finite_data.isnull().any(axis=1)].index
+                incomplete_finite_data.isnull().any(axis=1)].index
 
             val_dict[
                 'accuracy_of_forecast_finite_data'] = self.accuracy_of_predicted_finite_data(
@@ -157,7 +158,7 @@ class HMMValidationTool(ABC):
 
             incomplete_gaussian_data = get_gaussian_observations_from_data(
                 self.model, incomplete_data)
-        
+
             val_dict[
                 'average_relative_log_likelihood_of_forecast_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
                     incomplete_gaussian_data, forecast_gaussian_data,
@@ -165,7 +166,8 @@ class HMMValidationTool(ABC):
 
             val_dict[
                 'average_z_score_of_forecast_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
-                    incomplete_gaussian_data, np.log(cond_prob_of_hidden_states))
+                    incomplete_gaussian_data,
+                    np.log(cond_prob_of_hidden_states))
 
         return val_dict
 
@@ -181,73 +183,108 @@ class HMMValidationTool(ABC):
         """
 
         model = self.model
-        prob_df = pd.DataFrame(columns = [i for i in range(model.n_hidden_states)])
-        
+        prob_df = pd.DataFrame(
+            columns=[i for i in range(model.n_hidden_states)])
+
         # Create copy of dataframe with missing values.
         verify_data = incomplete_data.copy()
 
         # Get loc and iloc index for missing values.
-        red_idx = list(incomplete_data[incomplete_data.isna().any(axis = 1)].index)
-        ired_idx = [0] + [list(incomplete_data.index).index(i) for i in red_idx] + [incomplete_data.shape[0] + 1]
+        red_idx = list(
+            incomplete_data[incomplete_data.isna().any(axis=1)].index)
+        ired_idx = [0] + [
+            list(incomplete_data.index).index(i) for i in red_idx
+        ] + [incomplete_data.shape[0] + 1]
 
         # Deal with missing values in chunks.
         for i in range(len(red_idx)):
 
-            df_pre = incomplete_data.iloc[ired_idx[i]+1:ired_idx[i+1]]
+            df_pre = incomplete_data.iloc[ired_idx[i] + 1:ired_idx[i + 1]]
             # Dataframe of what is known after the missing value.
-            df_post = incomplete_data.iloc[ired_idx[i+1]+1:ired_idx[i+2]]
+            df_post = incomplete_data.iloc[ired_idx[i + 1] + 1:ired_idx[i + 2]]
 
-            unknown_col = list(incomplete_data.loc[red_idx[i]][incomplete_data.loc[red_idx[i]].isna()].index)
-            known_col = [g for g in incomplete_data.columns if not g in unknown_col]
+            unknown_col = list(incomplete_data.loc[red_idx[i]][
+                incomplete_data.loc[red_idx[i]].isna()].index)
+            known_col = [
+                g for g in incomplete_data.columns if not g in unknown_col
+            ]
 
             # Compute bracket Z star.
             inf = self.inf
             if df_pre.shape[0] == 0:
-                log_prob_pre = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+                log_prob_pre = pd.DataFrame([
+                    np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
+                ])
             else:
                 log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
 
             if df_post.shape[0] == 0:
-                log_prob_post = pd.DataFrame([np.log(np.full(model.n_hidden_states, 1 / model.n_hidden_states))])
+                log_prob_post = pd.DataFrame([
+                    np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
+                ])
             else:
-                log_prob_post = inf.predict_hidden_state_log_probability(df_post)
+                log_prob_post = inf.predict_hidden_state_log_probability(
+                    df_post)
 
             alpha = inf._compute_forward_probabilities(log_prob_pre)
             beta = inf._compute_backward_probabilities(log_prob_post)
 
-            log_p_fb = logsumexp(alpha[-1].reshape(-1,1) + model.log_transition, axis = 0) + beta[0]
+            log_p_fb = logsumexp(
+                alpha[-1].reshape(-1, 1) + model.log_transition,
+                axis=0) + beta[0]
 
-            log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
-            log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+            log_p_finite = np.log(
+                np.full(model.n_hidden_states, 1 / model.n_hidden_states))
+            log_p_gauss = np.log(
+                np.full(model.n_hidden_states, 1 / model.n_hidden_states))
 
             if model.categorical_model:
                 # Compute probability of finite observation components.
-                finite_obs = incomplete_data.loc[[red_idx[i]],list(model.finite_features)]
-                known_finite = [c for c in model.finite_features if c in known_col]
+                finite_obs = incomplete_data.loc[[red_idx[i]],
+                                                 list(model.finite_features)]
+                known_finite = [
+                    c for c in model.finite_features if c in known_col
+                ]
 
                 # If all finite observations are known...
                 if len(known_finite) == len(model.finite_features):
-                    finite_obs_enum = model.categorical_model.finite_values_dict_inverse[str(list(np.array(finite_obs)[0]))]
-                    log_p_finite = model.categorical_model.log_emission_matrix[finite_obs_enum]
+                    finite_obs_enum = model.categorical_model.finite_values_dict_inverse[
+                        str(list(np.array(finite_obs)[0]))]
+                    log_p_finite = model.categorical_model.log_emission_matrix[
+                        finite_obs_enum]
 
                 # If no finite observations are known...
                 elif len(known_finite) == 0:
                     possible_finite_obs_enum = list(model.finite_values.index)
-                    log_p_finite = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+                    log_p_finite = np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
 
                 # If some finite observations are known, but not all...
                 else:
                     possible_finite_obs_enum = []
                     for c in known_col:
                         if c in model.finite_features:
-                            possible_finite_obs_enum += list(model.finite_values[model.finite_values[c] == finite_obs.loc[red_idx[i],c]].index)  
-                    log_p_finite = logsumexp(model.categorical_model.log_emission_matrix[possible_finite_obs_enum], axis = 0)
+                            possible_finite_obs_enum += list(
+                                model.finite_values[model.finite_values[
+                                    c] == finite_obs.loc[red_idx[i], c]].index)
+                    log_p_finite = logsumexp(
+                        model.categorical_model.log_emission_matrix[
+                            possible_finite_obs_enum],
+                        axis=0)
 
             if model.gaussian_mixture_model:
 
                 # Compute probability of Gaussian observation components.
-                gaussian_obs = incomplete_data.loc[[red_idx[i]],model.continuous_features]
-                known_gaussian = [c for c in model.continuous_features if c in known_col]
+                gaussian_obs = incomplete_data.loc[[red_idx[i]],
+                                                   model.continuous_features]
+                known_gaussian = [
+                    c for c in model.continuous_features if c in known_col
+                ]
 
                 means = model.gaussian_mixture_model.means
                 covariances = model.gaussian_mixture_model.covariances
@@ -255,31 +292,41 @@ class HMMValidationTool(ABC):
 
                 # If all Gaussian observations are known...
                 if len(known_gaussian) == len(model.continuous_features):
-                    log_p_gauss = np.array(model.gaussian_mixture_model.log_probability(gaussian_obs))[0]
+                    log_p_gauss = np.array(
+                        model.gaussian_mixture_model.log_probability(
+                            gaussian_obs))[0]
 
                 # If no Gaussian observations are known...
                 elif len(known_gaussian) == 0:
-                    log_p_gauss = np.log(np.full(model.n_hidden_states,1 / model.n_hidden_states))
+                    log_p_gauss = np.log(
+                        np.full(model.n_hidden_states,
+                                1 / model.n_hidden_states))
 
                 # If some Gaussian observations are known...
                 else:
-                    known_gauss_dim = [i for i in range(len(model.continuous_features)) if model.continuous_features[i] in known_col]
+                    known_gauss_dim = [
+                        i for i in range(len(model.continuous_features))
+                        if model.continuous_features[i] in known_col
+                    ]
                     for h in range(model.n_hidden_states):
-                        for m in range(model.gaussian_mixture_model.n_gmm_components):
+                        for m in range(
+                                model.gaussian_mixture_model.n_gmm_components):
 
                             k = int(known_col[0][-1])
                             p = stats.multivariate_normal.logpdf(
-                                                    gaussian_obs.iloc[0,known_gauss_dim],
-                                                    means[h][m][known_gauss_dim],
-                                                    covariances[h][m][known_gauss_dim,:][:,known_gauss_dim],
-                                                    allow_singular=True)
+                                gaussian_obs.iloc[0, known_gauss_dim],
+                                means[h][m][known_gauss_dim],
+                                covariances[h][m][known_gauss_dim, :]
+                                [:, known_gauss_dim],
+                                allow_singular=True)
 
                             log_p_gauss[h] += p + np.log(weights[h][m])
 
-            Z_star = log_p_fb + log_p_finite + log_p_gauss - logsumexp(log_p_fb + log_p_finite + log_p_gauss)
-            
+            Z_star = log_p_fb + log_p_finite + log_p_gauss - logsumexp(
+                log_p_fb + log_p_finite + log_p_gauss)
+
             prob_df.loc[red_idx[i]] = Z_star
-        
+
         return prob_df
 
     def average_relative_log_likelihood_of_predicted_gaussian_data(
@@ -307,21 +354,22 @@ class HMMValidationTool(ABC):
         covariances = self.model.gaussian_mixture_model.covariances
         component_weights = self.model.gaussian_mixture_model.component_weights
 
-        incomplete_index = incomplete_gaussian_data[incomplete_gaussian_data.isnull()
-                                                .any(axis=1)].index
+        incomplete_index = incomplete_gaussian_data[
+            incomplete_gaussian_data.isnull().any(axis=1)].index
         verify_likelihood = np.empty(len(incomplete_index))
         true_likelihood = np.empty(len(incomplete_index))
         for i in range(len(incomplete_index)):
             idx = incomplete_index[i]
-            cond_prob = np.array(conditional_log_probability_of_hidden_states.loc[idx])
+            cond_prob = np.array(
+                conditional_log_probability_of_hidden_states.loc[idx])
 
             true_gaussian_observation = self.true_gaussian_data.loc[[idx]]
             verify_gaussian_observation = verify_gaussian_data.loc[[idx]]
             partial_gaussian_observation = incomplete_gaussian_data.loc[[idx]]
 
             true_prob = compute_log_likelihood_with_inferred_pdf(
-                true_gaussian_observation, partial_gaussian_observation,
-                means, covariances, component_weights)
+                true_gaussian_observation, partial_gaussian_observation, means,
+                covariances, component_weights)
             true_likelihood[i] = logsumexp(true_prob + cond_prob)
 
             verify_prob = compute_log_likelihood_with_inferred_pdf(
@@ -356,10 +404,11 @@ class HMMValidationTool(ABC):
 
         return average_z_score(
             means, covariances, component_weights, self.true_gaussian_data,
-            incomplete_gaussian_data, np.exp(conditional_log_probability_of_hidden_states))
+            incomplete_gaussian_data,
+            np.exp(conditional_log_probability_of_hidden_states))
 
     def accuracy_of_predicted_finite_data(self, incomplete_finite_data,
-                                               verify_finite_data):
+                                          verify_finite_data):
         """ Returns ratio of correctly imputed finite values to total imputed finite values.
 
         Arguments:
@@ -376,13 +425,13 @@ class HMMValidationTool(ABC):
             incomplete_finite_data.isnull().any(axis=1)].index
 
         total_correct = np.sum(
-            (true_finite_data.loc[incomplete_index] ==
-             verify_finite_data.loc[incomplete_index]).all(axis=1))
+            (true_finite_data.loc[incomplete_index] == verify_finite_data.loc[
+                incomplete_index]).all(axis=1))
 
         return total_correct / len(incomplete_index)
 
-    def relative_accuracy_of_predicted_finite_data(
-            self, incomplete_finite_data, verify_finite_data):
+    def relative_accuracy_of_predicted_finite_data(self, incomplete_finite_data,
+                                                   verify_finite_data):
         """ Returns ratio of rate of accuracy in imputed data to expected rate of accuracy with random guessing.
 
         Arguments:
@@ -395,14 +444,14 @@ class HMMValidationTool(ABC):
         """
         expected_accuracy = expected_proportional_accuracy(
             self.true_finite_data, incomplete_finite_data)
-        
+
         verify_accuracy = self.accuracy_of_predicted_finite_data(
             incomplete_finite_data, verify_finite_data)
 
         return verify_accuracy / expected_accuracy
 
-    def precision_recall_df_for_predicted_finite_data(
-            self, incomplete_data, data_to_verify):
+    def precision_recall_df_for_predicted_finite_data(self, incomplete_data,
+                                                      data_to_verify):
         """ Return DataFrame with precision, recall, and proportion of finite values
 
         Arguments:
@@ -422,18 +471,14 @@ class HMMValidationTool(ABC):
 
             df = self.true_data.copy()
             df['tuples'] = list(
-                zip(*[
-                    self.true_data[c]
-                    for c in self.true_finite_data.columns
-                ]))
+                zip(*[self.true_data[c]
+                      for c in self.true_finite_data.columns]))
             proportion = (df['tuples'].value_counts() / df.shape[0]).to_dict()
 
             df_imputed = data_to_verify.copy()
             df_imputed['tuples'] = list(
-                zip(*[
-                    data_to_verify[c]
-                    for c in self.true_finite_data.columns
-                ]))
+                zip(*[data_to_verify[c]
+                      for c in self.true_finite_data.columns]))
 
             state = df['tuples'].unique()
 

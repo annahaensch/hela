@@ -25,10 +25,11 @@ def n_hidden_states(random):
 def generative_model(random, n_hidden_states):
     model = gen.DiscreteHMMGenerativeModel(
         n_hidden_states=n_hidden_states,
-        n_categorical_features = 2,
-        n_categorical_values = [2,2],
-        categorical_values=pd.DataFrame([["on","one"],["on","two"],["off","one"],["off","two"]],
-            columns = ["categorical_feature_0","categorical_feature_1"]),
+        n_categorical_features=2,
+        n_categorical_values=[2, 2],
+        categorical_values=pd.DataFrame(
+            [["on", "one"], ["on", "two"], ["off", "one"], ["off", "two"]],
+            columns=["categorical_feature_0", "categorical_feature_1"]),
         n_gaussian_features=2,
         n_gmm_components=1)
 
@@ -135,23 +136,24 @@ def test_model_learning_and_imputation(generative_model):
                          predict_gibbs].shape[0] / hidden_states.shape[0] > .1
 
     # Load imputation tool.
-    imp = hmm.HMMImputationTool(model = new_model) 
-    dataset_imputed = imp.impute_missing_data(dataset_redacted, method='hmm_argmax')
+    imp = hmm.HMMImputationTool(model=new_model)
+    dataset_imputed = imp.impute_missing_data(
+        dataset_redacted, method='hmm_argmax')
 
     assert (dataset_redacted[(dataset_redacted.isna().any(axis=1))].shape[0] >
             0) & (dataset_imputed[(
                 dataset_imputed.isna().any(axis=1))].shape[0] == 0)
 
-    val = hmm.HMMValidationTool(model = model, true_data = dataset)
-    validation = val.validate_imputation(incomplete_data = dataset_redacted, data_to_verify = dataset_imputed)
+    val = hmm.HMMValidationTool(model=model, true_data=dataset)
+    validation = val.validate_imputation(
+        incomplete_data=dataset_redacted, data_to_verify=dataset_imputed)
 
     precision_recall = val.precision_recall_df_for_predicted_finite_data(
-        incomplete_data = dataset_redacted, data_to_verify= dataset_imputed)
+        incomplete_data=dataset_redacted, data_to_verify=dataset_imputed)
     assert precision_recall['proportion'].sum() == 1
 
     val1 = validation['relative_accuracy_of_verify_finite_data']
-    val2 = validation[
-        'average_relative_log_likelihood_of_verify_gaussian_data']
+    val2 = validation['average_relative_log_likelihood_of_verify_gaussian_data']
     val3 = validation['average_z_score_of_verify_gaussian_data']
 
     assert val1 >= 1  #Accuracy should be at least as good as random guessing.
@@ -164,6 +166,7 @@ def test_model_learning_and_imputation(generative_model):
     # If this is larger than 3.3 then my imputed values,
     # are on average, worse than the 99.9% confidence
     # interval and something has gone wrong.
+
 
 def test_distributed(distributed_learning_model, generative_model):
 
@@ -178,8 +181,9 @@ def test_distributed(distributed_learning_model, generative_model):
         set([h for h in range(training_parameters['n_hidden_states'])]))
 
     # Load imputation tool.
-    imp = hmm.HMMImputationTool(model = distributed_learning_model) 
-    dataset_imputed = imp.impute_missing_data(dataset_redacted, method='hmm_argmax')
+    imp = hmm.HMMImputationTool(model=distributed_learning_model)
+    dataset_imputed = imp.impute_missing_data(
+        dataset_redacted, method='hmm_argmax')
 
     #dataset_imputed = inf.impute_missing_data(dataset_redacted, method='argmax')
 
@@ -187,11 +191,13 @@ def test_distributed(distributed_learning_model, generative_model):
             0) & (dataset_imputed[(
                 dataset_imputed.isna().any(axis=1))].shape[0] == 0)
 
-    val = hmm.HMMValidationTool(model = distributed_learning_model, true_data = dataset)
-    validation = val.validate_imputation(incomplete_data = dataset_redacted, data_to_verify = dataset_imputed)
+    val = hmm.HMMValidationTool(
+        model=distributed_learning_model, true_data=dataset)
+    validation = val.validate_imputation(
+        incomplete_data=dataset_redacted, data_to_verify=dataset_imputed)
 
     precision_recall = val.precision_recall_df_for_predicted_finite_data(
-        incomplete_data = dataset_redacted, data_to_verify= dataset_imputed)
+        incomplete_data=dataset_redacted, data_to_verify=dataset_imputed)
     assert precision_recall['proportion'].sum() == 1
 
     val1 = validation['relative_accuracy_of_imputed_finite_data']
@@ -221,14 +227,17 @@ def test_forecasting(generative_model):
 
     # Load forecasting tool
     conditioning_data = dataset.iloc[:-10]
-    horizon_timesteps = [2,7]
-    forc = hmm.HMMForecastingTool(model = model, data = conditioning_data)
-    forecast = forc.forecast_observation_at_horizons(horizon_timesteps = horizon_timesteps)
+    horizon_timesteps = [2, 7]
+    forc = hmm.HMMForecastingTool(model=model, data=conditioning_data)
+    forecast = forc.forecast_observation_at_horizons(
+        horizon_timesteps=horizon_timesteps)
 
-    assert forecast[~forecast.isna().any(axis = 1)].shape[0] == len(horizon_timesteps)
+    assert forecast[~forecast.isna().any(axis=1)].shape[0] == len(
+        horizon_timesteps)
 
-    val = hmm.HMMValidationTool(model = model, true_data = dataset)
-    validation = val.validate_forecast(conditioning_data = conditioning_data, forecast = forecast)
+    val = hmm.HMMValidationTool(model=model, true_data=dataset)
+    validation = val.validate_forecast(
+        conditioning_data=conditioning_data, forecast=forecast)
 
     assert validation['average_z_score_of_forecast_gaussian_data'] < 3.3
 
@@ -255,7 +264,8 @@ def test_generative_model(generative_model, factored_generative_model):
     new_generative_model = gen.model_to_discrete_generative_spec(model)
 
     for c in discrete_model.categorical_values.columns:
-        assert set(discrete_model.categorical_values[c].unique()) == set(new_generative_model.categorical_values[c].unique())
+        assert set(discrete_model.categorical_values[c].unique()) == set(
+            new_generative_model.categorical_values[c].unique())
 
     assert np.all(discrete_model.means == new_generative_model.means)
     assert np.min(discrete_model.transition_matrix -

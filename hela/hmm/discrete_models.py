@@ -9,7 +9,8 @@ import pandas as pd
 from scipy import linalg, stats
 from scipy.special import logsumexp
 
-from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration, HMMLearningAlgorithm)
+from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
+                          HMMLearningAlgorithm)
 from .utils import *
 
 
@@ -285,6 +286,7 @@ class CategoricalModel(DiscreteHMM):
         log_emission_matrix -= logsumexp(gamma, axis=0)
         return log_emission_matrix
 
+
 class GaussianMixtureModel(DiscreteHMM):
 
     def __init__(self,
@@ -361,8 +363,8 @@ class GaussianMixtureModel(DiscreteHMM):
             for i in range(weights.shape[0]):
                 rand_init = random_state.rand(gmm.n_gmm_components)
                 rand_init = rand_init / np.sum(rand_init)
-                weights[i,:] = rand_init
-            
+                weights[i, :] = rand_init
+
             gmm.component_weights = weights
 
         return gmm
@@ -529,11 +531,11 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
         self.data = None
         self.finite_data_enum = None
         self.gaussian_data = None
-        self.other_data = None 
+        self.other_data = None
         self.sufficient_statistics = []
         self.model_results = []
 
-    def run(self, model, data, training_iterations, method = "em", use_jax=False):
+    def run(self, model, data, training_iterations, method="em", use_jax=False):
         """ Base class for EM learning methods.
 
         Arguments:
@@ -569,6 +571,7 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
             self.model_results.append(new_model)
 
         return new_model
+
 
 class DiscreteHMMInferenceResults(ABC):
     """ Abstract base class for HMM inference results """
@@ -855,7 +858,6 @@ class DiscreteHMMInferenceResults(ABC):
                 [l[i] for l in log_probability]).reshape(-1, 1)
 
         return gamma_by_component
-
 
     def _xi(self, data):
         """Auxiliary function for EM.
