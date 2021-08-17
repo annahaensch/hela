@@ -11,7 +11,7 @@ from scipy import linalg, stats
 from scipy.special import logsumexp
 
 from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
-                          HMMForecasting, HMMValidationMetrics)
+                          HMMValidationMetrics)
 from .graphical_models.DynamicBayesianNetwork import fhmm_model_to_graph
 from .utils import *
 
@@ -221,22 +221,22 @@ class FactoredHMM(ABC):
         # model.graph = fhmm_model_to_graph(model)
 
         return model
-
-    def load_inference_interface(self):
-        """ Returns FactoredHMMInference object
-
-        Returns:
-            Initialized FactoredHMMInference object
-        """
-        return FactoredHMMInference(self)
-
-    def load_learning_interface(self):
+    
+    def _load_learning_interface(self):
         """ Returns FactoredHMMLearning object
 
         Returns:
             Initialized FactoredHMMLearning object
         """
         return FactoredHMMLearningAlgorithm(self)
+
+    def _load_inference_interface(self):
+        """ Returns FactoredHMMInference object
+
+        Returns:
+            Initialized FactoredHMMInference object
+        """
+        return FactoredHMMInference(self)
 
     def vector_to_column_vectors(self, hidden_state_vector):
         """ Returns column vectors associated to hidden_state_vector

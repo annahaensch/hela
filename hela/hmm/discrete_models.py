@@ -10,7 +10,7 @@ from scipy import linalg, stats
 from scipy.special import logsumexp
 
 from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
-                          HMMForecasting, HMMValidationMetrics, HMMLearningAlgorithm)
+                         HMMValidationMetrics, HMMLearningAlgorithm)
 from .utils import *
 
 

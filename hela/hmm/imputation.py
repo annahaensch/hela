@@ -8,9 +8,7 @@ import pandas as pd
 
 from .utils import *
 
-from .discrete_models import DiscreteHMM
-
-class ImputationTool(ABC):
+class HMMImputationTool(ABC):
 
     def __init__(self, model):
         self.model = model
