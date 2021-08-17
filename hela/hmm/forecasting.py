@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
-
 from scipy import linalg
 
 from .imputation import HMMImputationTool

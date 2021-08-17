@@ -5,8 +5,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 
-from .utils import *
 from .forecasting import HMMForecastingTool
+from .utils import *
 
 LOG_ZERO = -1e8
 
