@@ -63,7 +63,7 @@ def generative_model(random, n_hidden_states):
 @pytest.fixture(scope="module")
 def factored_generative_model(random, n_hidden_states):
     model = gen.FactoredHMMGenerativeModel(
-        ns_hidden_states=3 * [n_hidden_states], n_gaussian_features=1)
+        n_hidden_states=3 * [n_hidden_states], n_gaussian_features=1)
 
     return {"model": model}
 
