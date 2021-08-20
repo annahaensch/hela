@@ -12,7 +12,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
     """ Class for generative factored HMM """
 
     def __init__(self,
-                 ns_hidden_states=None,
+                 n_hidden_states=None,
                  random_state=0,
                  n_categorical_features=0,
                  n_categorical_values=(),
@@ -29,7 +29,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             n_categorical_values=n_categorical_values,
             n_gaussian_features=n_gaussian_features,
             gaussian_values=gaussian_values)
-        self.ns_hidden_states = ns_hidden_states
+        self.n_hidden_states = n_hidden_states
         self.transition_matrices = None
         self.initial_state_vector = None
         self.emission_matrix = None
@@ -40,12 +40,12 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
 
         random = self.random
         transition_matrices = []
-        for n in ns_hidden_states:
+        for n in n_hidden_states:
             transition_matrices.append(self.get_transition_matrix(n))
         self.transition_matrices = np.array(transition_matrices)
 
         self.initial_state_vector = np.array(
-            [random.choice(h) for h in ns_hidden_states])
+            [random.choice(h) for h in n_hidden_states])
 
         # Generate categorical model parameters.
         if self.n_categorical_features > 0:
@@ -67,20 +67,18 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             function `FactoredHMMConfiguration.from_spec()`.
         """
         training_spec = {
-            "hidden_state": {
-                "type": "finite",
-                "count": self.ns_hidden_states
-            }
+            "n_hidden_states": self.n_hidden_states
         }
-        training_spec["n_systems"] = len(self.ns_hidden_states)
+        
+        training_spec["n_systems"] = len(self.n_hidden_states)
 
         model_parameter_constraints = {
             'transition_constraints': self.transition_matrices
         }
 
-        # Construct inital state as n_systems x n_hidden_states array
-        initial_state = np.zeros((len(self.ns_hidden_states),
-                                  np.max(self.ns_hidden_states)))
+        # Construct inital state as n_systems x total_hidden_states array
+        initial_state = np.zeros((len(self.n_hidden_states),
+                                  np.max(self.n_hidden_states)))
         for i in range(initial_state.shape[0]):
             initial_state[i][self.initial_state_vector[i]] = 1
         model_parameter_constraints["initial_state_constraints"] = initial_state
@@ -140,9 +138,9 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             'self.transition_matrices'.
         """
         random = self.random
-        hidden_states = np.empty((n_observations, len(self.ns_hidden_states)))
+        hidden_states = np.empty((n_observations, len(self.n_hidden_states)))
         hidden_states[0] = self.initial_state_vector
-        for n in range(len(self.ns_hidden_states)):
+        for n in range(len(self.n_hidden_states)):
             transition_matrix = self.transition_matrices[n]
             for i in range(n_observations - 1):
                 # Use discrete inverse transform method to sample hidden states
@@ -227,17 +225,17 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         """
         random = self.random
         categorical_values = self.categorical_values
-        n_hidden_states = np.prod(self.ns_hidden_states)
+        total_hidden_states = np.prod(self.n_hidden_states)
 
         values = list(categorical_values.index)
 
-        if len(values) >= n_hidden_states:
+        if len(values) >= total_hidden_states:
             most_likely_emission = random.choice(
-                values, n_hidden_states, replace=False)
+                values, total_hidden_states, replace=False)
         else:
-            most_likely_emission = random.choice(values, n_hidden_states)
-        emission_matrix = np.zeros((n_hidden_states, len(values)))
-        for i in range(n_hidden_states):
+            most_likely_emission = random.choice(values, total_hidden_states)
+        emission_matrix = np.zeros((total_hidden_states, len(values)))
+        for i in range(total_hidden_states):
             emission_prob = random.uniform(0, 1, len(values))
             most_likely_prob = random.uniform(.75, 1)
             emission_prob[most_likely_emission[i]] = 0
@@ -262,8 +260,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             Nan entries.
         """
         means = []
-        max_hidden_state = np.max(self.ns_hidden_states)
-        for n in self.ns_hidden_states:
+        max_hidden_state = np.max(self.n_hidden_states)
+        for n in self.n_hidden_states:
             weights = np.random.uniform(
                 -3, 3, (self.n_gaussian_features, max_hidden_state))
             if n < max_hidden_state:
@@ -292,7 +290,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
             the hidden state vectors in hidden_states.
         """
         hidden_state_values = [
-            [t for t in range(i)] for i in self.ns_hidden_states
+            [t for t in range(i)] for i in self.n_hidden_states
         ]
         hidden_state_vectors = [
             list(t) for t in itertools.product(*hidden_state_values)
