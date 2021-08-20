@@ -26,9 +26,9 @@ class DiscreteHMMConfiguration(HMMConfiguration):
         self.model_type = 'DiscreteHMM'
         return self
 
-    def _to_model(self, random_state):
+    def _to_model(self, set_random_state):
         """ Discrete HMM specific implementation of `to_model`. """
-        return DiscreteHMM.from_config(self, random_state)
+        return DiscreteHMM.from_config(self, set_random_state)
 
 
 class DiscreteHMM(HiddenMarkovModel):
@@ -36,6 +36,7 @@ class DiscreteHMM(HiddenMarkovModel):
 
     def __init__(self, model_config=None):
         super().__init__(model_config)
+        self.set_random_state = None
         self.random_state = None
         self.trained = False
 
@@ -54,9 +55,13 @@ class DiscreteHMM(HiddenMarkovModel):
         self.gaussian_mixture_model = None
 
     @classmethod
-    def from_config(cls, model_config, random_state):
+    def from_config(cls, model_config, set_random_state):
         model = cls(model_config=model_config)
         model.n_hidden_states = model_config.n_hidden_states
+        model.set_random_state = set_random_state
+        
+        # Set random state.
+        random_state = np.random.RandomState(set_random_state)
         model.random_state = random_state
 
         # Get finite features from model_config.
@@ -557,7 +562,7 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
                 self.gaussian_data = get_gaussian_observations_from_data(
                     model, data)
 
-        new_model = model.model_config.to_model()
+        new_model = model.model_config.to_model(set_random_state = model.set_random_state)
 
         for _ in range(training_iterations):
             # e_step
