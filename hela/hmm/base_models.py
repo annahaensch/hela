@@ -187,7 +187,6 @@ class HMMConfiguration(ABC):
 
     def to_model(self, set_random_state=0):
         """ Instatiate model from configuration """
-        #random_state = np.random.RandomState(set_random_state)
         return self._to_model(set_random_state)
 
     @abstractmethod
