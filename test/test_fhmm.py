@@ -24,7 +24,7 @@ def n_hidden_states(random):
 @pytest.fixture(scope="module")
 def generative_model(random, n_hidden_states):
     gen_model = gen.FactoredHMMGenerativeModel(
-        ns_hidden_states=[3, 2],
+        n_hidden_states=[3, 2],
         n_categorical_features=2,
         n_gaussian_features=1)
 
@@ -34,7 +34,7 @@ def generative_model(random, n_hidden_states):
 
     fhmm_training_spec = gen.data_to_fhmm_training_spec(
         factored_hidden_states,
-        gen_model.ns_hidden_states,
+        gen_model.n_hidden_states,
         dataset,
         categorical_features=list(gen_model.categorical_values.columns),
         gaussian_features=list(gen_model.gaussian_values.columns))
@@ -54,7 +54,7 @@ def test_model_loads_from_spec(generative_model):
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
     model = model_config.to_model()
 
-    assert model.ns_hidden_states == fhmm_training_spec['hidden_state']['count']
+    assert model.n_hidden_states == fhmm_training_spec['n_hidden_states']
 
 
 def test_model_sampling_and_inference(generative_model):

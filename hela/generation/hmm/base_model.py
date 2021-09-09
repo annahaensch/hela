@@ -307,7 +307,7 @@ def data_to_discrete_hmm_training_spec(hidden_states, n_hidden_states, data,
 
 
 def data_to_fhmm_training_spec(hidden_states,
-                               ns_hidden_states,
+                               n_hidden_states,
                                data,
                                categorical_features=[],
                                gaussian_features=[]):
@@ -316,7 +316,7 @@ def data_to_fhmm_training_spec(hidden_states,
     Arguments:
         hidden_states: (dataframe) of hidden state vectors (typically) 
             generated using generate_hidden_state_sequence(n_observations).
-        ns_hidden_states: (array) number of hidden states per system.
+        n_hidden_states: (array) number of hidden states per system.
         data: (dataframe) data with the same index as the series
             hidden_states and columns corresponding to categorical_features
             and guassian_features.
@@ -329,11 +329,11 @@ def data_to_fhmm_training_spec(hidden_states,
         sequence and the data
     """
 
-    spec = {"hidden_state": {"type": "finite", "count": ns_hidden_states}}
-    spec["n_systems"] = len(ns_hidden_states)
+    spec = {"n_hidden_states": n_hidden_states}
+    spec["n_systems"] = len(n_hidden_states)
 
     # Get mappings between hidden state vectors and enumerations,
-    hidden_state_values = [[t for t in range(i)] for i in ns_hidden_states]
+    hidden_state_values = [[t for t in range(i)] for i in n_hidden_states]
     hidden_state_vectors = [
         list(t) for t in itertools.product(*hidden_state_values)
     ]
@@ -377,15 +377,15 @@ def data_to_fhmm_training_spec(hidden_states,
     model_parameter_constraints = {}
 
     # Construct transition matrices from hidden state sequence.
-    transition_matrices = np.zeros((len(ns_hidden_states),
-                                    np.max(ns_hidden_states),
-                                    np.max(ns_hidden_states)))
+    transition_matrices = np.zeros((len(n_hidden_states),
+                                    np.max(n_hidden_states),
+                                    np.max(n_hidden_states)))
 
     transition_mask = np.zeros_like(transition_matrices)
-    for i in range(len(ns_hidden_states)):
-        x, y = np.ogrid[:np.max(ns_hidden_states), :np.max(ns_hidden_states)]
-        transition_mask[i] = np.where((x < ns_hidden_states[i]) &
-                                      (y < ns_hidden_states[i]), 0, 1)
+    for i in range(len(n_hidden_states)):
+        x, y = np.ogrid[:np.max(n_hidden_states), :np.max(n_hidden_states)]
+        transition_mask[i] = np.where((x < n_hidden_states[i]) &
+                                      (y < n_hidden_states[i]), 0, 1)
 
     for i in range(hidden_states.shape[0])[1:]:
         previous = [t for t in np.array(hidden_states.iloc[i - 1])]
@@ -394,33 +394,33 @@ def data_to_fhmm_training_spec(hidden_states,
             transition_matrices[j][previous[j]][current[j]] += 1
 
     zero_rows = (np.sum(transition_matrices, axis=2).reshape(
-        len(ns_hidden_states), -1, 1) == 0).astype(int)
+        len(n_hidden_states), -1, 1) == 0).astype(int)
     transition_matrices += zero_rows
 
-    if np.any(np.array(ns_hidden_states) != np.max(ns_hidden_states)):
+    if np.any(np.array(n_hidden_states) != np.max(n_hidden_states)):
         systems, over = zip(*np.concatenate(
             [[(i, j)
-              for j in range(ns_hidden_states[i], np.max(ns_hidden_states))]
-             for i in range(len(ns_hidden_states))
-             if ns_hidden_states[i] < np.max(ns_hidden_states)]))
+              for j in range(n_hidden_states[i], np.max(n_hidden_states))]
+             for i in range(len(n_hidden_states))
+             if n_hidden_states[i] < np.max(n_hidden_states)]))
         transition_matrices[systems, :, over] = 0
 
     transition_matrices = transition_matrices / np.sum(
-        transition_matrices, axis=2).reshape(len(ns_hidden_states), -1, 1)
+        transition_matrices, axis=2).reshape(len(n_hidden_states), -1, 1)
 
-    if np.any(np.array(ns_hidden_states) != np.max(ns_hidden_states)):
+    if np.any(np.array(n_hidden_states) != np.max(n_hidden_states)):
         transition_matrices[systems, over, :] = 0
 
     model_parameter_constraints["transition_constraints"] = transition_matrices
 
     # Construct initial state vector from hidden state sequence.
-    ns_hidden_states = ns_hidden_states
-    initial_state_prob = np.zeros((len(ns_hidden_states),
-                                   np.max(ns_hidden_states)))
+    n_hidden_states = n_hidden_states
+    initial_state_prob = np.zeros((len(n_hidden_states),
+                                   np.max(n_hidden_states)))
     initial_state_mask = np.zeros_like(initial_state_prob)
-    for i in range(len(ns_hidden_states)):
-        x = np.ogrid[0:np.max(ns_hidden_states)]
-        initial_state_mask[i] = np.where(x < ns_hidden_states[i], 0, 1)
+    for i in range(len(n_hidden_states)):
+        x = np.ogrid[0:np.max(n_hidden_states)]
+        initial_state_mask[i] = np.where(x < n_hidden_states[i], 0, 1)
 
     initial_vec = np.array(
         hidden_states[~(hidden_states.isna().any(axis=1))].iloc[0])
@@ -439,7 +439,7 @@ def data_to_fhmm_training_spec(hidden_states,
             ],
             index=data.index)
         emission_matrix = np.zeros((emissions.nunique(),
-                                    np.prod(ns_hidden_states)))
+                                    np.prod(n_hidden_states)))
 
         # Construct emission matrix from hidden state sequence and data.
         for i in list(
@@ -448,7 +448,7 @@ def data_to_fhmm_training_spec(hidden_states,
                     set(emissions.index))):
             emission_matrix[emissions[i], int(flattened_hidden_states[i])] += 1
 
-        for i in range(np.prod(ns_hidden_states)):
+        for i in range(np.prod(n_hidden_states)):
             if np.sum([e[i] for e in emission_matrix]) == 0:
                 emission_matrix[:, i] = np.full(emission_matrix.shape[0], 1)
         emission_matrix = emission_matrix / np.sum(emission_matrix, axis=0)
@@ -458,7 +458,7 @@ def data_to_fhmm_training_spec(hidden_states,
     # Determine gaussian parameter constraints from data.
     if gaussian_features:
         gaussian_parameter_constraints = {}
-        means = np.zeros((len(ns_hidden_states), np.max(ns_hidden_states),
+        means = np.zeros((len(n_hidden_states), np.max(n_hidden_states),
                           len(gaussian_features)))
         for system in hidden_states.columns:
             for i in hidden_states[:][system].unique():

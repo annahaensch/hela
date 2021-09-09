@@ -456,7 +456,7 @@ class GaussianMixtureModel(DiscreteHMM):
         return means
 
     def update_covariances(self, gaussian_data, gamma_by_component):
-        """ Return updated covarinaces for current hmm parameters.
+        """ Return updated covariances for current hmm parameters.
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame

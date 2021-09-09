@@ -20,7 +20,6 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                  n_gaussian_features=None,
                  gaussian_values=None,
                  n_gmm_components=1
-                 # TODO @AH: incorporate gaussian mixture models.
                 ):
         super().__init__(
             random_state=random_state,
