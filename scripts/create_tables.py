@@ -73,7 +73,7 @@ def train_hmm_em(gen, random_state, train_data):
     """
 
     n_gmm_components = 1
-    n_hidden_states = np.prod(gen.ns_hidden_states)
+    n_hidden_states = np.prod(gen.n_hidden_states)
 
     r = np.random.RandomState(random_state)
 
@@ -89,10 +89,7 @@ def train_hmm_em(gen, random_state, train_data):
     } for col in list(gen.gaussian_values.columns)]
 
     hmm_spec = {
-        'hidden_state': {
-            'type': 'Finite',
-            'count': n_hidden_states
-        },
+        'n_hidden_states': n_hidden_states,
         'observations': observations,
         'model_parameter_constraints': {
             'gmm_parameter_constraints': {
@@ -130,7 +127,7 @@ def train_fhmm_vi(gen, random_state, train_data, train_fact_hidden_states):
     """
     fhmm_training_spec = hmm_gen.data_to_fhmm_training_spec(
         train_fact_hidden_states,
-        gen.ns_hidden_states,
+        gen.n_hidden_states,
         train_data,
         categorical_features=[],
         gaussian_features=list(gen.gaussian_values.columns))
@@ -159,7 +156,7 @@ def train_fhmm_gibbs(gen, random_state, train_data, train_fact_hidden_states):
     """
     fhmm_training_spec = hmm_gen.data_to_fhmm_training_spec(
         train_fact_hidden_states,
-        gen.ns_hidden_states,
+        gen.n_hidden_states,
         train_data,
         categorical_features=[],
         gaussian_features=list(gen.gaussian_values.columns))
@@ -247,7 +244,7 @@ def main(argv):
     m = int(str(argv[0]).split(",")[0])
     n = int(str(argv[0]).split(",")[1])
 
-    ns_hidden_states = [n for i in range(m)]
+    n_hidden_states = [n for i in range(m)]
 
     time_df = pd.DataFrame(
         columns=['systems', 'states', 'random', 'trial', 'em', 'vi', 'gibbs'])
@@ -277,7 +274,7 @@ def main(argv):
         ll_df.loc[t, 'random'] = random_state
 
         gen = hmm_gen.FactoredHMMGenerativeModel(
-            ns_hidden_states=ns_hidden_states,
+            n_hidden_states=n_hidden_states,
             n_gaussian_features=4,
             n_categorical_features=0,
             random_state=random_state)
@@ -290,7 +287,7 @@ def main(argv):
         vec_list = list(
             itertools.product(*[[t
                                  for t in range(n)]
-                                for n in gen.ns_hidden_states]))
+                                for n in gen.n_hidden_states]))
 
         flattened_state_dict = {i: vec_list[i] for i in range(len(vec_list))}
         flattened_state_dict_inv = {
@@ -350,6 +347,7 @@ def main(argv):
                 logging.info("...test_ll: {}".format(em_test_ll))
 
             except:
+                em = "other"
                 em_random_state = em_random_state + 1
                 logging.info("EM: {}".format(em))
 

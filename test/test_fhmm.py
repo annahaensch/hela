@@ -82,10 +82,10 @@ def test_model_sampling_and_inference(generative_model):
     assert Gamma.shape[0] == dataset.shape[0]
 
     # Make sure that the subdiagonal terms of Gamma sum to 1.
-    csum = np.concatenate(([0], np.cumsum(model.ns_hidden_states)))
+    csum = np.concatenate(([0], np.cumsum(model.n_hidden_states)))
     Gamma_sum = np.array([[
         g.diagonal()[csum[i]:csum[i + 1]]
-        for i in range(len(model.ns_hidden_states))
+        for i in range(len(model.n_hidden_states))
     ]
                           for g in Gamma])
     assert np.all([[np.sum(d) == 1 for d in g] for g in Gamma_sum])
@@ -117,7 +117,7 @@ def test_learning_with_gibbs(generative_model):
     # probabilities sum to the proper value.
     assert np.all(
         np.sum(np.sum(model.transition_matrix, axis=2), axis=1) -
-        model.ns_hidden_states < 1e-08)
+        model.n_hidden_states < 1e-08)
 
     assert np.all(
         (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)
@@ -169,7 +169,7 @@ def test_learning_with_distributed_gibbs(generative_model):
     # probabilities sum to the proper value.
     assert np.all(
         np.sum(np.sum(model.transition_matrix, axis=2), axis=1) -
-        model.ns_hidden_states < 1e-08)
+        model.n_hidden_states < 1e-08)
 
     assert np.all(
         (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)

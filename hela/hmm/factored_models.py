@@ -15,167 +15,80 @@ from .graphical_models.DynamicBayesianNetwork import fhmm_model_to_graph
 from .utils import *
 
 
-class FactoredHMMConfiguration(ABC):
+class FactoredHMMConfiguration(HMMConfiguration):
     """ Abstract base class for fHMM configuration. """
 
-    def __init__(self,
-                 n_hidden_states,
-                 random_state=0,
-                 hidden_state_vectors=None,
-                 hidden_state_vector_to_enum={},
-                 hidden_state_enum_to_vector={},
-                 categorical_features=[],
-                 categorical_values=None,
-                 categorical_vector_to_enum={},
-                 categorical_enum_to_vector={},
-                 gaussian_features=[],
-                 gaussian_values=None,
-                 model_parameter_constraints=None):
+    def __init__(self, n_hidden_states = None,
+                hidden_state_vectors = None,
+                hidden_state_enum = None,
+                hidden_state_vector_to_enum = None,
+                hidden_state_enum_to_vector = None
+                 ):
 
-        self.random_state = random_state
-
-        self.n_hidden_states = n_hidden_states
+        super().__init__(n_hidden_states)
         self.hidden_state_vectors = hidden_state_vectors
+        self.hidden_state_enum = hidden_state_enum
         self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
         self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
 
-        self.categorical_features = categorical_features
-        self.categorical_values = categorical_values
-        self.categorical_vector_to_enum = categorical_vector_to_enum
-        self.categorical_enum_to_vector = categorical_enum_to_vector
-
-        self.gaussian_features = gaussian_features
-        self.gaussian_values = gaussian_values
-
-        self.model_parameter_constraints = model_parameter_constraints
-
-    @classmethod
-    def from_spec(cls, spec, random_state=0):
+    def _from_spec(self, spec):
         """ Factored HMM specific implementation of `from_spec`. 
 
         Arguments: 
             spec: (dict) model specification.
-            random_state: (int) value to set random state.
 
         Returns: 
             Model configuration which can be used to instantiate 
             an instance of FactoredHMM.
         """
-        model_config = cls(n_hidden_states=spec['n_hidden_states'])
-        model_config.model_type = 'FactoredHMM'
-        model_config.random_state = random_state
-
-        # Get mappings between hidden state vectors and enumerations.
-        hidden_state_values = [
-            [t for t in range(i)] for i in model_config.n_hidden_states
-        ]
-        hidden_state_vectors = [
-            list(t) for t in itertools.product(*hidden_state_values)
-        ]
-        model_config.hidden_state_vectors = hidden_state_vectors
-        model_config.hidden_state_vector_to_enum = {
-            str(hidden_state_vectors[i]): i
-            for i in range(len(hidden_state_vectors))
-        }
-        model_config.hidden_state_enum_to_vector = {
-            i: hidden_state_vectors[i]
-            for i in range(len(hidden_state_vectors))
-        }
-
-        categorical_observations = {
-            obs['name']: obs['values']
-            for obs in spec['observations']
-            if obs['type'] == 'finite'
-        }
-
-        # Add categorical observation data to model config.
-        if len(categorical_observations) > 0:
-            categorical_observations = {
-                k: categorical_observations[k]
-                for k in sorted(categorical_observations.keys())
-            }
-            values = [sorted(v) for k, v in categorical_observations.items()]
-            categorical_vectors = [list(t) for t in itertools.product(*values)]
-            categorical_features = sorted(list(categorical_observations.keys()))
-            categorical_values = pd.DataFrame(
-                categorical_vectors, columns=categorical_features)
-
-            model_config.categorical_features = categorical_features
-            model_config.categorical_values = categorical_values
-            model_config.categorical_vector_to_enum = {
-                str(list(row)): i
-                for i, row in model_config.categorical_values.iterrows()
-            }
-            model_config.categorical_enum_to_vector = {
-                i: list(row)
-                for i, row in model_config.categorical_values.iterrows()
-            }
-
-        # Add gaussian observation data to model config.
-        continuous_features = [
-            obs for obs in spec['observations'] if obs['type'] == 'continuous'
-        ]
-        gaussian_features = [
-            obs['name']
-            for obs in continuous_features
-            if obs['dist'].lower() == 'gaussian'
-        ]
-        model_config.gaussian_features = sorted(gaussian_features)
-        model_config.gaussian_values = pd.DataFrame(
-            columns=model_config.gaussian_features)
-
-        model_config.model_parameter_constraints = spec[
-            'model_parameter_constraints']
-
-        return model_config
-
-    def to_model(self, set_random_state=0):
-        """ Factored HMM specific implementation of `to_model`. """
-        random_state = np.random.RandomState(set_random_state)
-        return FactoredHMM.from_config(self, random_state)
-
-
-class FactoredHMM(ABC):
-    """ Model class for factored hidden Markov models """
-
-    def __init__(
-            self,
-            model_config,
-            random_state=None,
-            n_hidden_states=None,
-            hidden_state_vectors=None,
-            hidden_state_vector_to_enum=None,
-            hidden_state_enum_to_vector=None,
-            categorical_features=None,
-            gaussian_features=None,
-            transition_matrix=None,
-            initial_state_matrix=None,
-            categorical_model=None,
-            # TODO (isalju): incorporate gaussian mixture models
-            gaussian_model=None,
-            training_dict={},
-            graph=None):
-
-        self.model_config = model_config
-        self.random_state = random_state
-
+        n_hidden_states = spec['n_hidden_states']
+        hidden_state_values = [[t for t in range((i))] for i in n_hidden_states]
+        hidden_state_vectors = [list(t) for t in itertools.product(*hidden_state_values)]
+        hidden_state_vector_to_enum = {str(hidden_state_vectors[i]):i for i in range(len(hidden_state_vectors))}
+        hidden_state_enum_to_vector = {i:hidden_state_vectors[i] for i in range(len(hidden_state_vectors))}
+        hidden_state_enum = list(hidden_state_enum_to_vector.keys())
+        hidden_state_vectors = list(hidden_state_enum_to_vector.values())
+        
         self.n_hidden_states = n_hidden_states
-        self.hidden_state_vectors = hidden_state_vectors
+        self.hidden_state_vectors = list(hidden_state_enum_to_vector.values())
+        self.hidden_state_enum = list(hidden_state_enum_to_vector.keys())
         self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
         self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
+        self.model_type = 'FactoredHMM'
 
-        self.categorical_features = categorical_features
-        self.gaussian_features = gaussian_features
+        return self
 
-        self.transition_matrix = transition_matrix
-        self.initial_state_matrix = initial_state_matrix
+    def _to_model(self, set_random_state=0):
+        """ Factored HMM specific implementation of `to_model`. """
+        return FactoredHMM.from_config(self, set_random_state)
 
-        self.categorical_model = categorical_model
-        # TODO (isalju): incorporate gaussian mixture models
-        self.gaussian_model = gaussian_model
 
-        self.training_dict = training_dict
-        # self.graph = graph
+class FactoredHMM(HiddenMarkovModel):
+    """ Model class for factored hidden Markov models """
+
+    def __init__(self, model_config):
+
+        super().__init__(model_config)
+        self.set_random_state = None
+        self.seed_parameters = {}
+
+        self.n_hidden_states = None
+        self.hidden_state_vectors = None
+        self.hidden_state_enum = None
+        self.hidden_state_vector_to_enum = None
+        self.hidden_state_enum_to_vector = None
+
+        self.finite_features = None
+        self.finite_values = None
+        self.gaussian_features = None
+
+        self.transition_matrix = None
+        self.initial_state_matrix = None
+
+        self.categorical_model = None
+        self.gaussian_model = None
+
+        self.training_dict = None
 
     @classmethod
     def from_config(cls, model_config, random_state):
@@ -186,7 +99,7 @@ class FactoredHMM(ABC):
             random_state: (int) set random state.
 
         Returns: 
-            Instantiated FactoredHMM instace.
+            Instantiated FactoredHMM instance.
         """
         model = cls(model_config=model_config)
         model.random_state = random_state
@@ -196,18 +109,25 @@ class FactoredHMM(ABC):
         # Get mappings between hidden state vectors and enumerations
         model.n_hidden_states = model_config.n_hidden_states
         model.hidden_state_vectors = model_config.hidden_state_vectors
+        model.hidden_state_enum = model_config.hidden_state_enum
         model.hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum
         model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
 
         # Get categorical features from model_config.
-        model.categorical_features = model_config.categorical_features
-        if len(model.categorical_features) > 0:
-            model.categorical_model = CategoricalModel.from_config(model_config)
+        model.finite_features = model_config.finite_features
+        model.finite_values = model_config.finite_values
+        if len(model.finite_features) > 0:
+            model.categorical_model = CategoricalModel.from_config(model_config,random_state)
 
         # Get continuous features from model_config.
-        model.gaussian_features = model_config.gaussian_features
-        if len(model.gaussian_features) > 0:
-            model.gaussian_model = GaussianModel.from_config(model_config)
+        gaussian_features = [
+            i for i in model_config.continuous_features if model_config.continuous_values.loc[
+                'distribution', i].lower() == 'gaussian'
+              ]
+        gaussian_features.sort()
+        model.gaussian_features = gaussian_features
+        if len(gaussian_features) > 0:
+            model.gaussian_model = GaussianModel.from_config(model_config, random_state)
 
         # TODO: (AH) These matrix copies are here because model training was
         # chaning the underlying model config. This is probably easy to fix.
@@ -229,7 +149,7 @@ class FactoredHMM(ABC):
         """
         return FactoredHMMLearningAlgorithm(self)
 
-    def _load_inference_interface(self):
+    def _load_inference_interface(self, use_jax = False):
         """ Returns FactoredHMMInference object
 
         Returns:
@@ -361,14 +281,14 @@ class FactoredHMM(ABC):
             new_model.gaussian_model.means = self.gaussian_model.update_means(
                 data, Gamma)
 
-            # Update covariance.
-            new_model.gaussian_model.covariance = self.gaussian_model.update_covariance(
+            # Update covariances.
+            new_model.gaussian_model.covariances = self.gaussian_model.update_covariance(
                 new_model.gaussian_model.means, data, Gamma)
 
             msg = "Covariance update is not positive definite: {}".format(
-                new_model.gaussian_model.covariance)
+                new_model.gaussian_model.covariances)
             assert np.all(
-                np.linalg.eigvals(new_model.gaussian_model.covariance) > 0), msg
+                np.linalg.eigvals(new_model.gaussian_model.covariances) > 0), msg
 
         return new_model
 
@@ -376,41 +296,34 @@ class FactoredHMM(ABC):
 class CategoricalModel(FactoredHMM):
 
     def __init__(self,
-                 model_config,
                  n_hidden_states=None,
-                 hidden_state_vector_to_enum=None,
-                 hidden_state_enum_to_vector=None,
-                 categorical_features=None,
-                 categorical_values=None,
-                 categorical_vector_to_enum=None,
-                 categorical_enum_to_vector=None,
+                 finite_features=None,
+                 finite_values=None,
+                 finite_values_dict=None,
+                 finite_values_dict_inverse=None,
                  emission_matrix=None):
-        super().__init__(
-            model_config=model_config,
-            n_hidden_states=n_hidden_states,
-            hidden_state_vector_to_enum=hidden_state_vector_to_enum,
-            hidden_state_enum_to_vector=hidden_state_enum_to_vector)
-        self.categorical_features = categorical_features
-        self.categorical_values = categorical_values
-        self.categorical_vector_to_enum = categorical_vector_to_enum
-        self.categorical_enum_to_vector = categorical_enum_to_vector
+        self.n_hidden_states = n_hidden_states
+        self.finite_features = finite_features
+        self.finite_values = finite_values
+        self.finite_values_dict = finite_values_dict
+        self.finite_values_dict_inverse = finite_values_dict_inverse
         self.emission_matrix = emission_matrix
 
     @classmethod
-    def from_config(cls, model_config):
+    def from_config(cls, model_config, random_state):
         """ Return instantiated CategoricalModel object)
         """
         categorical_model = cls(
-            model_config=model_config,
             n_hidden_states=model_config.n_hidden_states,
-            hidden_state_vector_to_enum=model_config.
-            hidden_state_vector_to_enum,
-            hidden_state_enum_to_vector=model_config.hidden_state_enum_to_vector
+            finite_features = model_config.finite_features,
+            finite_values = model_config.finite_values,
+            finite_values_dict = model_config.finite_values_dict,
+            finite_values_dict_inverse = model_config.finite_values_dict_inverse
         )
-        categorical_model.categorical_features = model_config.categorical_features
-        categorical_model.categorical_values = model_config.categorical_values
-        categorical_model.categorical_vector_to_enum = model_config.categorical_vector_to_enum
-        categorical_model.categorical_enum_to_vector = model_config.categorical_enum_to_vector
+        categorical_model.hidden_state_vectors = model_config.hidden_state_vectors,
+        categorical_model.hidden_state_enum = model_config.hidden_state_enum,
+        categorical_model.hidden_state_vector_to_enum=model_config.hidden_state_vector_to_enum,
+        categorical_model.hidden_state_enum_to_vector=model_config.hidden_state_enum_to_vector
 
         categorical_model.emission_matrix = model_config.model_parameter_constraints[
             'emission_constraints']
@@ -432,8 +345,8 @@ class CategoricalModel(FactoredHMM):
             enumerated in the "flattened" sense.  
         """
         flattened_observations = [
-            self.categorical_vector_to_enum[str(list(v))]
-            for v in np.array(data.loc[:, self.categorical_features])
+            self.finite_values_dict_inverse[str(list(v))]
+            for v in np.array(data.loc[:, self.finite_features])
         ]
         emission = self.emission_matrix
 
@@ -468,9 +381,9 @@ class CategoricalModel(FactoredHMM):
                          for i in range(len(h_vec))])
                 for g in Gamma_split
             ]
-            for d, cat_vec in self.categorical_enum_to_vector.items():
+            for d, cat_vec in self.finite_values_dict.items():
                 data_at_d = np.all(
-                    np.array(data.loc[:, self.categorical_features]) == cat_vec,
+                    np.array(data.loc[:, self.finite_features]) == cat_vec,
                     axis=1).astype(int)
                 emission_matrix[d][i] = np.sum(
                     data_at_d * Gamma_at_v) / np.sum(Gamma_at_v)
@@ -481,49 +394,41 @@ class CategoricalModel(FactoredHMM):
 class GaussianModel(FactoredHMM):
 
     def __init__(self,
-                 model_config,
+                 model_config=None,
                  n_hidden_states=None,
-                 hidden_state_vector_to_enum=None,
-                 hidden_state_enum_to_vector=None,
                  gaussian_features=None,
                  dims=None,
                  means=None,
-                 covariance=None):
-        super().__init__(
-            model_config=model_config,
-            n_hidden_states=n_hidden_states,
-            hidden_state_vector_to_enum=hidden_state_vector_to_enum,
-            hidden_state_enum_to_vector=hidden_state_enum_to_vector)
+                 covariances=None):
         self.n_hidden_states = n_hidden_states
-        self.hidden_state_vector_to_enum = hidden_state_vector_to_enum
-        self.hidden_state_enum_to_vector = hidden_state_enum_to_vector
         self.gaussian_features = gaussian_features
         self.dims = dims
         self.means = means
-        self.covariance = covariance
+        self.covariances = covariances
 
     @classmethod
-    def from_config(cls, model_config):
+    def from_config(cls, model_config, random_state):
         """ Return instantiated GaussianModel object)
         """
-        gaussian_model = cls(
-            model_config=model_config,
-            n_hidden_states=model_config.n_hidden_states,
-            hidden_state_vector_to_enum=model_config.
-            hidden_state_vector_to_enum,
-            hidden_state_enum_to_vector=model_config.hidden_state_enum_to_vector
-        )
+        gaussian_model = cls(n_hidden_states=model_config.n_hidden_states)
+        gaussian_model.hidden_state_vectors = model_config.hidden_state_vectors,
+        gaussian_model.hidden_state_enum = model_config.hidden_state_enum,
+        gaussian_modelhidden_state_vector_to_enum=model_config.hidden_state_vector_to_enum,
+        gaussian_model.hidden_state_enum_to_vector=model_config.hidden_state_enum_to_vector
 
-        gaussian_features = model_config.gaussian_features
-        gaussian_values = model_config.gaussian_values
+        continuous_values = model_config.continuous_values
+        gaussian_features = [
+            i for i in model_config.continuous_features if model_config.continuous_values.loc[
+                'distribution', i].lower() == 'gaussian'
+              ]
+        gaussian_features.sort()
+        gaussian_model.gaussian_features = gaussian_features
         gaussian_params = model_config.model_parameter_constraints[
             'gaussian_parameter_constraints']
 
-        # Gather gaussian features and values.
-        gaussian_model.gaussian_features = model_config.gaussian_features
         gaussian_model.dims = len(gaussian_features)
         gaussian_model.means = gaussian_params['means']
-        gaussian_model.covariance = gaussian_params['covariance']
+        gaussian_model.covariances = gaussian_params['covariances']
 
         # TODO: (AH) Add option to randomly seed gaussian parameters.
 
@@ -569,7 +474,7 @@ class GaussianModel(FactoredHMM):
             k: self.mean_for_hidden_state_vector(v)
             for k, v in self.hidden_state_enum_to_vector.items()
         }
-        cov = self.covariance
+        cov = self.covariances
 
         # Initialize dataframe that will hold probablites for observations
         # (rows) conditioned on hidden states (columns)
@@ -1223,13 +1128,13 @@ class FactoredHMMInference(ABC):
         model = self.model
 
         if model.gaussian_model:
-            inv_cov = np.linalg.inv(model.gaussian_model.covariance)
+            inv_cov = np.linalg.inv(model.gaussian_model.covariances)
             gauss_data = np.array(data.loc[:, model.gaussian_features])
 
         if model.categorical_model:
             cat_data_enum = [
-                model.categorical_model.categorical_vector_to_enum[str(list(d))]
-                for d in np.array(data.loc[:, model.categorical_features])
+                model.categorical_model.finite_values_dict_inverse[str(list(d))]
+                for d in np.array(data.loc[:, model.finite_features])
             ]
 
         h_t_new = np.zeros((len(data), len(model.n_hidden_states),
@@ -1257,7 +1162,7 @@ class FactoredHMMInference(ABC):
                 gaussian_upgrade = (residual_error @ inv_cov @ mean) - (
                     delta / 2)
 
-            if len(model.categorical_features) > 0:
+            if len(model.finite_features) > 0:
                 hidden_states_enum = [[
                     k
                     for k, v in model.hidden_state_enum_to_vector.items()
@@ -1452,13 +1357,13 @@ def _factored_hmm_to_discrete_hmm(model):
     observations = []
 
     # Assemble categorical features.
-    if len(model.categorical_features) > 0:
-        categorical_values = model.categorical_model.categorical_values
-        for c in sorted(categorical_values.columns):
+    if len(model.finite_features) > 0:
+        finite_values = model.categorical_model.finite_values
+        for c in sorted(finite_values.columns):
             observations.append({
                 'name': c,
                 'type': 'finite',
-                'values': sorted(categorical_values[c].unique())
+                'values': sorted(finite_values[c].unique())
             })
         model_parameter_constraints[
             'emission_constraints'] = model.categorical_model.emission_matrix
@@ -1478,7 +1383,7 @@ def _factored_hmm_to_discrete_hmm(model):
             for v in model.hidden_state_vectors
         ]
         gmm_parameter_constraints['covariances'] = n_hidden_states * [[
-            model.gaussian_model.covariance
+            model.gaussian_model.covariances
         ]]
         gmm_parameter_constraints['component_weights'] = np.array(
             n_hidden_states * [[[1]]])

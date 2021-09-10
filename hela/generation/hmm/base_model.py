@@ -472,7 +472,7 @@ def data_to_fhmm_training_spec(hidden_states,
 
         gaussian_parameter_constraints = {
             "means": means,
-            "covariance": covariance
+            "covariances": covariance
         }
         model_parameter_constraints[
             "gaussian_parameter_constraints"] = gaussian_parameter_constraints
