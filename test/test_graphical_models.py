@@ -13,7 +13,7 @@ from hela.hmm.graphical_models.ContinuousFactor import ContinuousFactor
 @pytest.fixture(scope="module")
 def generative_model():
     gen_model = gen.FactoredHMMGenerativeModel(
-        ns_hidden_states=[3, 2],
+        n_hidden_states=[3, 2],
         n_categorical_features=2,
         n_gaussian_features=1)
 
@@ -23,7 +23,7 @@ def generative_model():
 
     fhmm_training_spec = gen.data_to_fhmm_training_spec(
         factored_hidden_states,
-        gen_model.ns_hidden_states,
+        gen_model.n_hidden_states,
         dataset,
         categorical_features=list(gen_model.categorical_values.columns),
         gaussian_features=list(gen_model.gaussian_values.columns))
@@ -38,7 +38,7 @@ def generative_model():
 @pytest.fixture(scope="module")
 def generative_categorical_model():
     gen_model = gen.FactoredHMMGenerativeModel(
-        ns_hidden_states=[3, 2],
+        n_hidden_states=[3, 2],
         n_categorical_features=2,
         n_gaussian_features=0)
 
@@ -48,7 +48,7 @@ def generative_categorical_model():
 
     fhmm_training_spec = gen.data_to_fhmm_training_spec(
         factored_hidden_states,
-        gen_model.ns_hidden_states,
+        gen_model.n_hidden_states,
         dataset,
         categorical_features=list(gen_model.categorical_values.columns),
         gaussian_features=[])
@@ -85,12 +85,12 @@ def test_continuous_factors(generative_model):
     assert continuous_factors0[1].weights.all() == model.gaussian_model.means[
         1].all()
     assert continuous_factors0[
-        0].covariance.all() == model.gaussian_model.covariance.all()
+        0].covariance.all() == model.gaussian_model.covariances.all()
 
     # cardinality of latent nodes associated with continuous_factors is equal to hidden states
     evidence_cards = [factor.cardinality[1] for factor in continuous_factors0]
     variable_cards = [factor.cardinality[0] for factor in continuous_factors0]
-    assert evidence_cards == model.ns_hidden_states
+    assert evidence_cards == model.n_hidden_states
 
     # cardinality of continuous observation nodes is equal to gaussian features
     assert variable_cards[0] == variable_cards[1] == len(
@@ -109,7 +109,7 @@ def test_forward_backward(generative_categorical_model):
     dataset = generative_categorical_model["dataset"]
     system_graphs = fhmm_graph.generate_system_graphs()
     # Correct number of graphs are generated
-    assert len(system_graphs) == len(model.ns_hidden_states)
+    assert len(system_graphs) == len(model.n_hidden_states)
 
     inference = dbn_inf.DBNInference(system_graphs[0])
     probability = inference.forward_backward(dataset)
