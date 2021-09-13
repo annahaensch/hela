@@ -105,10 +105,10 @@ def train_hmm_em(gen, random_state, train_data):
     untrained_hmm_model = hmm_model_config.to_model(
         set_random_state=random_state)
 
-    em_alg = hmm.LearningAlgorithm()
+    em_alg = untrained_hmm_model.load_learning_interface()
 
     em_hmm_model = em_alg.run(
-        untrained_hmm_model, train_data, n_em_iterations=ITERATIONS)
+        untrained_hmm_model, train_data, training_iterations=ITERATIONS)
 
     return em_alg, em_hmm_model
 
@@ -333,7 +333,7 @@ def main(argv):
                 time_df.loc[t, 'em'] = (time.time() - em_start) / ITERATIONS
 
                 em = "successful"
-                logging.info("\n EM: {} - {}".format(em, em_random_state))
+                logging.info("\n EM: {} - random state {}".format(em, em_random_state))
 
                 em_learning_ll = compute_learning_ll(em_alg, train_data, "hmm")
                 em_df[str(random_state)] = em_learning_ll
@@ -347,7 +347,6 @@ def main(argv):
                 logging.info("...test_ll: {}".format(em_test_ll))
 
             except:
-                em = "other"
                 em_random_state = em_random_state + 1
                 logging.info("EM: {}".format(em))
 
@@ -363,7 +362,7 @@ def main(argv):
                 time_df.loc[t, 'vi'] = (time.time() - vi_start) / ITERATIONS
 
                 vi = "successful"
-                logging.info("\n VI: {} - {}".format(vi, vi_random_state))
+                logging.info("\n VI: {} - random state {}".format(vi, vi_random_state))
 
                 vi_learning_ll = compute_learning_ll(vi_alg, train_data, "fhmm")
                 vi_df[str(random_state)] = vi_learning_ll
@@ -395,7 +394,7 @@ def main(argv):
                     time.time() - gibbs_start) / ITERATIONS
 
                 gibbs = "successful"
-                logging.info("\n Gibbs: {} - {}".format(gibbs,
+                logging.info("\n Gibbs: {} - random state {}".format(gibbs,
                                                         gibbs_random_state))
 
                 gibbs_learning_ll = compute_learning_ll(gibbs_alg, train_data,
