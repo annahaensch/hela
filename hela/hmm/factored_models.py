@@ -1296,7 +1296,7 @@ class FactoredHMMInference(ABC):
                 forward_state = int(best_path[m][t + 1])
                 best_path[m][t] = backpoint_matrix[t + 1][m][forward_state]
 
-        return pd.DataFrame(best_path.T, index=data.index)
+        return pd.DataFrame(best_path.T.astype(int), index=data.index)
 
 
 def _sample(probability_distribution, sample_parameter):
