@@ -10,26 +10,25 @@ from scipy import linalg, stats
 from scipy.special import logsumexp
 
 from .base_models import (LOG_ZERO, HiddenMarkovModel, HMMConfiguration,
-                          HMMForecasting, HMMValidationMetrics)
+                          HMMLearningAlgorithm)
 from .utils import *
 
 
 class DiscreteHMMConfiguration(HMMConfiguration):
     """ Intilialize HMM configuration from specification dictionary. """
 
-    def __init__(self, hidden_state_type=None):
-        super().__init__(hidden_state_type)
-        self.n_hidden_states = None
+    def __init__(self, n_hidden_states=None):
+        super().__init__(n_hidden_states)
 
     def _from_spec(self, spec):
         """ Discrete HMM specific implementation of `from_spec`. """
-        self.n_hidden_states = spec['hidden_state']['count']
+        self.n_hidden_states = spec['n_hidden_states']
         self.model_type = 'DiscreteHMM'
         return self
 
-    def _to_model(self, random_state):
+    def _to_model(self, set_random_state):
         """ Discrete HMM specific implementation of `to_model`. """
-        return DiscreteHMM.from_config(self, random_state)
+        return DiscreteHMM.from_config(self, set_random_state)
 
 
 class DiscreteHMM(HiddenMarkovModel):
@@ -37,9 +36,9 @@ class DiscreteHMM(HiddenMarkovModel):
 
     def __init__(self, model_config=None):
         super().__init__(model_config)
+        self.set_random_state = None
         self.random_state = None
         self.trained = False
-        # TODO: @annahaensch deal with other continuous observation types.
 
         self.n_hidden_states = None
         self.seed_parameters = {}
@@ -56,9 +55,13 @@ class DiscreteHMM(HiddenMarkovModel):
         self.gaussian_mixture_model = None
 
     @classmethod
-    def from_config(cls, model_config, random_state):
+    def from_config(cls, model_config, set_random_state):
         model = cls(model_config=model_config)
         model.n_hidden_states = model_config.n_hidden_states
+        model.set_random_state = set_random_state
+
+        # Set random state.
+        random_state = np.random.RandomState(set_random_state)
         model.random_state = random_state
 
         # Get finite features from model_config.
@@ -106,18 +109,13 @@ class DiscreteHMM(HiddenMarkovModel):
 
         return model
 
+    def _load_learning_interface(self):
+        """ Loads DiscreteHMM specific learning interface."""
+        return DiscreteHMMLearningAlgorithm()
+
     def _load_inference_interface(self, use_jax):
         """ Loads DiscreteHMM specific inference interface."""
         return DiscreteHMMInferenceResults(self, use_jax)
-
-    def _load_validation_interface(self, actual_data, use_jax):
-        """ Loads DiscreteHMM specific validation interface.
-        """
-        return DiscreteHMMValidationMetrics(self, actual_data, use_jax)
-
-    def _load_forecasting_interface(self, use_jax):
-        """ Loads DiscreteHMM specific forecasting interface."""
-        return DiscreteHMMForecasting(self, use_jax)
 
     def log_transition_from_constraints(self, transition_constraints=None):
         """ Return log transition matrix with fixed transition constraints"""
@@ -250,84 +248,48 @@ class CategoricalModel(DiscreteHMM):
 
         return log_emission
 
-    def log_probability(self, finite_data):
+    def log_probability(self, finite_data_enum):
         """ Return log probability of finite observation given hidden state
 
         Arguments:
-            finite_data: observed finite data as Series.
+            finite_data_enum: (Series) finite observations by observation 
+                vector enumeration (i.e. 0 = (a,a), 1 = (a,b), etc.).
 
         Returns:
-            np.array where entry [t,i] is the log probability of emitting finite observation t in hidden state i.
+            Array where entry [t,i] is the log probability of observing the 
+            finite emission at time t given hidden state i.
         """
-        n_observations = finite_data.shape[0]
+        n_observations = finite_data_enum.shape[0]
         log_emission = np.array(self.log_emission_matrix)
 
         return pd.DataFrame(
             [
                 list(prob) for prob in np.array(
-                    finite_data.map(lambda x: log_emission[x]))
+                    finite_data_enum.map(lambda x: log_emission[x]))
             ],
-            index=finite_data.index)
+            index=finite_data_enum.index)
 
-    def update_log_emission_matrix(self, gamma, finite_state_data):
+    def update_log_emission_matrix(self, gamma, finite_data_enum):
         """ Update log emission matrix for categorical model
 
         Arguments:
             gamma: output of DiscreteHMMInferenceResults
-            finite_states_data: series of finite state data
+            finite_data_enum: (Series) finite observations by observation 
+                vector enumeration (i.e. 0 = (a,a), 1 = (a,b), etc.).
 
         Returns:
-            Updated log emission matrix
+            Updated log emission matrix.
         """
         log_emission_matrix = np.full(
             (np.array(self.log_emission_matrix).shape), LOG_ZERO)
-        gamma_df = pd.DataFrame(gamma, index=finite_state_data.index)
+        gamma_df = pd.DataFrame(gamma, index=finite_data_enum.index)
         for l in self.finite_values.index:
-            if l in finite_state_data.unique():
-                l_index = finite_state_data[finite_state_data == l].index
+            if l in finite_data_enum.unique():
+                l_index = finite_data_enum[finite_data_enum == l].index
                 l_gamma_df = gamma_df.loc[l_index]
                 log_emission_matrix[l] = logsumexp(np.array(l_gamma_df), axis=0)
         log_emission_matrix -= logsumexp(gamma, axis=0)
         return log_emission_matrix
-
-    def probability_of_hidden_state_from_discrete_obs(
-            self, partial_finite_observation):
-        """ Return probabilites associated to each hidden state given the partial observation.
-
-        Arguments:
-            partial_partial_observation: single row of a dataframe of finite observations.
-
-        Returns:
-            Array of probabilities where the ith entry is the probability of hidden state i given the partial finite observation.
-
-        TODO @annahaensch: this probabilty needs to be refined to include known sequential data.
-        """
-        finite_values = self.finite_values
-        emission_matrix = np.exp(np.array(self.log_emission_matrix))
-        known_features = partial_finite_observation.columns[
-            ~partial_finite_observation.isna().any()].tolist()
-        if len(known_features) == 0:
-            return np.ones(self.n_hidden_states)
-        elif len(known_features) == partial_finite_observation.shape[1]:
-            observation_tuple = str(
-                list(partial_finite_observation.loc[:, self.finite_features]
-                     .iloc[0]))
-            observation_state = self.finite_values_dict_inverse[
-                observation_tuple]
-            return emission_matrix[observation_state]
-        else:
-            eligible_states = []
-            for feat in known_features:
-                eligible_values = finite_values[finite_values[
-                    feat] == partial_finite_observation[feat][0]]
-                eligible_states.append([
-                    self.finite_values_dict_inverse[str(list(x))]
-                    for x in np.array(eligible_values)
-                ])
-
-            possible_states = list(
-                set.intersection(*[set(x) for x in eligible_states]))
-            return np.sum(emission_matrix[possible_states], axis=0)
 
 
 class GaussianMixtureModel(DiscreteHMM):
@@ -406,8 +368,8 @@ class GaussianMixtureModel(DiscreteHMM):
             for i in range(weights.shape[0]):
                 rand_init = random_state.rand(gmm.n_gmm_components)
                 rand_init = rand_init / np.sum(rand_init)
-                weights[i,:] = rand_init
-            
+                weights[i, :] = rand_init
+
             gmm.component_weights = weights
 
         return gmm
@@ -494,7 +456,7 @@ class GaussianMixtureModel(DiscreteHMM):
         return means
 
     def update_covariances(self, gaussian_data, gamma_by_component):
-        """ Return updated covarinaces for current hmm parameters.
+        """ Return updated covariances for current hmm parameters.
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
@@ -566,36 +528,55 @@ class GaussianMixtureModel(DiscreteHMM):
 
         return new_gmm
 
-    def marginal_probability_of_gaussian_observation_by_hidden_state(
-            self, partial_gaussian_observation):
-        """ Return marginal probabilty of observation by hidden state
+
+class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
+    """ Discrete model class for HMM learning algorithms """
+
+    def __init__(self):
+        self.data = None
+        self.finite_data_enum = None
+        self.gaussian_data = None
+        self.other_data = None
+        self.sufficient_statistics = []
+        self.model_results = []
+
+    def run(self, model, data, training_iterations, method="em", use_jax=False):
+        """ Base class for EM learning methods.
 
         Arguments:
-            partial_gaussian_obervation: single row of an observation dataframe containing guassian obsevations or nan.
+            model: instance of DiscreteHMM
+            data: dataframe with hybrid data for training.
+            training_iterations: number of training iterations to carry out.
+            method: "em"
+            use_jax: (bool) If True, run distributed training using Jax. 
 
         Returns:
-            Array of probabilities of the given observation by hidden state
+            Trained instance of DiscreteHMM.  Also returns em training results.
         """
-        obs = np.array(partial_gaussian_observation.iloc[0])
-        nan_index = np.argwhere(np.isnan(obs)).flatten()
+        self.data = data
+        if len(model.finite_features) > 0:
+            self.finite_data_enum = get_finite_observations_from_data_as_enum(
+                model, data)
+        if len(model.continuous_features) > 0:
+            if model.gaussian_mixture_model:
+                self.gaussian_data = get_gaussian_observations_from_data(
+                    model, data)
 
-        if len(nan_index) == len(obs):
-            marginal_prob = np.full(self.n_hidden_states,
-                                    1 / self.n_hidden_states)
+        new_model = model.model_config.to_model(
+            set_random_state=model.set_random_state)
 
-        elif len(nan_index) == 0:
-            marginal_prob = np.exp(
-                np.array(self.log_probability(partial_gaussian_observation)))
+        for _ in range(training_iterations):
+            # e_step
+            expectation = new_model.load_inference_interface(use_jax)
+            expectation.compute_sufficient_statistics(data)
+            self.sufficient_statistics.append(expectation)
 
-        else:
-            marginal_prob = np.empty(self.n_hidden_states)
-            for i in range(self.n_hidden_states):
-                marginal_prob[
-                    i] = compute_marginal_probability_gaussian_mixture(
-                        partial_gaussian_observation, self.means[i],
-                        self.covariances[i], self.component_weights[i])
+            # m_step
+            new_model = new_model.update_model_parameters(
+                self.finite_data_enum, self.gaussian_data, expectation)
+            self.model_results.append(new_model)
 
-        return marginal_prob
+        return new_model
 
 
 class DiscreteHMMInferenceResults(ABC):
@@ -638,10 +619,10 @@ class DiscreteHMMInferenceResults(ABC):
         """
         log_probability = np.zeros((data.shape[0], self.model.n_hidden_states))
         if self.model.categorical_model is not None:
-            finite_state_data = get_finite_observations_from_data_as_states(
+            finite_data_enum = get_finite_observations_from_data_as_enum(
                 self.model, data)
             log_probability += np.array(
-                self.model.categorical_model.log_probability(finite_state_data))
+                self.model.categorical_model.log_probability(finite_data_enum))
         if self.model.gaussian_mixture_model is not None:
             gaussian_data = get_gaussian_observations_from_data(
                 self.model, data)
@@ -777,275 +758,6 @@ class DiscreteHMMInferenceResults(ABC):
 
         return hidden_states
 
-    def conditional_probability_of_partial_observation(self, observation):
-        """ Returns probability of partial observation by hidden state.
-
-        Arguments:
-            observation: single row of a dataframe of mixed partial data
-
-        Returns:
-            Array of length (number of hidden states) were entry i is the  conditional probability of the partial observation given hidden state i.
-
-        """
-        partial_finite_observation = get_finite_observations_from_data(
-            self.model, observation)
-        partial_gaussian_observation = get_gaussian_observations_from_data(
-            self.model, observation)
-
-        prob = []
-        if self.model.categorical_model is not None:
-            prob.append(
-                self.model.categorical_model.
-                probability_of_hidden_state_from_discrete_obs(
-                    partial_finite_observation))
-        if self.model.gaussian_mixture_model is not None:
-            prob.append(
-                self.model.gaussian_mixture_model.
-                marginal_probability_of_gaussian_observation_by_hidden_state(
-                    partial_gaussian_observation))
-        prob = np.prod(prob, axis=0)
-
-        return prob
-
-    def conditional_probability_of_hidden_states(self, data):
-        """ Returns dataframe of conditional probability of hidden state given observation.
-
-        Arguments:
-            data: dataframe with possible NaN entries
-
-        Returns:
-            dataframe where iloc[t,i] is the conditional probability of hidden state i
-            given the complete/partial/missing observation at time t.  For complete observations,
-            this is done using the gamma_chunked method, for partial/missing observations, this is
-            done with a modified forward algorithm, computing p(z_t = i | x_t, x_(t-1)).
-        """
-        log_transition = self.model.log_transition
-        nan_index = data[data.isna().any(axis=1)].index
-        # Do forward backward for complete chunks of data
-        if len(nan_index) < data.shape[0]:
-            cond_prob = self._gamma_chunked(data)
-
-        nan_index_total = data[data.isna().all(axis=1)].index
-        nan_index_partial = [
-            idx for idx in nan_index if not idx in nan_index_total
-        ]
-
-        for idx in nan_index:
-            if idx in nan_index_total:
-                if idx == data.index[0]:
-                    cond_prob.loc[idx] = np.log(
-                        np.full(self.model.n_hidden_states,
-                                1 / self.model.n_hidden_states))
-                else:
-                    i = data.index.get_loc(idx)
-                    cond_prob.loc[idx] = logsumexp(
-                        np.array(cond_prob.iloc[i - 1]).reshape(-1, 1) +
-                        log_transition,
-                        axis=1)
-            else:
-                i = data.index.get_loc(idx)
-                p = self.conditional_probability_of_partial_observation(
-                    (data.iloc[[i - 1]]))
-                log_probability = np.log(
-                    p, out=np.full(p.shape, LOG_ZERO), where=(p != 0))
-                alpha = self._compute_forward_probabilities(
-                    pd.DataFrame(log_probability.reshape(1, -1), index=[idx]))
-                cond_prob_of_partial = \
-                    self.conditional_probability_of_partial_observation(
-                    data.loc[[idx]])
-                log_cond_prob_of_partial = [
-                    np.log(p) if p > 0 else LOG_ZERO
-                    for p in cond_prob_of_partial.flatten()
-                ]
-                joint_prob = log_cond_prob_of_partial + logsumexp(
-                    alpha.reshape(-1, 1) + log_transition, axis=1)
-                cond_prob.loc[idx] = joint_prob - logsumexp(joint_prob)
-
-        return np.exp(cond_prob.loc[nan_index])
-
-    def impute_missing_data_single_observation(self,
-                                               observation,
-                                               hidden_state_prob,
-                                               method='argmax'):
-        """ Return most observation with missing data imputed
-
-        Arguments:
-            observation: single row of a dataframe of incomplete mixed data.
-            hidden_state_prob: vector of relative probabilities of hidden states
-            given observation.
-            method: method of imputing Gaussian data, can be either 'average'
-                (which imputes the weighted average of the means) or 'maximal'
-                (which imputes the means of the most probable state and
-                component).
-
-        Returns:
-            Observation with missing data replaced by most data most likely to
-            be observed given the current model.
-        """
-        new_observation = observation.copy()
-
-        if self.model.categorical_model is not None:
-            partial_finite_observation = get_finite_observations_from_data(
-                self.model, observation)
-            known_features = partial_finite_observation.columns[
-                ~(partial_finite_observation.isna().any())].tolist()
-            emission_matrix = np.exp(
-                np.array(self.model.categorical_model.log_emission_matrix))
-
-            if len(known_features) < len(self.model.finite_features):
-                eligible_values_index_list = []
-                finite_values = self.model.finite_values
-                if len(known_features) == 0:
-                    # Impute missing values when all data is missing.
-                    eligible_values_index_list = list(finite_values.index)
-                else:
-                    # Impute missing values when partial data is missing.
-                    for feat in known_features:
-                        val = partial_finite_observation.loc[:, feat][0]
-                        eligible_values_index_list.append(
-                            set(finite_values[finite_values[feat] == val]
-                                .index))
-                    eligible_values_index_list = [
-                        i for i in set.intersection(*eligible_values_index_list)
-                    ]
-                eligible_values_index_list.sort()
-                eligible_emissions = np.array(
-                    [emission_matrix[i] for i in eligible_values_index_list])
-                maximum_index = np.argmax(
-                    np.sum(hidden_state_prob * eligible_emissions, axis=1))
-                most_likely_observation = self.model.finite_values.iloc[[
-                    eligible_values_index_list[maximum_index]
-                ]]
-                for col in most_likely_observation.columns:
-                    new_observation.loc[new_observation.index[
-                        0], col] = most_likely_observation.loc[
-                            most_likely_observation.index[0], col]
-
-        if self.model.gaussian_mixture_model is not None:
-            partial_gaussian_observation = get_gaussian_observations_from_data(
-                self.model, observation)
-            obs = np.array(partial_gaussian_observation.iloc[0])
-            index_nan = np.argwhere(np.isnan(obs)).flatten()
-            unknown_values = partial_gaussian_observation.columns[index_nan]
-            if len(unknown_values) > 0:
-                means = np.array(self.model.gaussian_mixture_model.means)
-                covariances = np.array(
-                    self.model.gaussian_mixture_model.covariances)
-                component_weights = np.array(
-                    self.model.gaussian_mixture_model.component_weights)
-                if method == 'average':
-                    conditional_means_of_missing_values = np.empty(
-                        (self.model.n_hidden_states, len(index_nan)))
-                    for i in range(self.model.n_hidden_states):
-                        conditional_means_of_missing_values[
-                            i] = compute_mean_of_conditional_probability_gaussian_mixture(
-                                partial_gaussian_observation, means[i],
-                                covariances[i], component_weights[i])
-                    conditional_means_of_missing_values = np.sum(
-                        np.array(hidden_state_prob).reshape(-1, 1) *
-                        conditional_means_of_missing_values,
-                        axis=0)
-
-                if method == 'maximal':
-                    maximal_hidden_state = np.argmax(hidden_state_prob)
-                    conditional_means_of_missing_values = compute_mean_of_conditional_probability_gaussian_mixture(
-                        partial_gaussian_observation,
-                        means[maximal_hidden_state],
-                        covariances[maximal_hidden_state],
-                        component_weights[maximal_hidden_state])
-
-                if method == 'argmax':
-                    new_covariances = np.empty((np.array(covariances).shape[0],
-                                                np.array(covariances).shape[1],
-                                                len(index_nan), len(index_nan)))
-                    new_means = np.empty((np.array(means).shape[0],
-                                          np.array(means).shape[1],
-                                          len(index_nan)))
-                    for i in range(new_covariances.shape[0]):
-                        for j in range(new_covariances.shape[1]):
-                            new_covariances[i][
-                                j] = compute_covariance_of_conditional_probability_gaussian(
-                                    partial_gaussian_observation, means[i][j],
-                                    covariances[i][j])
-                            new_means[i][
-                                j] = compute_mean_of_conditional_probability_gaussian(
-                                    partial_gaussian_observation, means[i][j],
-                                    covariances[i][j])
-
-                    covariances = np.array(
-                        self.model.gaussian_mixture_model.covariances)
-                    means = np.array(self.model.gaussian_mixture_model.means)
-                    component_weights = np.array(
-                        self.model.gaussian_mixture_model.component_weights)
-                    probabilities = np.zeros((means.shape[0], means.shape[1]))
-                    for i in range(probabilities.shape[0]):
-                        for j in range(probabilities.shape[1]):
-                            pdf = np.exp(
-                                stats.multivariate_normal.logpdf(
-                                    means[i][j],
-                                    means[i][j],
-                                    covariances[i][j],
-                                    allow_singular=True))
-                            probabilities[i][j] += hidden_state_prob[
-                                i] * component_weights[i][j] * pdf
-
-                    max_index = np.where(
-                        probabilities == np.amax(probabilities))
-
-                    conditional_means_of_missing_values = new_means[max_index[
-                        0][0]][max_index[1][0]]
-
-            for i in range(len(index_nan)):
-                new_observation.loc[new_observation.index[0], unknown_values[
-                    i]] = conditional_means_of_missing_values[i]
-
-        return new_observation
-
-    def impute_missing_data(self, data, method='argmax'):
-        """ Return dataframe with missing data imputed
-
-        Arguments:
-            data: dataframe of observations with some entries as NaN.
-            method: method of imputing Gaussian data, can be either 'average' (imputes the weighted average of the means) or 'maximal' (imputes the means of the most probable state and component) or 'argmax' (imputes the mean with highest probability).
-        Returns:
-            Observation with missing data replaced by most data most likely to be observed given the current model.
-        """
-        imputed_data = data.copy()
-        # Make sure that integer columns are being cast as integers.
-        float_to_int = {
-            feature: "Int64"
-            for feature in imputed_data[self.model.finite_features]
-            .select_dtypes("float")
-        }
-        imputed_data = imputed_data.astype(float_to_int, errors='ignore')
-
-        incomplete_observations = data[data.isna().any(axis=1)]
-        complete_data_chunks = get_complete_data_chunks(data)
-
-        for idx in incomplete_observations.index:
-            if idx < complete_data_chunks.iloc[0, 0]:
-                if idx == data.index[0]:
-                    cond_prob = np.full(self.model.n_hidden_states,
-                                        1 / self.model.n_hidden_states)
-                    hidden_state_probabilities = pd.DataFrame(
-                        cond_prob.reshape(1, -1), index=[idx])
-                else:
-                    hidden_state_probabilities = self.conditional_probability_of_hidden_states(
-                        imputed_data.loc[:idx])
-            else:
-                start = complete_data_chunks[
-                    complete_data_chunks['end'] < idx].iloc[-1, 0]
-                hidden_state_probabilities = self.conditional_probability_of_hidden_states(
-                    imputed_data.loc[start:idx])
-
-            imputed_data.loc[[
-                idx
-            ]] = self.impute_missing_data_single_observation(
-                incomplete_observations.loc[[idx]],
-                np.array(hidden_state_probabilities.loc[idx]), method)
-
-        return imputed_data
-
     def _compute_forward_probabilities(self, log_probability):
         """ Compute forward probabilities.
 
@@ -1153,35 +865,6 @@ class DiscreteHMMInferenceResults(ABC):
 
         return gamma_by_component
 
-    def _gamma_chunked(self, data):
-        """ Return gamma for chunks of non-NaN data.
-
-        Arguments:
-            data: dataframe with possible NaN entries
-
-        Returns:
-            Dataframe where iloc[t,i] is the probability of hidden state i
-            given the observation at time t, computed using the forward backward
-            algorithm; for rows with NaN entries, iloc[,i] is NaN.
-        """
-        gamma_chunk = pd.DataFrame()
-        data_chunks = get_complete_data_chunks(data)
-
-        def convert_chunk(data, chunks, i):
-            chunk = data.loc[chunks.loc[i, 'start']:chunks.loc[i, 'end']]
-            return pd.DataFrame(self._gamma(chunk), index=chunk.index)
-
-        gamma_chunk = pd.concat(
-            [convert_chunk(data, data_chunks, i) for i in data_chunks.index])
-
-        nan_entries = pd.DataFrame(
-            index=data[data.isna().any(axis=1)].index,
-            columns=gamma_chunk.columns)
-        gamma_chunk = pd.concat((gamma_chunk, nan_entries))
-        gamma_chunk.sort_index(inplace=True)
-
-        return gamma_chunk
-
     def _xi(self, data):
         """Auxiliary function for EM.
 
@@ -1210,524 +893,3 @@ class DiscreteHMMInferenceResults(ABC):
                                                                -1, 1)
 
         return xi
-
-
-class DiscreteHMMForecasting(HMMForecasting):
-    """ Forecasting class specific to discrete HMM
-    """
-
-    def __init__(self, model, use_jax=False):
-        super().__init__(model)
-        self.inf = model.load_inference_interface(use_jax)
-
-    def hidden_state_probability_at_conditioning_date(self, data,
-                                                      conditioning_date):
-        """ Compute probability of hidden state given data up to conditioning date.
-
-        Arguments:
-            data: dataframe with complete data
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-
-        Returns:
-            Probability distribution of hidden state at condtioning date.
-        """
-        data_restricted = data.loc[:conditioning_date]
-
-        log_prob = self.inf.predict_hidden_state_log_probability(
-            data_restricted)
-        joint_prob = self.inf._compute_forward_probabilities(log_prob)
-
-        return np.exp(joint_prob[-1] - logsumexp(joint_prob, axis=1)[-1])
-
-    def hidden_state_probability_at_horizon(self, data, horizon_timestep,
-                                            conditioning_date):
-        """ Compute hidden state probability at horizon.
-
-        Argument:
-            data: dataframe with complete data
-            horizon_timestep: timestep to consider for horizon.
-                It is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-
-        Returns:
-            An array with dimention (1 x n_hidden_states) where the ith entry is the conditional probability of hidden state i at horizon.
-        """
-        conditioning_date_prob = self.hidden_state_probability_at_conditioning_date(
-            data, conditioning_date)
-        transition_matrix = np.exp(self.model.log_transition)
-
-        return conditioning_date_prob @ np.linalg.matrix_power(
-            transition_matrix, horizon_timestep)
-
-    def hidden_state_probability_at_horizons(self, data, horizon_timesteps,
-                                             conditioning_date):
-        """ Compute hidden state probability at horizons.
-
-        Argument:
-            data: dataframe with complete data
-            horizon_timesteps: list of timesteps to consider for horizons.
-                It is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-
-        Returns:
-            Dataframe with hidden state probabilities for horizon dates.
-        """
-        conditioning_date_prob = self.hidden_state_probability_at_conditioning_date(
-            data, conditioning_date)
-
-        transition_matrix = np.exp(self.model.log_transition)
-
-        delta = data.index[-1] - data.index[-2]
-        horizon_date = [
-            conditioning_date + (t * delta) for t in horizon_timesteps
-        ]
-        horizon_prediction = np.array([
-            conditioning_date_prob @ np.linalg.matrix_power(
-                transition_matrix, t) for t in horizon_timesteps
-        ])
-
-        forecast = pd.DataFrame(
-            horizon_prediction,
-            index=horizon_date,
-            columns=[i for i in range(len(transition_matrix))])
-
-        return forecast
-
-    def _forecast_hidden_state_at_horizons(self, data, horizon_timesteps,
-                                           conditioning_date):
-        """ Returns series with most likely hidden states at horizons.
-
-        Arguments:
-            data: dataframe with complete data
-            horizon_timesteps: list of timesteps to consider for horizons.
-                It is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-
-        Returns:
-            Series with hidden state prections with the conditioning date as the first entry.
-        """
-        forecast = self.hidden_state_probability_at_horizons(
-            data, horizon_timesteps, conditioning_date)
-
-        return pd.Series(
-            np.array(forecast).argmax(axis=1), index=forecast.index)
-
-    def forecast_observation_at_horizon(self,
-                                        data,
-                                        horizon_timestep,
-                                        conditioning_date,
-                                        imputation_method='average'):
-        """ Returns dataframe with most likely observations at horizon.
-
-        Arguments:
-            data: dataframe with complete data
-            horizon_timestep: timestep to consider for horizon.
-                It is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-
-        Returns:
-            dataframe with forecast observations at horizon
-        """
-        delta = data.index[-1] - data.index[-2]
-        new_time = conditioning_date + (horizon_timestep * delta)
-        observation = data.loc[[conditioning_date]].copy()
-        observation.loc[new_time, data.columns] = np.nan
-
-        hidden_state_prob = self.hidden_state_probability_at_horizon(
-            data, horizon_timestep, conditioning_date)
-
-        forecast = self.inf.impute_missing_data_single_observation(
-            observation.loc[[new_time]], hidden_state_prob, imputation_method)
-
-        return forecast
-
-    def _forecast_observation_at_horizons(self,
-                                          data,
-                                          horizon_timesteps,
-                                          conditioning_date,
-                                          imputation_method='average'):
-        """ Returns dataframe with most likely observations at horizons.
-
-        Arguments:
-            data: dataframe with complete data
-            horizon_timesteps: list of timesteps to consider for horizons.
-                It is assumed that the rows of `data` have a uniform timedelta; this uniform timedelta is 1 timestep
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-
-        Returns:
-            Dataframe with forecast observations for horizon_timestep dates. The first row of the dataframe is the conditioning date.
-        """
-        forecast = data.loc[[conditioning_date]]
-        for horizon in horizon_timesteps:
-            forecast = pd.concat((forecast,
-                                  self.forecast_observation_at_horizon(
-                                      data,
-                                      horizon,
-                                      conditioning_date,
-                                      imputation_method,
-                                  )))
-
-        return forecast
-
-    def steady_state(self):
-        """ Return steady state for model.
-        """
-
-        transition = np.exp(self.model.log_transition)
-        val, left_eig, right_eig = linalg.eig(transition, left=True)
-        idx = np.argmax(np.array([abs(v) for v in val]))
-        vec = left_eig[:, idx]
-
-        return vec / np.sum(vec)
-
-    def _steady_state_and_horizon(self, data, conditioning_date, atol):
-        """ Returns dictionary with steady state information.
-
-        Arguments:
-            data: dataframe with complete data
-            conditioning_date: entry from `data` index, forecast will
-                consider only the data up to this date.
-            atol: tolerance for determining whether steady state has been
-                reached.
-
-        Returns:
-            Dictionary with 'steady_state' for model and 'steady_state_horizon_timesteps', the timestep horizon at which the steady state has been achieved up to tolerance atol, and 'steady_state_horizon_date', the date at which the steady state has been achieved up to tolerance atol.
-        """
-        if conditioning_date is None:
-            conditioning_date = data.index[-1]
-        vec = self.steady_state()
-        transition = np.exp(self.model.log_transition)
-        initial_prob = self.hidden_state_probability_at_conditioning_date(
-            data, conditioning_date)
-
-        i = 1
-        while np.max(
-                np.abs(initial_prob @ np.linalg.matrix_power(transition, i) -
-                       vec)) > atol:
-            i += 1
-
-        delta = data.index[-1] - data.index[-2]
-        horizon_date = conditioning_date + (i * delta)
-
-        return {
-            'steady_state': vec,
-            'steady_state_horizon_timesteps': i,
-            'steady_state_horizon_date': horizon_date
-        }
-
-
-class DiscreteHMMValidationMetrics(HMMValidationMetrics):
-    """ Validation class specific to discrete HMM
-    """
-
-    def __init__(self, model, actual_data, use_jax=False):
-        super().__init__(model, actual_data)
-        self.inf = model._load_inference_interface(use_jax)
-        self.actual_gaussian_data = get_gaussian_observations_from_data(
-            self.model, actual_data)
-        self.actual_categorical_data = get_finite_observations_from_data(
-            self.model, actual_data)
-
-    def _validate_imputation(self, redacted_data, imputed_data):
-        """ Return DiscreteHMM specific dictionary of validation metrics for imputation.
-
-        Arguments:
-            redacted_data: dataframe with values set to nan.
-            imputed_data: dataframe with missing values imputed.
-
-        Returns:
-            Dictionary with validation metrics for imputed data against actual data.
-        """
-        cond_prob_of_hidden_states = self.inf.conditional_probability_of_hidden_states(
-            redacted_data)
-        val_dict = {}
-
-        if self.model.categorical_model:
-            redacted_categorical_data = get_finite_observations_from_data(
-                self.model, redacted_data)
-            imputed_categorical_data = get_finite_observations_from_data(
-                self.model, imputed_data)
-
-            val_dict[
-                'accuracy_of_imputed_categorical_data'] = self.accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, imputed_categorical_data)
-
-            val_dict[
-                'relative_accuracy_of_imputed_categorical_data'] = self.relative_accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, imputed_categorical_data)
-
-            val_dict[
-                'best_possible_accuracy_of_categorical_imputation'] = best_possible_accuracy_of_categorical_prediction(
-                    self.actual_categorical_data, redacted_categorical_data)
-
-        if self.model.gaussian_mixture_model:
-            redacted_gaussian_data = get_gaussian_observations_from_data(
-                self.model, redacted_data)
-            imputed_gaussian_data = get_gaussian_observations_from_data(
-                self.model, imputed_data)
-
-            val_dict[
-                'average_relative_log_likelihood_of_imputed_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
-                    redacted_gaussian_data, imputed_gaussian_data,
-                    cond_prob_of_hidden_states)
-
-            val_dict[
-                'average_z_score_of_imputed_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
-                    redacted_gaussian_data, cond_prob_of_hidden_states)
-
-        return val_dict
-
-    def _validate_forecast(self, forecast_data):
-        """ Return DiscreteHMM specific dictionary of validation metrics for imputation.
-
-        Arguments:
-            forecast_data: dataframe with forecast data where the first row
-                of the dataframe is actual observed conditioning date data.
-
-        Returns:
-            Dictionary with validation metrics for forecast data against actual data.
-        """
-        conditioning_date = forecast_data.index[0]
-        delta = self.actual_data.index[-1] - self.actual_data.index[-2]
-
-        horizon_timesteps = [
-            int(t) for t in (forecast_data.index - conditioning_date) / delta
-        ]
-
-        cond_prob_of_hidden_states = DiscreteHMMForecasting(
-            self.model).hidden_state_probability_at_horizons(
-                self.actual_data, horizon_timesteps, conditioning_date)
-
-        val_dict = {}
-
-        if self.model.categorical_model:
-            forecast_categorical_data = get_finite_observations_from_data(
-                self.model, forecast_data)
-
-            redacted_categorical_data = forecast_categorical_data.copy()
-            redacted_categorical_data.loc[:, :] = np.nan
-
-            val_dict[
-                'accuracy_of_forecast_categorical_data'] = self.accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, forecast_categorical_data)
-
-            val_dict[
-                'relative_accuracy_of_forecast_categorical_data'] = self.relative_accuracy_of_predicted_categorical_data(
-                    redacted_categorical_data, forecast_categorical_data)
-
-            val_dict[
-                'best_possible_accuracy_of_categorical_forecast'] = best_possible_accuracy_of_categorical_prediction(
-                    self.actual_categorical_data, redacted_categorical_data)
-
-        if self.model.gaussian_mixture_model:
-            forecast_gaussian_data = get_gaussian_observations_from_data(
-                self.model, forecast_data)
-
-            redacted_gaussian_data = forecast_gaussian_data.copy()
-            redacted_gaussian_data.loc[:, :] = np.nan
-
-            val_dict[
-                'average_relative_log_likelihood_of_forecast_gaussian_data'] = self.average_relative_log_likelihood_of_predicted_gaussian_data(
-                    redacted_gaussian_data, forecast_gaussian_data,
-                    cond_prob_of_hidden_states)
-
-            val_dict[
-                'average_z_score_of_forecast_gaussian_data'] = self.average_z_score_of_predicted_gaussian_data(
-                    redacted_gaussian_data, cond_prob_of_hidden_states)
-
-        return val_dict
-
-    def average_relative_log_likelihood_of_predicted_gaussian_data(
-            self, redacted_gaussian_data, imputed_gaussian_data,
-            conditional_probability_of_hidden_states):
-        """Returns the difference between the log likelihood of the actual
-        data and the log likelihood of the imputed data.  This is done
-        using the probability density function for the conditional probability
-        of the unknown part of the observation given the known part of the
-        observation.  This metric is intended to be a measure of how surprised
-        you should be to see the actual value relative to the imputed value.
-
-        Arguments:
-            redacted_gaussian_data: dataframe if Gaussian observations
-                with values set to nan.
-            imputed_gaussian_data: dataframe with missing values imputed.
-            conditional_probability_of_hidden_states: dataframe with
-                conditional probability of hidden states given partial
-                observations at all timesteps with redacted data.
-
-        Returns:
-            float
-        """
-        actual_gaussian_data = self.actual_gaussian_data
-        means = self.model.gaussian_mixture_model.means
-        covariances = self.model.gaussian_mixture_model.covariances
-        component_weights = self.model.gaussian_mixture_model.component_weights
-
-        redacted_index = redacted_gaussian_data[redacted_gaussian_data.isnull()
-                                                .any(axis=1)].index
-        imputed_likelihood = np.empty(len(redacted_index))
-        actual_likelihood = np.empty(len(redacted_index))
-        for i in range(len(redacted_index)):
-            idx = redacted_index[i]
-            p = np.float64(
-                np.array(conditional_probability_of_hidden_states.loc[idx]))
-            log_cond_prob = np.log(
-                p, np.full(p.shape, LOG_ZERO), where=(p != 0))
-
-            actual_gaussian_observation = actual_gaussian_data.loc[[idx]]
-            imputed_gaussian_observation = imputed_gaussian_data.loc[[idx]]
-            partial_gaussian_observation = redacted_gaussian_data.loc[[idx]]
-
-            actual_prob = compute_log_likelihood_with_inferred_pdf(
-                actual_gaussian_observation, partial_gaussian_observation,
-                means, covariances, component_weights)
-            actual_likelihood[i] = logsumexp(actual_prob + log_cond_prob)
-
-            imputed_prob = compute_log_likelihood_with_inferred_pdf(
-                imputed_gaussian_observation, partial_gaussian_observation,
-                means, covariances, component_weights)
-            imputed_likelihood[i] = logsumexp(imputed_prob + log_cond_prob)
-
-        total_actual_log_likelihood = logsumexp(actual_likelihood)
-        total_imputed_log_likelihood = logsumexp(imputed_likelihood)
-
-        return total_actual_log_likelihood - total_imputed_log_likelihood
-
-    def average_z_score_of_predicted_gaussian_data(
-            self, redacted_gaussian_data,
-            conditional_probability_of_hidden_states):
-        """ Computes z score of gaussian data averaged over observations.
-
-        Arguments:
-            redacted_gaussian_data: dataframe if Gaussian observations
-                with values set to nan.
-            imputed_gaussian_data: dataframe with missing values imputed.
-            conditional_probability_of_hidden_states: dataframe with
-                conditional probability of hidden states given partial
-                observations at all timesteps with redacted data.
-
-        Returns:
-            float
-        """
-        means = self.model.gaussian_mixture_model.means
-        covariances = self.model.gaussian_mixture_model.covariances
-        component_weights = self.model.gaussian_mixture_model.component_weights
-
-        return average_z_score(
-            means, covariances, component_weights, self.actual_gaussian_data,
-            redacted_gaussian_data, conditional_probability_of_hidden_states)
-
-    def accuracy_of_predicted_categorical_data(self, redacted_categorical_data,
-                                               imputed_categorical_data):
-        """ Returns ratio of correctly imputed categorical values to total imputed categorical values.
-
-        Arguments:
-            redacted_categorical_data: dataframe of categorical data with
-                values set to nan.
-            imputed_categorical_data: dataframe of categorical data with missing values fill in.
-
-        Returns:
-            float
-        """
-        redacted_index = redacted_categorical_data[
-            redacted_categorical_data.isnull().any(axis=1)].index
-
-        total_correct = np.sum(
-            (self.actual_categorical_data.loc[redacted_index] ==
-             imputed_categorical_data.loc[redacted_index]).all(axis=1))
-
-        return total_correct / len(redacted_index)
-
-    def relative_accuracy_of_predicted_categorical_data(
-            self, redacted_categorical_data, imputed_categorical_data):
-        """ Returns ratio of rate of accuracy in imputed data to expected rate of accuracy with random guessing.
-
-        Arguments:
-            redacted_categorical_data: dataframe of categorical data with
-                values set to nan.
-            imputed_categorical_data: dataframe of categorical data with missing values fill in.
-
-        Returns:
-            float
-        """
-        expected_accuracy = expected_proportional_accuracy(
-            self.actual_categorical_data, redacted_categorical_data)
-        imputed_accuracy = self.accuracy_of_predicted_categorical_data(
-            redacted_categorical_data, imputed_categorical_data)
-
-        return imputed_accuracy / expected_accuracy
-
-    def precision_recall_df_for_predicted_categorical_data(
-            self, redacted_data, imputed_data):
-        """ Return DataFrame with precision, recall, and proportion of categorical values
-
-        Arguments:
-            redacted_data: dataframe with values set to nan.
-            imputed_data: dataframe with missing values imputed.
-
-        Returns:
-            Dataframe with precision, recall, and proportion of imputed data against actual data.
-        """
-        if len(self.model.finite_features) == 0:
-            return None
-        else:
-            redacted_categorical_data = get_finite_observations_from_data(
-                self.model, redacted_data)
-            redacted_index = redacted_categorical_data[
-                redacted_categorical_data.isnull().any(axis=1)].index
-
-            df = self.actual_data.copy()
-            df['tuples'] = list(
-                zip(*[
-                    self.actual_data[c]
-                    for c in self.actual_categorical_data.columns
-                ]))
-            proportion = (df['tuples'].value_counts() / df.shape[0]).to_dict()
-
-            df_imputed = imputed_data.copy()
-            df_imputed['tuples'] = list(
-                zip(*[
-                    imputed_data[c]
-                    for c in self.actual_categorical_data.columns
-                ]))
-
-            state = df['tuples'].unique()
-
-            precision_recall = pd.DataFrame(
-                np.full((df['tuples'].nunique(), 3), np.nan),
-                index=state,
-                columns=['precision', 'recall', 'proportion'])
-
-            for n, idx in enumerate(precision_recall.index):
-                # pandas cannot use loc with tuples in the index
-                precision_recall.iloc[n]['proportion'] = proportion[idx]
-
-            actual = df.loc[redacted_index, 'tuples']
-
-            imputed = df_imputed.loc[redacted_index, 'tuples']
-
-            true_pos = ((np.array(actual)[:, None] == state) &
-                        (np.array(imputed)[:, None] == state)).sum(axis=0)
-            false_pos = ((np.array(actual)[:, None] != state) &
-                         (np.array(imputed)[:, None] == state)).sum(axis=0)
-            false_neg = ((np.array(actual)[:, None] == state) &
-                         (np.array(imputed)[:, None] != state)).sum(axis=0)
-
-            precision_recall.loc[state, 'precision'] = [
-                x for x in true_pos / np.
-                array([np.nan if x == 0 else x for x in true_pos + false_pos])
-            ]
-            precision_recall.loc[state, 'recall'] = [
-                x for x in true_pos / np.
-                array([np.nan if x == 0 else x for x in true_pos + false_neg])
-            ]
-
-            precision_recall.sort_values(
-                by=['proportion'], ascending=False, inplace=True)
-            return precision_recall

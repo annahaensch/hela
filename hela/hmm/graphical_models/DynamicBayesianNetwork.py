@@ -810,7 +810,7 @@ def fhmm_model_to_graph(model):
     factors = []
     # Add latent nodes for all systems for t = 0, t = 1
     latent_nodes = [('system_{system}'.format(system=i), j)
-                    for i in range(len(model.ns_hidden_states))
+                    for i in range(len(model.n_hidden_states))
                     for j in range(2)]
 
     graph.add_nodes_from(latent_nodes, latent=[True] * len(latent_nodes))
@@ -821,12 +821,12 @@ def fhmm_model_to_graph(model):
             [('cont_obs', 0), ('cont_obs', 1)], latent=[False, False])
 
     # Add categorical observation nodes for t = 0, t = 1
-    if len(model.categorical_features) > 0:
+    if len(model.finite_features) > 0:
         graph.add_nodes_from(
             [('cat_obs', 0), ('cat_obs', 1)], latent=[False, False])
 
         emission_matrix = model.categorical_model.emission_matrix
-        emission_card = len(model.categorical_model.categorical_values)
+        emission_card = len(model.categorical_model.finite_values)
         emission0_evidence = graph.get_latent_nodes(time_slice=0)
         emission1_evidence = graph.get_latent_nodes(time_slice=1)
 
@@ -835,17 +835,17 @@ def fhmm_model_to_graph(model):
             emission_card,
             emission_matrix,
             evidence=emission0_evidence,
-            evidence_card=model.ns_hidden_states)
+            evidence_card=model.n_hidden_states)
 
         emission1_cpd = TabularCPD(
             ('cat_obs', 1),
             emission_card,
             emission_matrix,
             evidence=emission1_evidence,
-            evidence_card=model.ns_hidden_states)
+            evidence_card=model.n_hidden_states)
 
     # Creates a recursive FHMM structure
-    for i, hidden_state in enumerate(model.ns_hidden_states):
+    for i, hidden_state in enumerate(model.n_hidden_states):
 
         current_system = 'system_{system}'.format(system=i)
 
@@ -879,7 +879,7 @@ def fhmm_model_to_graph(model):
 
             weights = model.gaussian_model.means[i][:hidden_state, :
                                                     hidden_state]
-            covariance = model.gaussian_model.covariance
+            covariance = model.gaussian_model.covariances
 
             continuous_card = len(model.gaussian_model.gaussian_features)
 
@@ -889,7 +889,7 @@ def fhmm_model_to_graph(model):
                 weights,
                 covariance,
                 evidence=[(current_system, 0)],
-                evidence_card=[model.ns_hidden_states[i]])
+                evidence_card=[model.n_hidden_states[i]])
 
             continuous_factor1 = ContinuousFactor(
                 ('cont_obs', 1),
@@ -897,11 +897,11 @@ def fhmm_model_to_graph(model):
                 weights,
                 covariance,
                 evidence=[(current_system, 1)],
-                evidence_card=[model.ns_hidden_states[i]])
+                evidence_card=[model.n_hidden_states[i]])
 
             factors.extend([continuous_factor0, continuous_factor1])
 
-        if len(model.categorical_features) > 0:
+        if len(model.finite_features) > 0:
             # latent state[t=0] -> categorical obs[t=0]
             # latent state[t=1] -> categorical obs[t=1]
             graph.add_edges_from([((current_system, 0), ('cat_obs', 0)),

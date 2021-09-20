@@ -32,7 +32,7 @@ def get_finite_observations_from_data(model, data):
         return data.loc[:, model.finite_features]
 
 
-def get_finite_observations_from_data_as_states(model, data):
+def get_finite_observations_from_data_as_enum(model, data):
     """Return finite observations as series
 
     Arguments:
@@ -372,7 +372,12 @@ def jax_compute_forward_probabilities(log_initial_state, log_transition,
     """
     if check_jax_precision() == False:
         raise ValueError(
-            "To run forward-backward with Jax, you need to set the numerical precision to 64-bit, you can do this by either setting the environment variable `JAX_ENABLE_X64=True` or by setting the flag at startup with `config.update('jax_enable_x64', True)`.  You can find more details about this at https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#Double-(64bit)-precision"
+            "To run forward-backward with Jax, you need to set the numerical "
+            "precision to 64-bit, you can do this by either setting the "
+            "environment variable `JAX_ENABLE_X64=True` or by setting the "
+            "flag at startup with `config.update('jax_enable_x64', True)`.  "
+            "You can find more details about this at "
+            "https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#Double-(64bit)-precision"
         )
     log_prob = jnp.array(log_probability, jnp.float64)
 

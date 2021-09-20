@@ -24,9 +24,7 @@ def n_hidden_states(random):
 @pytest.fixture(scope="module")
 def generative_model(random, n_hidden_states):
     gen_model = gen.FactoredHMMGenerativeModel(
-        ns_hidden_states=[3, 2],
-        n_categorical_features=2,
-        n_gaussian_features=1)
+        n_hidden_states=[3, 2], n_categorical_features=2, n_gaussian_features=1)
 
     factored_hidden_states = gen_model.generate_hidden_state_sequence(
         n_observations=500)
@@ -34,7 +32,7 @@ def generative_model(random, n_hidden_states):
 
     fhmm_training_spec = gen.data_to_fhmm_training_spec(
         factored_hidden_states,
-        gen_model.ns_hidden_states,
+        gen_model.n_hidden_states,
         dataset,
         categorical_features=list(gen_model.categorical_values.columns),
         gaussian_features=list(gen_model.gaussian_values.columns))
@@ -54,7 +52,7 @@ def test_model_loads_from_spec(generative_model):
     model_config = hmm.FactoredHMMConfiguration.from_spec(fhmm_training_spec)
     model = model_config.to_model()
 
-    assert model.ns_hidden_states == fhmm_training_spec['hidden_state']['count']
+    assert model.n_hidden_states == fhmm_training_spec['n_hidden_states']
 
 
 def test_model_sampling_and_inference(generative_model):
@@ -82,10 +80,10 @@ def test_model_sampling_and_inference(generative_model):
     assert Gamma.shape[0] == dataset.shape[0]
 
     # Make sure that the subdiagonal terms of Gamma sum to 1.
-    csum = np.concatenate(([0], np.cumsum(model.ns_hidden_states)))
+    csum = np.concatenate(([0], np.cumsum(model.n_hidden_states)))
     Gamma_sum = np.array([[
         g.diagonal()[csum[i]:csum[i + 1]]
-        for i in range(len(model.ns_hidden_states))
+        for i in range(len(model.n_hidden_states))
     ]
                           for g in Gamma])
     assert np.all([[np.sum(d) == 1 for d in g] for g in Gamma_sum])
@@ -117,7 +115,7 @@ def test_learning_with_gibbs(generative_model):
     # probabilities sum to the proper value.
     assert np.all(
         np.sum(np.sum(model.transition_matrix, axis=2), axis=1) -
-        model.ns_hidden_states < 1e-08)
+        model.n_hidden_states < 1e-08)
 
     assert np.all(
         (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)
@@ -169,7 +167,7 @@ def test_learning_with_distributed_gibbs(generative_model):
     # probabilities sum to the proper value.
     assert np.all(
         np.sum(np.sum(model.transition_matrix, axis=2), axis=1) -
-        model.ns_hidden_states < 1e-08)
+        model.n_hidden_states < 1e-08)
 
     assert np.all(
         (np.sum(model.categorical_model.emission_matrix, axis=0) - 1) < 1e-08)
