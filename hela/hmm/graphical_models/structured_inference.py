@@ -486,7 +486,10 @@ class DBNInference(Inference):
         --------
         """
         unique_rows = data.drop_duplicates().values
-        categorical_dict = {str(list(unique_rows[i])):i for i in range(len(unique_rows))}
+        categorical_dict = {
+            str(list(unique_rows[i])): i
+            for i in range(len(unique_rows))
+        }
         #categorical_dict = {
         #    str(list(np.unique(data.values, axis=0)[i])): i
         #    for i in range(len(np.unique(data.values, axis=0)))

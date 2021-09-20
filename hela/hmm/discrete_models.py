@@ -59,7 +59,7 @@ class DiscreteHMM(HiddenMarkovModel):
         model = cls(model_config=model_config)
         model.n_hidden_states = model_config.n_hidden_states
         model.set_random_state = set_random_state
-        
+
         # Set random state.
         random_state = np.random.RandomState(set_random_state)
         model.random_state = random_state
@@ -562,7 +562,8 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
                 self.gaussian_data = get_gaussian_observations_from_data(
                     model, data)
 
-        new_model = model.model_config.to_model(set_random_state = model.set_random_state)
+        new_model = model.model_config.to_model(
+            set_random_state=model.set_random_state)
 
         for _ in range(training_iterations):
             # e_step

@@ -19,8 +19,7 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
                  categorical_values=None,
                  n_gaussian_features=None,
                  gaussian_values=None,
-                 n_gmm_components=1
-                ):
+                 n_gmm_components=1):
         super().__init__(
             random_state=random_state,
             n_categorical_features=n_categorical_features,
@@ -65,10 +64,8 @@ class FactoredHMMGenerativeModel(HMMGenerativeModel):
         N.B.: This training spec will be suitable input for the hmm
             function `FactoredHMMConfiguration.from_spec()`.
         """
-        training_spec = {
-            "n_hidden_states": self.n_hidden_states
-        }
-        
+        training_spec = {"n_hidden_states": self.n_hidden_states}
+
         training_spec["n_systems"] = len(self.n_hidden_states)
 
         model_parameter_constraints = {

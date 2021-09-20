@@ -211,10 +211,14 @@ class DiscreteHMMImputation(ABC):
                         for n in range(probs.shape[0]):
                             for m in range(probs.shape[1]):
                                 mu = means[n][m]
-                                probs[n][m] = Z_star[n] + np.log(model.gaussian_mixture_model.component_weights[n][m]
-                                                      ) + stats.multivariate_normal.logpdf(means[n][m], means[n][m], covariances[n][m])
+                                probs[n][m] = Z_star[n] + np.log(
+                                    model.gaussian_mixture_model.
+                                    component_weights[n][m]
+                                ) + stats.multivariate_normal.logpdf(
+                                    means[n][m], means[n][m], covariances[n][m])
 
-                        maximal_index = list(np.unravel_index(probs.argmax(), probs.shape))
+                        maximal_index = list(
+                            np.unravel_index(probs.argmax(), probs.shape))
                         y_star = means[maximal_index[0]][maximal_index[1]][idx]
 
                     if self.method == "hmm_average":

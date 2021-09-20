@@ -13,9 +13,7 @@ from hela.hmm.graphical_models.ContinuousFactor import ContinuousFactor
 @pytest.fixture(scope="module")
 def generative_model():
     gen_model = gen.FactoredHMMGenerativeModel(
-        n_hidden_states=[3, 2],
-        n_categorical_features=2,
-        n_gaussian_features=1)
+        n_hidden_states=[3, 2], n_categorical_features=2, n_gaussian_features=1)
 
     factored_hidden_states = gen_model.generate_hidden_state_sequence(
         n_observations=100)
@@ -38,9 +36,7 @@ def generative_model():
 @pytest.fixture(scope="module")
 def generative_categorical_model():
     gen_model = gen.FactoredHMMGenerativeModel(
-        n_hidden_states=[3, 2],
-        n_categorical_features=2,
-        n_gaussian_features=0)
+        n_hidden_states=[3, 2], n_categorical_features=2, n_gaussian_features=0)
 
     factored_hidden_states = gen_model.generate_hidden_state_sequence(
         n_observations=100)

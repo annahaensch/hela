@@ -333,7 +333,8 @@ def main(argv):
                 time_df.loc[t, 'em'] = (time.time() - em_start) / ITERATIONS
 
                 em = "successful"
-                logging.info("\n EM: {} - random state {}".format(em, em_random_state))
+                logging.info("\n EM: {} - random state {}".format(
+                    em, em_random_state))
 
                 em_learning_ll = compute_learning_ll(em_alg, train_data, "hmm")
                 em_df[str(random_state)] = em_learning_ll
@@ -362,7 +363,8 @@ def main(argv):
                 time_df.loc[t, 'vi'] = (time.time() - vi_start) / ITERATIONS
 
                 vi = "successful"
-                logging.info("\n VI: {} - random state {}".format(vi, vi_random_state))
+                logging.info("\n VI: {} - random state {}".format(
+                    vi, vi_random_state))
 
                 vi_learning_ll = compute_learning_ll(vi_alg, train_data, "fhmm")
                 vi_df[str(random_state)] = vi_learning_ll
@@ -394,8 +396,8 @@ def main(argv):
                     time.time() - gibbs_start) / ITERATIONS
 
                 gibbs = "successful"
-                logging.info("\n Gibbs: {} - random state {}".format(gibbs,
-                                                        gibbs_random_state))
+                logging.info("\n Gibbs: {} - random state {}".format(
+                    gibbs, gibbs_random_state))
 
                 gibbs_learning_ll = compute_learning_ll(gibbs_alg, train_data,
                                                         "fhmm")

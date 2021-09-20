@@ -18,12 +18,12 @@ from .utils import *
 class FactoredHMMConfiguration(HMMConfiguration):
     """ Abstract base class for fHMM configuration. """
 
-    def __init__(self, n_hidden_states = None,
-                hidden_state_vectors = None,
-                hidden_state_enum = None,
-                hidden_state_vector_to_enum = None,
-                hidden_state_enum_to_vector = None
-                 ):
+    def __init__(self,
+                 n_hidden_states=None,
+                 hidden_state_vectors=None,
+                 hidden_state_enum=None,
+                 hidden_state_vector_to_enum=None,
+                 hidden_state_enum_to_vector=None):
 
         super().__init__(n_hidden_states)
         self.hidden_state_vectors = hidden_state_vectors
@@ -43,12 +43,20 @@ class FactoredHMMConfiguration(HMMConfiguration):
         """
         n_hidden_states = spec['n_hidden_states']
         hidden_state_values = [[t for t in range((i))] for i in n_hidden_states]
-        hidden_state_vectors = [list(t) for t in itertools.product(*hidden_state_values)]
-        hidden_state_vector_to_enum = {str(hidden_state_vectors[i]):i for i in range(len(hidden_state_vectors))}
-        hidden_state_enum_to_vector = {i:hidden_state_vectors[i] for i in range(len(hidden_state_vectors))}
+        hidden_state_vectors = [
+            list(t) for t in itertools.product(*hidden_state_values)
+        ]
+        hidden_state_vector_to_enum = {
+            str(hidden_state_vectors[i]): i
+            for i in range(len(hidden_state_vectors))
+        }
+        hidden_state_enum_to_vector = {
+            i: hidden_state_vectors[i]
+            for i in range(len(hidden_state_vectors))
+        }
         hidden_state_enum = list(hidden_state_enum_to_vector.keys())
         hidden_state_vectors = list(hidden_state_enum_to_vector.values())
-        
+
         self.n_hidden_states = n_hidden_states
         self.hidden_state_vectors = list(hidden_state_enum_to_vector.values())
         self.hidden_state_enum = list(hidden_state_enum_to_vector.keys())
@@ -117,17 +125,20 @@ class FactoredHMM(HiddenMarkovModel):
         model.finite_features = model_config.finite_features
         model.finite_values = model_config.finite_values
         if len(model.finite_features) > 0:
-            model.categorical_model = CategoricalModel.from_config(model_config,random_state)
+            model.categorical_model = CategoricalModel.from_config(
+                model_config, random_state)
 
         # Get continuous features from model_config.
         gaussian_features = [
-            i for i in model_config.continuous_features if model_config.continuous_values.loc[
-                'distribution', i].lower() == 'gaussian'
-              ]
+            i for i in model_config.continuous_features
+            if model_config.continuous_values.loc['distribution', i].lower() ==
+            'gaussian'
+        ]
         gaussian_features.sort()
         model.gaussian_features = gaussian_features
         if len(gaussian_features) > 0:
-            model.gaussian_model = GaussianModel.from_config(model_config, random_state)
+            model.gaussian_model = GaussianModel.from_config(
+                model_config, random_state)
 
         # TODO: (AH) These matrix copies are here because model training was
         # chaning the underlying model config. This is probably easy to fix.
@@ -149,7 +160,7 @@ class FactoredHMM(HiddenMarkovModel):
         """
         return FactoredHMMLearningAlgorithm(self)
 
-    def _load_inference_interface(self, use_jax = False):
+    def _load_inference_interface(self, use_jax=False):
         """ Returns FactoredHMMInference object
 
         Returns:
@@ -203,9 +214,9 @@ class FactoredHMM(HiddenMarkovModel):
 
                 for m_prime in other_systems:
                     blocks.append(
-                        (gamma[t, m, :hidden_state].reshape(-1, 1) @ gamma[
-                            t, m_prime, :n_hidden_states[m_prime]].reshape(
-                                1, -1)).transpose())
+                        (gamma[t, m, :hidden_state].reshape(-1, 1)
+                         @ gamma[t, m_prime, :n_hidden_states[m_prime]].reshape(
+                             1, -1)).transpose())
 
                 Gamma[t, :, csum[m]:csum[m + 1]] = np.vstack(blocks)
 
@@ -288,7 +299,8 @@ class FactoredHMM(HiddenMarkovModel):
             msg = "Covariance update is not positive definite: {}".format(
                 new_model.gaussian_model.covariances)
             assert np.all(
-                np.linalg.eigvals(new_model.gaussian_model.covariances) > 0), msg
+                np.linalg.eigvals(new_model.gaussian_model.covariances) > 0
+            ), msg
 
         return new_model
 
@@ -315,15 +327,14 @@ class CategoricalModel(FactoredHMM):
         """
         categorical_model = cls(
             n_hidden_states=model_config.n_hidden_states,
-            finite_features = model_config.finite_features,
-            finite_values = model_config.finite_values,
-            finite_values_dict = model_config.finite_values_dict,
-            finite_values_dict_inverse = model_config.finite_values_dict_inverse
-        )
+            finite_features=model_config.finite_features,
+            finite_values=model_config.finite_values,
+            finite_values_dict=model_config.finite_values_dict,
+            finite_values_dict_inverse=model_config.finite_values_dict_inverse)
         categorical_model.hidden_state_vectors = model_config.hidden_state_vectors,
         categorical_model.hidden_state_enum = model_config.hidden_state_enum,
-        categorical_model.hidden_state_vector_to_enum=model_config.hidden_state_vector_to_enum,
-        categorical_model.hidden_state_enum_to_vector=model_config.hidden_state_enum_to_vector
+        categorical_model.hidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum,
+        categorical_model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
 
         categorical_model.emission_matrix = model_config.model_parameter_constraints[
             'emission_constraints']
@@ -413,14 +424,15 @@ class GaussianModel(FactoredHMM):
         gaussian_model = cls(n_hidden_states=model_config.n_hidden_states)
         gaussian_model.hidden_state_vectors = model_config.hidden_state_vectors,
         gaussian_model.hidden_state_enum = model_config.hidden_state_enum,
-        gaussian_modelhidden_state_vector_to_enum=model_config.hidden_state_vector_to_enum,
-        gaussian_model.hidden_state_enum_to_vector=model_config.hidden_state_enum_to_vector
+        gaussian_modelhidden_state_vector_to_enum = model_config.hidden_state_vector_to_enum,
+        gaussian_model.hidden_state_enum_to_vector = model_config.hidden_state_enum_to_vector
 
         continuous_values = model_config.continuous_values
         gaussian_features = [
-            i for i in model_config.continuous_features if model_config.continuous_values.loc[
-                'distribution', i].lower() == 'gaussian'
-              ]
+            i for i in model_config.continuous_features
+            if model_config.continuous_values.loc['distribution', i].lower() ==
+            'gaussian'
+        ]
         gaussian_features.sort()
         gaussian_model.gaussian_features = gaussian_features
         gaussian_params = model_config.model_parameter_constraints[
@@ -789,14 +801,12 @@ class FactoredHMMInference(ABC):
 
         # Add initial state probabilities if idx  is 0.
         if idx == 0:
-            prob *= model.initial_state_matrix[system][:n_hidden_states[
-                system]]
+            prob *= model.initial_state_matrix[system][:n_hidden_states[system]]
 
         # Add transition probabilities untill idx corresponds to the last observed data.
         if idx < data.shape[0] - 1:
-            prob *= np.array(
-                model.transition_matrix[system][:, next_hidden_state[
-                    system]])[:n_hidden_states[system]]
+            prob *= np.array(model.transition_matrix[
+                system][:, next_hidden_state[system]])[:n_hidden_states[system]]
 
         return prob
 
@@ -1349,9 +1359,7 @@ def _factored_hmm_to_discrete_hmm(model):
         obtained from a factored HMM model object.
     """
     n_hidden_states = np.prod(model.n_hidden_states)
-    training_spec = {
-        'n_hidden_states': n_hidden_states
-    }
+    training_spec = {'n_hidden_states': n_hidden_states}
 
     model_parameter_constraints = {}
     observations = []

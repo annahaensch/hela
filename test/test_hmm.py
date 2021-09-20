@@ -153,7 +153,8 @@ def test_model_learning_and_imputation(generative_model):
     assert precision_recall['proportion'].sum() == 1
 
     val1 = validation['relative_accuracy_of_imputed_finite_data']
-    val2 = validation['average_relative_log_likelihood_of_imputed_gaussian_data']
+    val2 = validation[
+        'average_relative_log_likelihood_of_imputed_gaussian_data']
     val3 = validation['average_z_score_of_imputed_gaussian_data']
 
     assert val1 >= 1  #Accuracy should be at least as good as random guessing.

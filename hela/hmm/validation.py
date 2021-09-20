@@ -68,9 +68,10 @@ class HMMValidationTool(ABC):
             verify_finite_data = get_finite_observations_from_data(
                 self.model, data_to_verify)
 
-            if incomplete_finite_data[incomplete_finite_data.isna().any(axis = 1)].shape[0] == 0:
+            if incomplete_finite_data[incomplete_finite_data.isna().any(
+                    axis=1)].shape[0] == 0:
                 val_dict['accuracy_of_imputed_finite_data'] = 1
-                val_dict['relative_accuracy_of_imputed_finite_data'] =1
+                val_dict['relative_accuracy_of_imputed_finite_data'] = 1
                 val_dict['best_possible_accuracy_of_finite_imputation'] = 1
 
             else:

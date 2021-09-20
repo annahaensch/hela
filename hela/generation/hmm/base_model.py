@@ -105,7 +105,9 @@ class HMMGenerativeModel(ABC):
                 msg = "all n_categorical_values entries must be greater than 1"
                 assert np.all(np.array(n_categorical_values) > 1), msg
 
-                values = [[str(t) for t in list(range(v))] for v in n_categorical_values]
+                values = [[str(t)
+                           for t in list(range(v))]
+                          for v in n_categorical_values]
                 value_tuples = list(itertools.product(*values))
                 categorical_features = [
                     "categorical_feature_{}".format(i)

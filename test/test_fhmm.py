@@ -24,9 +24,7 @@ def n_hidden_states(random):
 @pytest.fixture(scope="module")
 def generative_model(random, n_hidden_states):
     gen_model = gen.FactoredHMMGenerativeModel(
-        n_hidden_states=[3, 2],
-        n_categorical_features=2,
-        n_gaussian_features=1)
+        n_hidden_states=[3, 2], n_categorical_features=2, n_gaussian_features=1)
 
     factored_hidden_states = gen_model.generate_hidden_state_sequence(
         n_observations=500)
