@@ -12,17 +12,17 @@ PY_VERSION=$(shell (sed -ne "s/^__version__\s*=\s*['\"]\(.*\)['\"]/\1/p" hela/__
 #################################################################################
 
 format: .docker_images/$(GIT_VERSION).stamp
-	@$(RUN) yapf --style=google -pir $(PYTHON_FILES)
+	@bash $(RUN) yapf --style=google -pir $(PYTHON_FILES)
 
 lint: .docker_images/$(GIT_VERSION).stamp
 	@mkdir -p logs
-	@$(RUN) prospector | tee logs/prospector.out
+	@bash $(RUN) prospector | tee logs/prospector.out
 
 test: .docker_images/$(GIT_VERSION).stamp
-	@$(RUN) python -m pytest test
+	@bash $(RUN) python -m pytest test
 
-isort:
-	@$(RUN) isort $(PYTHON_FILES)
+isort: .docker_images/$(GIT_VERSION).stamp
+	@bash $(RUN) isort $(PYTHON_FILES)
 
 python: .docker_images/$(GIT_VERSION).stamp
 	docker run --rm -it -v $(CURDIR):/hela hela:$(GIT_VERSION) python3
