@@ -6,6 +6,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
   build-essential dvipng
 
 RUN pip install \
+  altair==3.2.0 \
+  altair_saver==0.1.0 \
+  dask==2.11.0 \
+  distributed==2.11.0 \
   isort==4.3.21 \
   jax==0.2.8 \
   jaxlib==0.3.2 \
@@ -14,6 +18,7 @@ RUN pip install \
   pandas==1.1.4 \
   pgmpy==0.1.18 \
   pytest==5.3.2 \
+  vega==2.6.0 \
   yapf==0.20.1
 
 WORKDIR /hela
