@@ -1,13 +1,15 @@
 """Utility functions used across hmm classes, including for validation.
 """
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
-from jax import random
-from jax.scipy.special import logsumexp as lse
 from scipy import stats
 from scipy.special import logsumexp
+
+#TODO(annahaensch): restore Jax
+#import jax
+#import jax.numpy as jnp
+#from jax import random
+#from jax.scipy.special import logsumexp as lse
 
 
 def get_finite_observations_from_data(model, data):
@@ -356,7 +358,8 @@ def check_jax_precision():
     return x.dtype == 'float64'
 
 
-@jax.jit
+#@jax.jit
+#TODO(annahaensch): restore Jax
 def jax_compute_forward_probabilities(log_initial_state, log_transition,
                                       log_probability):
     """ Compute forward probabilities faster with Jax.
@@ -397,7 +400,8 @@ def jax_compute_forward_probabilities(log_initial_state, log_transition,
     return alpha
 
 
-@jax.jit
+#@jax.jit
+#TODO(annahaensch): restore Jax
 def jax_compute_backward_probabilities(log_transition, log_probability):
     """ compute backard probabilities faster with Jax.
 
