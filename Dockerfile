@@ -11,8 +11,6 @@ RUN pip install \
   dask==2.11.0 \
   distributed==2.11.0 \
   isort==4.3.21 \
-  jax==0.2.8 \
-  jaxlib==0.3.2 \
   matplotlib==3.1.2 \
   numpy==1.18.1 \
   pandas==1.1.4 \
