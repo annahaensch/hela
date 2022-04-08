@@ -8,8 +8,6 @@ from scipy.special import logsumexp
 
 import hela.generation.hmm as gen
 import hela.hmm as hmm
-from hela.walk_forward_concordance import WalkForwardConcordance
-
 
 @pytest.fixture(scope="module")
 def random():

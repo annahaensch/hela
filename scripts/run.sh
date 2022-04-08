@@ -1,5 +1,6 @@
 #!/bin/bash
-ROOT_DIR="$(readlink -f "$(dirname "$(readlink -f "$0")")/..")"
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
 
 COMMAND=${@:-bash}
 docker run -it --rm      \

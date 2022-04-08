@@ -224,6 +224,8 @@ class HiddenMarkovModel(ABC):
         methods that comprise the forward-backward passes of EM as well 
         as Viterbi prediction methods.
         """
+        if use_jax == True:
+            raise NotImplementedError("Jax is currently under construction.")
         return self._load_inference_interface(use_jax)
 
     @abstractmethod
@@ -249,3 +251,5 @@ class HMMLearningAlgorithm(ABC):
     @abstractmethod
     def run(self, model, data, training_iterations, method, use_jax):
         """ Runs specified training method for given data."""
+        if use_jax == True:
+            raise NotImplementedError("Jax is currently under construction.")
