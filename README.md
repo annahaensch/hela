@@ -15,7 +15,7 @@ Once your working environment is prepared, navigate to the directory where you'd
 ```
 $ git clone <copy_the_link_from_Code_Clone_SSH>
 ```
-In case it's your first time, when we write "<something_here>" in a code snippet, that means replace the angle brackets and everything between them with whatever is being suggested.  Once you've cloned the repository, navigate into the top level Hela folder and launch a Jupyter server in the Docker container (this step will also mount a Docker image in the background and might take a few moments).
+In case it's your first time, when we write "<something_here>" in a code snippet, that means replace the angle brackets and everything between them with whatever is being suggested.  Once you've cloned the repository, navigate into the top level Hela folder.  From here you'll want to launch a Jupyter server in the Docker container (this step will also mount a Docker image in the background and might take a few moments).
 
 ```
 $ cd hela
@@ -26,7 +26,7 @@ Now, to access your Jupyter server, run the following.
 ```
 $ make jupyter_url
 ```
-This will print a link which you can cut/paste into a web browser to access the Hela notebook directory.
+This will print a link which you can cut/paste into a web browser to access the Hela notebook directory.  You will see one folder called `tracked` which contains several tracked notebooks that will walk you through the data generation and modeling tools in hela.
 
 
 ## Working with Hela
