@@ -5,8 +5,8 @@ import hela
 setup(
     name='hela',
     version=hela.__version__,
-    description="Factored hidden Markov modeling.",
-    author="Will Vega-Brown",
-    author_email="will@tagup.io",
-    url="http://tagup.io",
+    description="Factored and hybrid hidden Markov modeling.",
+    author="Anna Haensch",
+    author_email="anna.haensch@tufts.edu",
+    url="http://annahaensch.com",
     packages=find_packages())
