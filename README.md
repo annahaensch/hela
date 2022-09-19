@@ -4,6 +4,35 @@ This repository contains various code related to hidden Markov models (HMM).  Fo
 
 ## Getting Started 
 
+There are two ways to access the Hela codebase.  The first is using a Conda virtual environemnt, the other is by mounting a Docker image.  Instructions for both are below.
+
+### Using Hela with Conda (_recommended_)
+
+Before you get started, you'll need to create a new environment using `conda` (in case you need it, [installation guide here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)). If you use `conda` you can create a new environment (we'll call it `hela_env`) and it's important (for backwards compatibility) that we create it specifically with Python version 3.7.3 as follows.
+
+```
+conda create --name hela_env python=3.7.3
+```
+
+and activate your new environment, with
+
+```
+conda activate hela_env
+```
+To run the tools in the libarary will need to install the necessary dependencies. First you'll need to conda install `pip` and then install the remaining required Python libraries as follows.
+
+```
+conda install pip
+pip install -U -r requirements.txt
+```
+Now, to access your Jupyter server, run the following.
+```
+$ jupyter notebook
+```
+This will print a link which you can cut/paste into a web browser to access the Hela notebook directory.  You will see one folder called `tracked` which contains several tracked notebooks that will walk you through the data generation and modeling tools in hela.
+
+### Using Hela with Docker
+
 This code is packaged as a Docker container, so before you can interact with Hela, you'll need to do a few things: 
 
 1. Install Docker ([available here](https://docs.docker.com/get-docker/)), or if you think you might already have Docker installed, run `docker --version` from you terminal command line.
@@ -31,9 +60,7 @@ This will print a link which you can cut/paste into a web browser to access the 
 
 ## Working with Hela
 
-### Generative Modeling with Hela
-
-### Inference and Learning with Hela
+There are several tracked notebooks to help get you started in `notebooks\tracked`.
 
 ## Contact
 
