@@ -80,7 +80,7 @@ class DiscreteHMM(HiddenMarkovModel):
         ]
         if len(gaussian_features) > 0:
             model.gaussian_mixture_model = GaussianMixtureModel.from_config(
-                model_config, random_state)
+                model_config,random_state)
 
         # Check that there are no remaining features.
         if len(model.continuous_features) > 0:
@@ -170,20 +170,25 @@ class DiscreteHMM(HiddenMarkovModel):
 
         new_model = self.model_config.to_model()
 
-        if self.model_config.model_parameter_constraints.get(
-                'initial_state_constraints', None) is None:
-            new_model.log_initial_state = gamma[0]
+        new_model.log_initial_state = gamma[0]
 
         new_model.log_transition = logsumexp(
             xi, axis=0) - logsumexp(
                 gamma[:-1], axis=0).reshape(-1, 1)
 
         if self.categorical_model is not None:
-            new_model.categorical_model.log_emission_matrix = self.categorical_model.update_log_emission_matrix(
+            new_log_emission_matrix = self.categorical_model.update_log_emission_matrix(
                 gamma, finite_states_data)
+
+            new_model.log_emission_matrix = new_log_emission_matrix
+
         if self.gaussian_mixture_model is not None:
-            new_model.gaussian_mixture_model = self.gaussian_mixture_model.update_gmm_parameters(
+            new_means, new_covariances, new_weights = self.gaussian_mixture_model.update_gmm_parameters(
                 gaussian_data, gamma, gamma_by_component)
+            
+            new_model.gaussian_mixture_model.means = new_means
+            new_model.gaussian_mixture_model.covariances = new_covariances
+            new_model.gaussian_mixture_model.component_weights = new_weights
 
         return new_model
 
@@ -191,12 +196,14 @@ class DiscreteHMM(HiddenMarkovModel):
 class CategoricalModel(DiscreteHMM):
 
     def __init__(self,
+                 random_state=None,
                  n_hidden_states=None,
                  finite_features=None,
                  finite_values=None,
                  finite_values_dict=None,
                  finite_values_dict_inverse=None,
                  log_emission_matrix=None):
+        self.random_state = random_state
         self.n_hidden_states = n_hidden_states
         self.finite_features = finite_features
         self.finite_values = finite_values
@@ -296,6 +303,7 @@ class CategoricalModel(DiscreteHMM):
 class GaussianMixtureModel(DiscreteHMM):
 
     def __init__(self,
+                 random_state=None,
                  n_hidden_states=None,
                  gaussian_features=None,
                  gaussian_values=None,
@@ -304,6 +312,7 @@ class GaussianMixtureModel(DiscreteHMM):
                  component_weights=None,
                  means=None,
                  covariances=None):
+        self.random_state = random_state
         self.n_hidden_states = n_hidden_states
         self.gaussian_features = gaussian_features
         self.dims = dims
@@ -317,6 +326,7 @@ class GaussianMixtureModel(DiscreteHMM):
         """ Return instantiated Gaussian MixtureModel object)
         """
         gmm = cls(n_hidden_states=model_config.n_hidden_states)
+        gmm.random_state = random_state
         continuous_values = model_config.continuous_values
 
         # Gather gaussian features and values.
@@ -521,13 +531,13 @@ class GaussianMixtureModel(DiscreteHMM):
             dims=self.dims,
             gaussian_features=self.gaussian_features)
 
-        new_gmm.means = self.update_means(gaussian_data, gamma_by_component)
-        new_gmm.covariances = self.update_covariances(gaussian_data,
+        new_means = self.update_means(gaussian_data, gamma_by_component)
+        new_covariances = self.update_covariances(gaussian_data,
                                                       gamma_by_component)
-        new_gmm.component_weights = self.update_component_weights(
-            gamma, gamma_by_component)
+        new_weights = self.update_component_weights(
+                                        gamma, gamma_by_component)
 
-        return new_gmm
+        return new_means, new_covariances, new_weights
 
 
 class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
@@ -565,18 +575,9 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
 
         new_model = model.model_config.to_model(
             set_random_state=model.set_random_state)
-        new_model.log_transition = model.log_transition
-        new_model.log_initial_state = model.log_initial_state
-        
-        if new_model.categorical_model:
-            new_model.categorical_model.log_emission_matrix = model.categorical_model.log_emission_matrix
-
-        if new_model.gaussian_mixture_model:
-            new_model.gaussian_mixture_model.means = model.gaussian_mixture_model.means
-            new_model.gaussian_mixture_model.component_weights = model.gaussian_mixture_model.component_weights
-            new_model.gaussian_mixture_model.covariances = model.gaussian_mixture_model.covariances
 
         for _ in range(training_iterations):
+
             # e_step
             expectation = new_model.load_inference_interface(use_jax)
             expectation.compute_sufficient_statistics(data)
