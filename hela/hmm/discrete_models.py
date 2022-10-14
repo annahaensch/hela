@@ -513,8 +513,10 @@ class GaussianMixtureModel(DiscreteHMM):
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
-            gamma: array where entry [t,i] is the probability of being in hidden state i at time t.
-            gamma_by_component: array where entry [i,t,m] if the probability of being in hidden state i and gmm component m at time t.
+            gamma: array where entry [t,i] is the probability of being in 
+                hidden state i at time t.
+            gamma_by_component: array where entry [i,t,m] if the probability of 
+                being in hidden state i and gmm component m at time t.
 
         Returns:
             GaussianMixtureModel object with updated parameters
@@ -702,11 +704,13 @@ class DiscreteHMMInferenceResults(ABC):
         Arguments:
             data: dataframe of observed data
             n_iterations: number of sampling iterations
-            seed_inference: sequence of hidden states to seed sampling algorithm.
-                Default is None in which case hidden states are seeded randomly.
+            seed_inference: sequence of hidden states to seed sampling 
+                algorithm.  Default is None in which case hidden states are 
+                seeded randomly.
 
         Returns:
-            Most likely sequence of hidden states determined by n_iterations of Gibbs sampling.
+            Most likely sequence of hidden states determined by n_iterations of 
+            Gibbs sampling.
         """
         model = self.model
         initial_state_prob = np.exp(model.log_initial_state)
@@ -770,7 +774,8 @@ class DiscreteHMMInferenceResults(ABC):
             log_probability: dataframe of log probability of hidden state
 
         Returns:
-            Array where entry [t,i] is the log probability of observations o_0,...,o_t and h_t = i under the current model parameters.
+            Array where entry [t,i] is the log probability of observations 
+            o_0,...,o_t and h_t = i under the current model parameters.
 
         """
         log_transition = self.model.log_transition
@@ -796,7 +801,8 @@ class DiscreteHMMInferenceResults(ABC):
             log_probability: dataframe of log probability of hidden state
 
         Returns:
-            Array where entry [t,i] is the log probability of observations o_{t+1},...,o_T given h_t = i under the current model parameters.
+            Array where entry [t,i] is the log probability of observations 
+            o_{t+1},...,o_T given h_t = i under the current model parameters.
 
         """
         log_transition = self.model.log_transition
