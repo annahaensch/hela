@@ -846,9 +846,10 @@ class DiscreteHMMInferenceResults(ABC):
             data: dataframe of mixed data types.
 
         Returns:
-            List of gamma values where gamma[i][t][l] gives the log probability
-            of being in hidden states i and component l at time t, given 
-            observations and current HMM parameters.
+            Array where the [i,t,m] entry given the log conditional probability 
+            of hidden state i and gmm component m at time t given ALL 
+            observations and current model parameters, more formally, 
+            log[ (p(z_t = i, c_t = m | x_1,...,X_T) ].
         """
         n_hidden_states = self.model.n_hidden_states
         n_components = self.model.gaussian_mixture_model.n_gmm_components
@@ -856,7 +857,7 @@ class DiscreteHMMInferenceResults(ABC):
         log_weights = np.log(
             weights,
             out=np.zeros_like(weights) + LOG_ZERO,
-            where=(weights != 0))
+            where=(weights != 0)).reshape(n_hidden_states, -1, n_components)
 
         gaussian_data = get_gaussian_observations_from_data(self.model, data)
         log_probability = np.array(
@@ -866,13 +867,14 @@ class DiscreteHMMInferenceResults(ABC):
                 gaussian_data))
 
         gamma = self._gamma(data)
-        gamma_by_component = np.empty((n_hidden_states, data.shape[0],
-                                       n_components))
-        for i in range(n_hidden_states):
-            gamma_by_component[i] = np.array([g[i] for g in gamma]).reshape(
-                -1, 1
-            ) + log_probability_by_component[i] + log_weights[i] - np.array(
-                [l[i] for l in log_probability]).reshape(-1, 1)
+        gamma_by_component = log_probability_by_component + log_weights
+        gamma_by_component = gamma_by_component - logsumexp(
+                                gamma_by_component, axis = 2, keepdims = True)
+        gamma_by_component = gamma_by_component + gamma.transpose().reshape(
+                                n_hidden_states, data.shape[0],-1)
+        
+        assert np.all(np.exp(gamma_by_component).sum(axis = 0
+                                    ).sum(axis = 1) -1 < 1e-08)
 
         return gamma_by_component
 
