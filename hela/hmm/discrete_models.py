@@ -474,11 +474,11 @@ class GaussianMixtureModel(DiscreteHMM):
         n_gmm_components = self.n_gmm_components
         means = self.means
         covariances = np.zeros_like(np.array(self.covariances))
-        gamma_exp = np.exp(gamma_by_component)
         for i in range(n_hidden_states):
             for m in range(n_gmm_components):
+                gamma_exp = np.exp(gamma_by_component[i,:,m])
                 error = (gaussian_data - means[i][m]).values
-                error_prod = np.array([e.reshape(-1, 1) @ er.reshape(1, -1)
+                error_prod = np.array([e.reshape(-1, 1) @ e.reshape(1, -1)
                                             for e in error])
                 new_covariance = np.array([gamma_exp[i] * error_prod[i] for 
                     i in range(error_prod.shape[0])]).sum(axis = 0)
@@ -491,9 +491,8 @@ class GaussianMixtureModel(DiscreteHMM):
         """ Return updated component weights for current hmm parameters.
 
         Arguments:
-            gamma: array where entry [t,i] is the probability of being in hidden state i at time t.
-            gamma_by_component: array where entry [i,t,m] if the probability of being in hidden state i and gmm component m at time t.
-
+            gamma: output of `_gamma`
+            gamma_by_component: output of `_gamma_by_component`
 
         Returns:
             Array of updated component weights matrices.
@@ -509,11 +508,9 @@ class GaussianMixtureModel(DiscreteHMM):
         """ Return gmm with updated parameters
 
         Arguments:
-            gaussian_data: observed gaussian data as DataFrame
-            gamma: array where entry [t,i] is the probability of being in 
-                hidden state i at time t.
-            gamma_by_component: array where entry [i,t,m] if the probability of 
-                being in hidden state i and gmm component m at time t.
+            gaussian_data: observed Gaussian data as DataFrame
+            gamma: output of `gamma`
+            gamma_by_component: output of `_gamma_by_component`
 
         Returns:
             GaussianMixtureModel object with updated parameters
@@ -568,6 +565,16 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
 
         new_model = model.model_config.to_model(
             set_random_state=model.set_random_state)
+        new_model.log_transition = model.log_transition
+        new_model.log_initial_state = model.log_initial_state
+        
+        if new_model.categorical_model:
+            new_model.categorical_model.log_emission_matrix = model.categorical_model.log_emission_matrix
+
+        if new_model.gaussian_mixture_model:
+            new_model.gaussian_mixture_model.means = model.gaussian_mixture_model.means
+            new_model.gaussian_mixture_model.component_weights = model.gaussian_mixture_model.component_weights
+            new_model.gaussian_mixture_model.covariances = model.gaussian_mixture_model.covariances
 
         for _ in range(training_iterations):
             # e_step
