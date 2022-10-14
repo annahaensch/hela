@@ -249,15 +249,16 @@ class CategoricalModel(DiscreteHMM):
         return log_emission
 
     def log_probability(self, finite_data_enum):
-        """ Return log probability of finite observation given hidden state
+        """ Return log conditional prob of observation given hidden state.
 
         Arguments:
             finite_data_enum: (Series) finite observations by observation 
                 vector enumeration (i.e. 0 = (a,a), 1 = (a,b), etc.).
 
         Returns:
-            Array where entry [t,i] is the log probability of observing the 
-            finite emission at time t given hidden state i.
+            Array where entry [t,i] is the log conditional probability of 
+            emitting the discrete observation x_t given hidden state i, more 
+            formally, log[ p(x_t | z_t = i) ].
         """
         n_observations = finite_data_enum.shape[0]
         log_emission = np.array(self.log_emission_matrix)
@@ -375,14 +376,15 @@ class GaussianMixtureModel(DiscreteHMM):
         return gmm
 
     def log_probability_by_component(self, gaussian_data):
-        """ Return log probability of gaussian observation given hidden state and gmm component
+        """ Return log conditional prob of obs given state and component.
 
         Arguments:
-            model: HiddenMarkovModel object.
             gaussian_data: observed gaussian data as DataFrame
 
         Returns:
-            np.array where entry [i,t,m] is the log probability of emitting continuous observation t in hidden state i and gaussian component m.
+            Numpy array where entry [i,t,m] is the log conditional probability 
+            of emitting continuous observation x_t in hidden state i and gmm 
+            component m, formally log[ p(x_t | z_t = h_i, c_t = m) ].
         """
         n_hidden_states = self.n_hidden_states
         n_gmm_components = self.n_gmm_components
@@ -407,16 +409,19 @@ class GaussianMixtureModel(DiscreteHMM):
         return log_emission_by_component
 
     def log_probability(self, gaussian_data):
-        """ Return log probability of observations for each hidden state
+        """ Return log conditional prob of observation given hidden state.
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
 
         Returns:
-            DataFrame of log probabilties of observations for each hidden state
+            DataFrame of log conditional probabilties of observations given 
+            hidden states.  Entry in row t and column i corresponds to the 
+            log conditional probability log[ p(x_t | z_t = i) ] 
         """
         n_hidden_states = self.n_hidden_states
         n_observations = gaussian_data.shape[0]
+        n_gmm_components = self.n_gmm_components
         weights = np.array(self.component_weights)
         log_weights = np.log(
             weights,
@@ -425,19 +430,19 @@ class GaussianMixtureModel(DiscreteHMM):
         log_emission_by_component = self.log_probability_by_component(
             gaussian_data)
 
-        log_emission = np.full((n_hidden_states, n_observations), np.nan)
-        for i in range(len(log_weights)):
-            log_emission[i] = logsumexp(
-                log_emission_by_component[i] + log_weights[i], axis=1)
+        log_emission = logsumexp(
+                    log_emission_by_component + log_weights.reshape(
+                    n_hidden_states, -1, n_gmm_components), axis = 2
+                                                                ).transpose()
 
-        return pd.DataFrame(log_emission.transpose(), index=gaussian_data.index)
+        return pd.DataFrame(log_emission, index=gaussian_data.index)
 
     def update_means(self, gaussian_data, gamma_by_component):
         """ Return updated means for current hmm parameters.
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
-            gamma_by_component: array where entry [i,t,m] if the probability of being in hidden state i and gmm component m at time t.
+            gamma_by_component: array returned from `_gamma_by_component`
 
         Returns:
             Array of updated means.
@@ -607,7 +612,7 @@ class DiscreteHMMInferenceResults(ABC):
             self.gamma_by_component = self._gamma_by_component(data)
 
     def predict_hidden_state_log_probability(self, data):
-        """ Return log probabilities of hidden states
+        """ Return log probabilities of observations and hidden states
 
         Arguments:
             data: dataframe of mixed data types
@@ -837,7 +842,9 @@ class DiscreteHMMInferenceResults(ABC):
             data: dataframe of mixed data types
 
         Returns:
-            List of gamma values where gamma[i][t][l] gives the log probability of being in hidden states i and component l at time t, given observations and current HMM parameters.
+            List of gamma values where gamma[i][t][l] gives the log probability
+            of being in hidden states i and component l at time t, given 
+            observations and current HMM parameters.
         """
         n_hidden_states = self.model.n_hidden_states
         n_components = self.model.gaussian_mixture_model.n_gmm_components
