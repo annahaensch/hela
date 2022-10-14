@@ -442,7 +442,7 @@ class GaussianMixtureModel(DiscreteHMM):
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
-            gamma_by_component: array returned from `_gamma_by_component`
+            gamma_by_component: output of `_gamma_by_component`
 
         Returns:
             Array of updated means.
@@ -465,7 +465,7 @@ class GaussianMixtureModel(DiscreteHMM):
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
-            gamma_by_component: array where entry [i,t,m] if the probability of being in hidden state i and gmm component m at time t.
+            gamma_by_component: output of `_gamma_by_component`
 
         Returns:
             Array of updated covariance matrices.
@@ -474,19 +474,16 @@ class GaussianMixtureModel(DiscreteHMM):
         n_gmm_components = self.n_gmm_components
         means = self.means
         covariances = np.zeros_like(np.array(self.covariances))
-        gamma_by_component = np.exp(gamma_by_component)
+        gamma_exp = np.exp(gamma_by_component)
         for i in range(n_hidden_states):
             for m in range(n_gmm_components):
-                error = np.array(gaussian_data) - means[i][m]
-                error_prod = np.array([
-                    error[t].reshape(-1, 1) @ error[t].reshape(1, -1)
-                    for t in range(len(error))
-                ])
-                gamma = np.array([g[m] for g in gamma_by_component[i]]).reshape(
-                    -1, 1, 1)
-                covariances[i][m] = np.sum(
-                    gamma * error_prod, axis=0) / np.sum(
-                        gamma, axis=0)
+                error = (gaussian_data - means[i][m]).values
+                error_prod = np.array([e.reshape(-1, 1) @ er.reshape(1, -1)
+                                            for e in error])
+                new_covariance = np.array([gamma_exp[i] * error_prod[i] for 
+                    i in range(error_prod.shape[0])]).sum(axis = 0)
+                new_covariance = new_covariance / gamma_exp.sum(axis = 0)
+                covariances[i][m] = new_covariance
 
         return covariances
 
