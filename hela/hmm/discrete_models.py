@@ -821,11 +821,12 @@ class DiscreteHMMInferenceResults(ABC):
         """Auxiliary function for EM.
 
         Arguments:
-            model: HiddenMarkovModel object.
+            data: dataframe of mixed data types.
 
         Returns:
-            List of gamma values where gamma[t,i] is the log proability of
-            hidden state i occuring at time t, given observations and current HMM parameters.
+            Array where the [t,i] entry is the log conditional probability of 
+            hidden state i at time t given ALL observations and current model 
+            parameters, more formally, log[ p(z_t = i | x_1,...,x_T) ]
         """
         log_probability = np.asarray(
             self.predict_hidden_state_log_probability(data))
@@ -833,13 +834,16 @@ class DiscreteHMMInferenceResults(ABC):
         beta = self._compute_backward_probabilities(log_probability)
         gamma = np.asarray(alpha) + np.asarray(beta)
         gamma -= logsumexp(gamma, axis=1).reshape(-1, 1)
+
+        assert np.all(np.exp(gamma).sum(axis = 1) - 1 < 1e-08)
+
         return gamma
 
     def _gamma_by_component(self, data):
         """Auxiliary function for EM.
 
         Arguments:
-            data: dataframe of mixed data types
+            data: dataframe of mixed data types.
 
         Returns:
             List of gamma values where gamma[i][t][l] gives the log probability
