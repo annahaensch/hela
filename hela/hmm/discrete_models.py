@@ -383,7 +383,7 @@ class GaussianMixtureModel(DiscreteHMM):
                 except:
                     raise ValueError("Oh no, it looks like you've arrived at "+
                         "a singular covariance matrix.  This probably means "+
-                        "that you are using to many gmm components.  Try "+
+                        "that you are using too many gmm components.  Try "+
                         "reinitializing your model with fewer gmm components " +
                         "or try seeding it with difference initial parameters.")
 
