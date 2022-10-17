@@ -541,9 +541,10 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
                 new_model.gaussian_mixture_model.covariances = cov
 
         for _ in range(training_iterations):
-            new_model = self.get_updated_model_parameters(new_model, data, 
+            new_model, ss = self.get_updated_model_parameters(new_model, data, 
                 use_jax=False)
             self.model_results.append(new_model)
+            self.sufficient_statistics.append(ss)
 
         return new_model
 
@@ -623,11 +624,9 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
             new_model.gaussian_mixture_model.component_weights = new_weights.copy()
             
             # Recompute expectation
-            expectation.compute_sufficient_statistics(data)
-            gamma = expectation.gamma
-            gamma_by_component = expectation.gamma_by_component
+            ss = expectation.compute_sufficient_statistics(data)
 
-        return new_model
+        return new_model, ss
 
 class DiscreteHMMInferenceResults(ABC):
     """ Abstract base class for HMM inference results """
