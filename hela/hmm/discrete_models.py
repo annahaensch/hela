@@ -507,7 +507,6 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
         Returns:
             Trained instance of DiscreteHMM.  Also returns em training results.
         """
-        msg = "Check that your data columns are ordered correctly."
         self.data = data
 
         new_model = model.model_config.to_model(
@@ -523,8 +522,6 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
         if len(model.finite_features) > 0:
             self.finite_data_enum = get_finite_observations_from_data_as_enum(
                 model, data)
-            assert list(self.finite_data.columns
-                                ) == actual_model.categorgical_features, msg
 
             # Make sure that finite model parameters are up to date.
             emissions = model.categorical_model.log_emission_matrix.copy()
@@ -534,8 +531,9 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
             if model.gaussian_mixture_model:
                 self.gaussian_data = get_gaussian_observations_from_data(
                     model, data)
+                msg = "Check that your data columns are ordered correctly."
                 assert list(self.gaussian_data.columns
-                                ) == actual_model.continuous_features, msg
+                                ) == model.continuous_features, msg
 
                 # Make sure that gmm parameters are up to date.
                 means = model.gaussian_mixture_model.means.copy()
