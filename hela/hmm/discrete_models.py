@@ -531,6 +531,9 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
             if model.gaussian_mixture_model:
                 self.gaussian_data = get_gaussian_observations_from_data(
                     model, data)
+                msg = "Check that your data columns are ordered correctly."
+                assert list(self.gaussian_data.columns
+                                ) == model.continuous_features, msg
 
                 # Make sure that gmm parameters are up to date.
                 means = model.gaussian_mixture_model.means.copy()
