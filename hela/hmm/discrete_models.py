@@ -507,10 +507,10 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
         Returns:
             Trained instance of DiscreteHMM.  Also returns em training results.
         """
-        col = data.columns.copy()
-        col.sorted()
+        col = list(data.columns.copy())
+        col.sort()
         msg = "Check that your data columns are ordered correctly."
-        assert list(col) == list(data.columns); msg
+        assert col == list(data.columns), msg
         self.data = data
 
         new_model = model.model_config.to_model(
@@ -658,6 +658,8 @@ class DiscreteHMMInferenceResults(ABC):
         self.gamma_by_component = None
         if model.gaussian_mixture_model is not None:
             self.gamma_by_component = self._gamma_by_component(data)
+
+        return self.log_prob
 
     def predict_hidden_state_log_probability(self, data):
         """ Return log probabilities of observations and hidden states
