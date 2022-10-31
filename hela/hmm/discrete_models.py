@@ -659,8 +659,6 @@ class DiscreteHMMInferenceResults(ABC):
         if model.gaussian_mixture_model is not None:
             self.gamma_by_component = self._gamma_by_component(data)
 
-        return self.log_prob
-
     def predict_hidden_state_log_probability(self, data):
         """ Return log probabilities of observations and hidden states
 
