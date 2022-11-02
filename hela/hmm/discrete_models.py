@@ -890,8 +890,7 @@ class DiscreteHMMInferenceResults(ABC):
             hidden state i at time t given ALL observations and current model 
             parameters, more formally, log[ p(z_t = i | x_1,...,x_T) ]
         """
-        log_prob = self.log_prob #log_probability = np.asarray(
-            #self.predict_hidden_state_log_probability(data))
+        log_prob = self.log_prob
         alpha = self._compute_forward_probabilities(log_prob)
         beta = self._compute_backward_probabilities(log_prob)
         gamma = np.asarray(alpha) + np.asarray(beta)
