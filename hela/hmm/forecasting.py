@@ -68,7 +68,7 @@ class HMMForecastingTool(ABC):
         Returns:
             Probability distribution of hidden state at last observation.
         """
-        log_prob = self.inf.predict_hidden_state_log_probability(self.data)
+        log_prob = self.inf.observation_log_probability(self.data)
         joint_prob = self.inf._compute_forward_probabilities(log_prob)
 
         return np.exp(joint_prob[-1] - logsumexp(joint_prob, axis=1)[-1])
