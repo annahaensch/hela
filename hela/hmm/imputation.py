@@ -151,7 +151,7 @@ class DiscreteHMMImputation(ABC):
                 # If all Gaussian observations are known...
                 if len(known_gaussian) == len(model.continuous_features):
                     log_p_gauss = np.array(
-                        model.gaussian_mixture_model.log_probability(
+                        model.gaussian_mixture_model.gaussian_log_probability(
                             gaussian_obs))[0]
 
                 # If no Gaussian observations are known...
