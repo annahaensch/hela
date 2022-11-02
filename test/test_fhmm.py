@@ -125,7 +125,7 @@ def test_learning_with_gibbs(generative_model):
         hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
         hmm_model = hmm_config.to_model()
         hmm_inf = hmm_model.load_inference_interface()
-        log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
+        log_prob = hmm_inf.observation_log_probability(dataset)
         likelihood.append(
             logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1]))
 
@@ -177,7 +177,7 @@ def test_learning_with_distributed_gibbs(generative_model):
         hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
         hmm_model = hmm_config.to_model()
         hmm_inf = hmm_model.load_inference_interface()
-        log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
+        log_prob = hmm_inf.observation_log_probability(dataset)
         likelihood.append(
             logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1]))
 
@@ -213,7 +213,7 @@ def test_learning_with_structured_vi(generative_model):
         hmm_config = hmm.DiscreteHMMConfiguration.from_spec(spec)
         hmm_model = hmm_config.to_model()
         hmm_inf = hmm_model.load_inference_interface()
-        log_prob = hmm_inf.predict_hidden_state_log_probability(dataset)
+        log_prob = hmm_inf.observation_log_probability(dataset)
         likelihood.append(
             logsumexp(hmm_inf._compute_forward_probabilities(log_prob)[-1]))
 

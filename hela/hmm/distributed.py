@@ -387,7 +387,7 @@ class EMObjective(object):
         """
 
         inference = inference.model.load_inference_interface()
-        log_prob = inference.predict_hidden_state_log_probability(self.data)
+        log_prob = inference.observation_log_probability(self.data)
         inference.log_probability = log_prob
 
         return inference
@@ -459,10 +459,10 @@ class EMObjective(object):
 
         gaussian_data = self.gaussian_data
         log_probability = np.array(
-            inference.model.gaussian_mixture_model.log_probability(
+            inference.model.gaussian_mixture_model.gaussian_log_probability(
                 gaussian_data))
         log_probability_by_component = np.array(
-            inference.model.gaussian_mixture_model.log_probability_by_component(
+            inference.model.gaussian_mixture_model.gaussian_log_probability_by_component(
                 gaussian_data))
 
         gamma = inference.gamma

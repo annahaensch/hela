@@ -224,7 +224,7 @@ class HMMValidationTool(ABC):
                                 1 / model.n_hidden_states))
                 ])
             else:
-                log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
+                log_prob_pre = inf.observation_log_probability(df_pre)
 
             if df_post.shape[0] == 0:
                 log_prob_post = pd.DataFrame([
@@ -233,7 +233,7 @@ class HMMValidationTool(ABC):
                                 1 / model.n_hidden_states))
                 ])
             else:
-                log_prob_post = inf.predict_hidden_state_log_probability(
+                log_prob_post = inf.observation_log_probability(
                     df_post)
 
             alpha = inf._compute_forward_probabilities(log_prob_pre)
@@ -299,7 +299,7 @@ class HMMValidationTool(ABC):
                 # If all Gaussian observations are known...
                 if len(known_gaussian) == len(model.continuous_features):
                     log_p_gauss = np.array(
-                        model.gaussian_mixture_model.log_probability(
+                        model.gaussian_mixture_model.gaussian_log_probability(
                             gaussian_obs))[0]
 
                 # If no Gaussian observations are known...

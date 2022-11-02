@@ -62,6 +62,15 @@ This will print a link which you can cut/paste into a web browser to access the 
 
 There are several tracked notebooks to help get you started in `notebooks\tracked`.
 
+## Unit Tests
+
+Before pushing any code you should run the unit tests.  You can do this from the top level directory with
+
+```
+$ pytest
+```
+If you get any errors that means your code has broken Hela and you should figure out why.  Don't worry if you get warnings, that's totally fine.
+
 ## Contact
 
 If you have questions or comments not suited for the Github workflow, please reach out to anna.haensch@tufts.edu.
