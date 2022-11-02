@@ -387,7 +387,7 @@ class EMObjective(object):
         """
 
         inference = inference.model.load_inference_interface()
-        log_prob = inference.predict_hidden_state_log_probability(self.data)
+        log_prob = inference.observation_log_probability(self.data)
         inference.log_probability = log_prob
 
         return inference
