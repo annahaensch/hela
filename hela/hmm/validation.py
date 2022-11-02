@@ -224,7 +224,7 @@ class HMMValidationTool(ABC):
                                 1 / model.n_hidden_states))
                 ])
             else:
-                log_prob_pre = inf.predict_hidden_state_log_probability(df_pre)
+                log_prob_pre = inf.observation_log_probability(df_pre)
 
             if df_post.shape[0] == 0:
                 log_prob_post = pd.DataFrame([
@@ -233,7 +233,7 @@ class HMMValidationTool(ABC):
                                 1 / model.n_hidden_states))
                 ])
             else:
-                log_prob_post = inf.predict_hidden_state_log_probability(
+                log_prob_post = inf.observation_log_probability(
                     df_post)
 
             alpha = inf._compute_forward_probabilities(log_prob_pre)
