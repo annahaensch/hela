@@ -117,7 +117,7 @@ def test_model_learning_and_imputation(generative_model):
     alphas = []
     for m in alg.model_results:
         m_inf = m.load_inference_interface()
-        m_log_prob = m_inf.predict_hidden_state_log_probability(dataset)
+        m_log_prob = m_inf.observation_log_probability(dataset)
         alpha = m_inf._compute_forward_probabilities(m_log_prob)
         alphas.append(logsumexp(alpha[-1]))
     assert alphas[0] < alphas[1]
