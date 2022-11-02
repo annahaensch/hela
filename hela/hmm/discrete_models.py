@@ -551,7 +551,6 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
                 new_model.gaussian_mixture_model.covariances = cov
 
         for _ in range(training_iterations):
-            print(f"ITERATION: {_}")
             new_model, ss = self.get_updated_model_parameters(new_model, data, 
                 r, use_jax=False)
             hmm_inf = new_model.load_inference_interface()
