@@ -223,7 +223,7 @@ class CategoricalModel(DiscreteHMM):
 
         return log_emission
 
-    def log_probability(self, finite_data_enum):
+    def categorical_log_probability(self, finite_data_enum):
         """ Return log conditional prob of observation given hidden state.
 
         Arguments:
@@ -326,7 +326,10 @@ class GaussianMixtureModel(DiscreteHMM):
             if 'means' in gmm_params:
                 gmm.means = gmm_params['means']
             if 'covariances' in gmm_params:
-                gmm.covariances = gmm_params['covariances']
+                #gmm.covariances = gmm_params['covariances']
+                covariances = np.array(gmm.n_hidden_states *
+                    [np.array(gmm.n_gmm_components * [np.identity(gmm.dims)])])
+                gmm.covariances = covariances.copy()
             if 'component_weights' in gmm_params:
                 gmm.component_weights = gmm_params['component_weights']
 
@@ -351,7 +354,7 @@ class GaussianMixtureModel(DiscreteHMM):
 
         return gmm
 
-    def log_probability_by_component(self, gaussian_data):
+    def gaussian_log_probability_by_component(self, gaussian_data):
         """ Return log conditional prob of obs given state and component.
 
         Arguments:
@@ -389,7 +392,7 @@ class GaussianMixtureModel(DiscreteHMM):
 
         return log_emission_by_component
 
-    def log_probability(self, gaussian_data):
+    def gaussian_log_probability(self, gaussian_data):
         """ Return log conditional prob of observation given hidden state.
 
         Arguments:
@@ -406,7 +409,7 @@ class GaussianMixtureModel(DiscreteHMM):
         weights = np.array(self.component_weights)
         weights = weights.reshape(n_hidden_states, -1, n_gmm_components)
 
-        log_emission_by_component = self.log_probability_by_component(
+        log_emission_by_component = self.gaussian_log_probability_by_component(
             gaussian_data)
         prob = (weights * np.exp(log_emission_by_component)).sum(axis = 2)
         prob = np.where(prob != 0, prob, 1e-08)
@@ -437,12 +440,13 @@ class GaussianMixtureModel(DiscreteHMM):
                                  ]).reshape(-1, 1))
         return means.copy()
 
-    def update_covariances(self, gaussian_data, gamma_by_component):
+    def update_covariances(self, gaussian_data, gamma_by_component,r):
         """ Return updated covariances for current hmm parameters.
 
         Arguments:
             gaussian_data: observed gaussian data as DataFrame
             gamma_by_component: output of `_gamma_by_component`
+            r: (float) regularization constant.
 
         Returns:
             Array of updated covariance matrices.
@@ -461,7 +465,8 @@ class GaussianMixtureModel(DiscreteHMM):
                     i in range(error_prod.shape[0])]).sum(axis = 0)
                 new_covariance = new_covariance / gamma_exp.sum(axis = 0)
 
-                covariances[i][m] = new_covariance
+                covariances[i][m] = new_covariance + (r * np.identity(
+                        new_covariance.shape[0]))
 
         return covariances.copy()
 
@@ -494,13 +499,14 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
         self.sufficient_statistics = []
         self.model_results = []
 
-    def run(self, model, data, training_iterations, method="em", use_jax=False):
+    def run(self, model, data, training_iterations, r = 0, method="em", use_jax=False):
         """ Base class for EM learning methods.
 
         Arguments:
             model: instance of DiscreteHMM
             data: dataframe with hybrid data for training.
             training_iterations: number of training iterations to carry out.
+            r: (float) regularization constant, default 0.
             method: "em"
             use_jax: (bool) If True, run distributed training using Jax. 
 
@@ -545,19 +551,24 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
                 new_model.gaussian_mixture_model.covariances = cov
 
         for _ in range(training_iterations):
+            print(f"ITERATION: {_}")
             new_model, ss = self.get_updated_model_parameters(new_model, data, 
-                use_jax=False)
+                r, use_jax=False)
+            hmm_inf = new_model.load_inference_interface()
+            log_prob = hmm_inf.observation_log_probability(data)
+            ll = logsumexp(hmm_inf._compute_forward_probabilities(log_prob))
             self.model_results.append(new_model)
             self.sufficient_statistics.append(ss)
 
         return new_model
 
-    def get_updated_model_parameters(self, model, data, use_jax):
+    def get_updated_model_parameters(self, model, data, r, use_jax):
         """  Update model parameters using EM.
         
         Arguments: 
             model: starting instance of DiscreteHMM
             data: dataframe with hybrid data for training.
+            r: (float) regularization constant.
             use_jax: (bool) if True, use jax.
             
         Returns: 
@@ -613,16 +624,15 @@ class DiscreteHMMLearningAlgorithm(HMMLearningAlgorithm):
             expectation.compute_sufficient_statistics(data)
             gamma = expectation.gamma
             gamma_by_component = expectation.gamma_by_component
-
             new_covariances = new_model.gaussian_mixture_model.update_covariances(
-                self.gaussian_data, gamma_by_component)
+                self.gaussian_data, gamma_by_component,r)
             new_model.gaussian_mixture_model.covariances = new_covariances.copy()
-            
+
             # Recompute expectation
             expectation.compute_sufficient_statistics(data)
             gamma = expectation.gamma
             gamma_by_component = expectation.gamma_by_component
-            
+
             new_weights = new_model.gaussian_mixture_model.update_component_weights(
                 gamma, gamma_by_component)
             new_model.gaussian_mixture_model.component_weights = new_weights.copy()
@@ -637,7 +647,7 @@ class DiscreteHMMInferenceResults(ABC):
 
     def __init__(self, model, use_jax):
         self.model = model
-        self.log_probability = None
+        self.log_prob = None
         self.gamma = None
         self.alpha = None
         self.beta = None
@@ -652,21 +662,23 @@ class DiscreteHMMInferenceResults(ABC):
             Statistics from HMMInferenceResults
         """
         model = self.model
-        self.log_prob = self.predict_hidden_state_log_probability(data)
+        self.log_prob = self.observation_log_probability(data)
         self.gamma = self._gamma(data)
         self.xi = self._xi(data)
-        self.gamma_by_component = None
+
         if model.gaussian_mixture_model is not None:
             self.gamma_by_component = self._gamma_by_component(data)
 
-    def predict_hidden_state_log_probability(self, data):
+        return self.log_prob
+
+    def observation_log_probability(self, data):
         """ Return log probabilities of observations and hidden states
 
         Arguments:
             data: dataframe of mixed data types
 
         Returns:
-            Dataframe where entry [t,i] is the log conditinonal probabilites of 
+            Dataframe where entry [t,i] is the log conditional probabilites of 
             observing the emission at time t given hidden state i.
         """
         log_probability = np.zeros((data.shape[0], self.model.n_hidden_states))
@@ -674,12 +686,12 @@ class DiscreteHMMInferenceResults(ABC):
             finite_data_enum = get_finite_observations_from_data_as_enum(
                 self.model, data)
             log_probability += np.array(
-                self.model.categorical_model.log_probability(finite_data_enum))
+                self.model.categorical_model.categorical_log_probability(finite_data_enum))
         if self.model.gaussian_mixture_model is not None:
             gaussian_data = get_gaussian_observations_from_data(
                 self.model, data)
             log_probability += np.array(
-                self.model.gaussian_mixture_model.log_probability(
+                self.model.gaussian_mixture_model.gaussian_log_probability(
                     gaussian_data))
 
         return pd.DataFrame(log_probability, index=data.index)
@@ -693,7 +705,7 @@ class DiscreteHMMInferenceResults(ABC):
         Returns:
             Series of most likely hidden states
         """
-        log_probability = self.predict_hidden_state_log_probability(data)
+        log_probability = self.observation_log_probability(data)
         return log_probability.idxmax(axis=1)
 
     def predict_hidden_states_viterbi(self, data):
@@ -708,7 +720,7 @@ class DiscreteHMMInferenceResults(ABC):
         initial_state = np.exp(self.model.log_initial_state)
         transition = np.exp(self.model.log_transition)
         log_probability = np.array(
-            self.predict_hidden_state_log_probability(data))
+            self.observation_log_probability(data))
         probability = np.exp(
             log_probability - logsumexp(log_probability, axis=1).reshape(-1, 1))
 
@@ -760,7 +772,7 @@ class DiscreteHMMInferenceResults(ABC):
         model = self.model
         initial_state_prob = np.exp(model.log_initial_state)
         emission_prob = np.exp(
-            np.array(self.predict_hidden_state_log_probability(data)))
+            np.array(self.observation_log_probability(data)))
         emission_prob = emission_prob / np.sum(
             emission_prob, axis=1).reshape(-1, 1)
         transition_prob = np.exp(model.log_transition)
@@ -879,10 +891,10 @@ class DiscreteHMMInferenceResults(ABC):
             hidden state i at time t given ALL observations and current model 
             parameters, more formally, log[ p(z_t = i | x_1,...,x_T) ]
         """
-        log_probability = np.asarray(
-            self.predict_hidden_state_log_probability(data))
-        alpha = self._compute_forward_probabilities(log_probability)
-        beta = self._compute_backward_probabilities(log_probability)
+        log_prob = self.log_prob #log_probability = np.asarray(
+            #self.predict_hidden_state_log_probability(data))
+        alpha = self._compute_forward_probabilities(log_prob)
+        beta = self._compute_backward_probabilities(log_prob)
         gamma = np.asarray(alpha) + np.asarray(beta)
         gamma -= logsumexp(gamma, axis=1).reshape(-1, 1)
 
@@ -912,7 +924,7 @@ class DiscreteHMMInferenceResults(ABC):
 
         gaussian_data = get_gaussian_observations_from_data(self.model, data)
         log_probability_by_component = np.array(
-            self.model.gaussian_mixture_model.log_probability_by_component(
+            self.model.gaussian_mixture_model.gaussian_log_probability_by_component(
                 gaussian_data))
 
         gamma = self._gamma(data)
@@ -940,7 +952,7 @@ class DiscreteHMMInferenceResults(ABC):
         """
         n_hidden_states = self.model.n_hidden_states
         log_probability = np.asarray(
-            self.predict_hidden_state_log_probability(data))
+            self.observation_log_probability(data))
         gamma = self._gamma(data)
         beta = self._compute_backward_probabilities(log_probability)
         log_transition = self.model.log_transition
