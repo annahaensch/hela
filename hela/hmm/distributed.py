@@ -459,7 +459,7 @@ class EMObjective(object):
 
         gaussian_data = self.gaussian_data
         log_probability = np.array(
-            inference.model.gaussian_mixture_model.log_probability(
+            inference.model.gaussian_mixture_model.gaussian_log_probability(
                 gaussian_data))
         log_probability_by_component = np.array(
             inference.model.gaussian_mixture_model.log_probability_by_component(
