@@ -4,6 +4,8 @@ authors:
   - family-names: Anna
     given-names: Haensch
     orcid: https://orcid.org/0000-0002-2299-2106
-title: annahaensch/hela: Hela Beta
+title: "Hela HMM Library Beta"
 version: 0.0.1
+doi: https://doi.org/10.5281/zenodo.7429961
 date-released: 2022-12-12
+url: https://github.com/annahaensch/hela
