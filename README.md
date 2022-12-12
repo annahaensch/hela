@@ -1,5 +1,7 @@
 # Hela HMM Toolkit
 
+[![DOI](https://zenodo.org/badge/331356967.svg)](https://zenodo.org/badge/latestdoi/331356967)
+
 This repository contains various code related to hidden Markov models (HMM).  For a technical overview of HMM, see this note on [Inference and Imputation for Hidden Markov Models with Hybrid State Outputs](https://annahaensch.com/papers/hmm_hybrid_em_and_inf.pdf).   
 
 ## Getting Started 
