@@ -311,14 +311,13 @@ class HMMValidationTool(ABC):
                 # If some Gaussian observations are known...
                 else:
                     known_gauss_dim = [
-                        i for i in range(len(model.continuous_features))
-                        if model.continuous_features[i] in known_col
+                        j for j in range(len(model.continuous_features))
+                        if model.continuous_features[j] in known_col
                     ]
                     for h in range(model.n_hidden_states):
                         for m in range(
                                 model.gaussian_mixture_model.n_gmm_components):
 
-                            k = int(known_col[0][-1])
                             p = stats.multivariate_normal.logpdf(
                                 gaussian_obs.iloc[0, known_gauss_dim],
                                 means[h][m][known_gauss_dim],
