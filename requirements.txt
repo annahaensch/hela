@@ -17,3 +17,5 @@ pgmpy==0.1.18
 pytest==5.3.2
 vega==2.6.0
 yapf==0.20.1
+
+#test
