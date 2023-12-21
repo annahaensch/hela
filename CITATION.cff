@@ -1,11 +1,11 @@
 cff-version: 1.1.0
 message: "If you use this software, please cite it as below."
 authors:
-  - family-names: Anna
-    given-names: Haensch
+  - family-names: Haensch
+    given-names: Anna
     orcid: https://orcid.org/0000-0002-2299-2106
 title: "Hela HMM Toolkit"
-version: 0.0.1
+version: 1.0.0
 doi: https://doi.org/10.5281/zenodo.7429961
-date-released: 2022-12-12
+date-released: 2023-12-21
 url: https://github.com/annahaensch/hela
